@@ -1,43 +1,56 @@
-# TRS — 2D Arcade Fighting Demo (a learning project)
+# TRS — Mini-Game Playground (a learning repo)
 
-A tiny, **heavily-commented** 1-v-1 fighting game built to teach the end-to-end
-workflow behind rich HTML animation: the **asset pipeline**, **sprite
-animation**, an **animation state machine**, the **game loop**, and **enemy AI**.
-You (blue) fight a CPU opponent (red) driven by the open-source **Yuka** AI library.
+A personal learning playground for the workflow behind **rich HTML animation**.
+Each mini-game is a self-contained, heavily-commented artifact that teaches a
+different slice of game/animation development. One repo, one Vite project, a
+menu page that links to each game.
 
 ## Run it
 
 ```bash
 npm install
-npm run build:sprites   # generate the sprite atlas from scratch (PNG + JSON)
-npm run dev             # open the printed http://localhost:5173 URL
+npm run dev        # open the printed http://localhost:5173 — the menu links to each game
 ```
 
-Controls: **← →** move · **↑** jump · **A** punch · **S** kick · **D** block ·
-**H** toggle hit/hurt boxes · **R** reset.
+- `npm run build` — production build of all pages
+- `npm run build:sprites` — regenerate the fighting game's sprite atlas
+- `npm run test:puzzle` — headless logic tests for the puzzle module
 
-> Tip: open DevTools and tweak the AI live, e.g.
-> `__game.scene.getScene('FightScene').brain.opts.aggression = 1`
+## The games
 
-## Read it in this order (each file teaches one concept)
+### 🥊 `games/fighting/` — Arcade Fighter (Phaser 3 + Yuka)
+A 1-v-1 fighting game vs. a Yuka-driven AI. Teaches the **sprite/atlas pipeline**,
+**animation state machines**, the **game loop**, and **enemy AI** (state machine +
+steering). Controls: **← →** move · **↑** jump · **A** punch · **S** kick ·
+**D** block · **H** hitboxes · **R** reset. Live-tinker via `window.__game`.
 
-| File | The concept it teaches |
+| File | Teaches |
 |---|---|
-| `tools/build-spritesheet.mjs` | **The asset pipeline** — drawing frames, packing them into one sprite sheet (texture atlas) + a JSON map. Run with `npm run build:sprites`. |
-| `assets/src/README.md` | **Asset management** — source-vs-export, how Aseprite/TexturePacker produce the same files, where to get free CC0 art. |
-| `src/main.js` | **Booting Phaser** — the game config (renderer, physics, scenes). |
-| `src/scenes/FightScene.js` | **The game loop** — Phaser's `preload → create → update`; loading the atlas, defining animations, input, hit detection, UI. |
-| `src/fighter/states.js` | **The state machine as data** — states, legal transitions, and attack **frame data** (startup/active/recovery). |
-| `src/fighter/Fighter.js` | **A character** — sprite + physics + the FSM, plus **hitbox vs hurtbox** combat. |
-| `src/ai/EnemyBrain.js` | **Enemy AI with Yuka** — a decision **state machine** (approach/attack/retreat/block) + **steering** for movement. |
+| `games/fighting/tools/build-spritesheet.mjs` | the asset pipeline (sprite sheet from scratch) |
+| `games/fighting/scenes/FightScene.js` | the game loop (`preload → create → update`) |
+| `games/fighting/fighter/states.js` + `Fighter.js` | animation state machine, frame data, hit/hurtboxes |
+| `games/fighting/ai/EnemyBrain.js` | enemy AI with Yuka (FSM + steering) |
 
-## How the pieces connect each frame
+### 🧩 `games/grid-path-puzzle/` — Grid Path Puzzle (DOM/CSS + SVG)
+A reusable, **zero-dependency**, framework-agnostic module: drag a path from
+START to GOAL weighing risk vs. reward. Configurable grid size (4×4–15×15) and
+developer-defined node types (power-ups / obstacles). Teaches a **DOM/SVG
+renderer**, a **drag-to-draw interaction**, **pure rules/effects**, and
+**procedural generation with a solvability guarantee**. See
+`games/grid-path-puzzle/README.md` for the full module API. Live-tinker via
+`window.__puzzle`.
+
+## Layout
 
 ```
-input (keyboard) ─┐
-                  ├─► Fighter state machine ─► animation + physics ─► render
-Yuka AI brain  ───┘            │
-                               └─► hitbox vs hurtbox ─► damage / hitstun / KO
+TRS/
+  index.html            # the menu
+  vite.config.js        # multi-page entry points
+  games/
+    fighting/           # Phaser game
+    grid-path-puzzle/    # reusable DOM/SVG module + demo + tests
 ```
 
-Built with [Phaser 3](https://phaser.io) (framework), [Yuka](https://mugen87.github.io/yuka/) (AI), and [Vite](https://vitejs.dev) (dev server). Sprites are generated from scratch — swap in real art any time by replacing `assets/sprites/fighter.{png,json}`.
+Built with [Vite](https://vitejs.dev). The fighting game uses
+[Phaser 3](https://phaser.io) + [Yuka](https://mugen87.github.io/yuka/); the
+puzzle module uses no libraries at all.
