@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grid Path Puzzle — demo</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: #0e0f13; color: #e6e6e6;
+        font-family: system-ui, sans-serif; }
+      a.back { position: fixed; top: 12px; left: 14px; color: #8a90a0; font-size: 13px; text-decoration: none; }
+      a.back:hover { color: #cdd2da; }
+      .layout { max-width: 980px; margin: 0 auto; padding: 46px 20px 60px;
+        display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 26px; align-items: start; }
+      h1 { grid-column: 1 / -1; font-size: 20px; margin: 0 0 2px; }
+      p.sub { grid-column: 1 / -1; color: #9aa0aa; margin: 0 0 8px; font-size: 13px; }
+      #board { width: 100%; }
+      .panel { background: #191c24; border: 1px solid #2a2e3a; border-radius: 12px; padding: 16px; }
+      .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+        color: #8a90a0; margin: 0 0 12px; }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 9px 0; font-size: 13px; }
+      .row label { color: #aeb4c0; }
+      input[type="range"] { width: 130px; }
+      input[type="number"] { width: 76px; background: #0e0f13; color: #e6e6e6;
+        border: 1px solid #2a2e3a; border-radius: 6px; padding: 4px 6px; }
+      select { background: #0e0f13; color: #e6e6e6; border: 1px solid #2a2e3a; border-radius: 6px; padding: 4px 6px; }
+      button { cursor: pointer; background: #2b3a55; color: #eaf0ff; border: 1px solid #3a4d70;
+        border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+      button:hover { background: #34466a; }
+      .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+      .hud b { color: #fff; }
+      .stat { font-variant-numeric: tabular-nums; }
+      #skills { color: #e6c84a; }
+      #result { margin-top: 12px; font-size: 14px; min-height: 22px; }
+      #result.win { color: #5ef08a; }
+      #result.lose { color: #ff6a6a; }
+      .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; grid-column: 1 / -1; font-size: 12px; color: #9aa0aa; margin-top: 4px; }
+      .legend span { display: inline-flex; align-items: center; gap: 5px; }
+      .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+      .warn { color: #ff8a5a; }
+    </style>
+  </head>
+  <body>
+    <a class="back" href="/">← all games</a>
+    <div class="layout">
+      <h1>🧩 Grid Path Puzzle</h1>
+      <p class="sub">Drag from the white <b>START</b> to the green <b>GOAL</b>. Collect blue/yellow/purple
+        for reward; gray blocks; red is a trap. Drag back along the line to erase. (Keyboard: focus the
+        grid, use arrow keys, Enter to finish.)</p>
+
+      <div id="board"></div>
+
+      <div>
+        <div class="panel hud">
+          <h2>Run</h2>
+          <div class="row"><label>Multiplier</label><b id="mult" class="stat">×1.00</b></div>
+          <div class="row"><label>Skills</label><span id="skills" class="stat">—</span></div>
+          <div class="row"><label>Steps / budget</label><span id="steps" class="stat">0 / ∞</span></div>
+          <div class="row"><label>Time</label><span id="time" class="stat">—</span></div>
+          <div class="row"><label>Can reach goal?</label><span id="reach" class="stat">yes</span></div>
+          <div id="result"></div>
+          <div class="btns">
+            <button id="execute">Execute</button>
+            <button id="reset">Reset</button>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:14px;">
+          <h2>Level</h2>
+          <div class="row"><label>Size <span id="sizeVal">8</span>×<span id="sizeVal2">8</span></label>
+            <input id="size" type="range" min="4" max="15" value="8" /></div>
+          <div class="row"><label>Difficulty <span id="diffVal">0.5</span></label>
+            <input id="diff" type="range" min="0" max="1" step="0.05" value="0.5" /></div>
+          <div class="row"><label>Seed</label><input id="seed" type="number" value="1" /></div>
+          <div class="row"><label>Move budget</label><input id="budget" type="number" placeholder="∞" /></div>
+          <div class="row"><label>Time limit (s)</label><input id="timelimit" type="number" placeholder="off" /></div>
+          <div class="row"><label>Trap on touch</label>
+            <select id="trapmode"><option value="commitFail">fail on release</option><option value="block">block entry</option></select></div>
+          <div class="btns">
+            <button id="generate">Generate</button>
+            <button id="authored">Authored level</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <script type="module" src="./demo.js"></script>
+  </body>
+</html>
