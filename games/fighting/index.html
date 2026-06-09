@@ -37,10 +37,11 @@
       &nbsp;•&nbsp; Toggle hitboxes <kbd>H</kbd> &nbsp;•&nbsp; Reset <kbd>R</kbd>
       <br />Opponent is driven by a <b>Yuka</b> state machine.
     </p>
-    <!-- Phaser mounts its canvas here (see src/main.js -> config.parent) -->
+    <!-- Phaser mounts its canvas here (see main.js -> config.parent) -->
     <div id="game"></div>
 
-    <!-- type="module" lets us use ES import/export. Vite bundles this. -->
-    <script type="module" src="/src/main.js"></script>
+    <!-- type="module" lets us use ES import/export. Vite bundles this.
+         Relative path: main.js sits next to this index.html in games/fighting/. -->
+    <script type="module" src="./main.js"></script>
   </body>
 </html>
