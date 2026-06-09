@@ -29,6 +29,9 @@ const CSS = `
    query units (cqi = 1% of the grid width), divided by the column count. */
 .gpp-icon { font-size: calc(58cqi / var(--cols)); line-height: 1; pointer-events: none;
   filter: drop-shadow(0 1px 1px rgba(0,0,0,.45)); }
+/* Multi-glyph icons: smaller + tightened so several emojis fit in one cell. */
+.gpp-icon.gpp-icon-multi { font-size: calc(30cqi / var(--cols)); letter-spacing: -0.12em;
+  white-space: nowrap; }
 .gpp-icon.gpp-pop, .gpp-label.gpp-pop { animation: gpp-pop .32s ease; }
 @keyframes gpp-pop { 0% { transform: scale(1); } 32% { transform: scale(1.5); } 100% { transform: scale(1); } }
 

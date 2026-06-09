@@ -30,7 +30,7 @@ const nodeTypes = {
   confuse:   { role: 'normal', passable: true, color: '#c58cff', icon: '🌀', label: 'Confuse',   effectKind: 'skill', onPass: (s) => { s.skills.push('Confuse'); } },
   drain:     { role: 'normal', passable: true, color: '#7fd66b', icon: '🩸', label: 'Drain',     effectKind: 'skill', onPass: (s) => { s.skills.push('Drain'); } },
   chain:     { role: 'normal', passable: true, color: '#e6a24a', icon: '🔗', label: 'Chain',     effectKind: 'skill', onPass: (s) => { s.skills.push('Chain'); } },
-  multihack: { role: 'normal', passable: true, color: '#ff9f43', icon: '💥', label: 'Multihack', effectKind: 'skill', onPass: (s) => { s.skills.push('Multihack'); } },
+  multihack: { role: 'normal', passable: true, color: '#ff9f43', icon: '💥💥💥', label: 'Multihack', effectKind: 'skill', onPass: (s) => { s.skills.push('Multihack'); } },
 
   penalty: { role: 'normal', passable: true,  color: '#aa8855', icon: '➖', label: '-MULT', effectKind: 'debuff', onPass: (s) => { s.multiplier = Math.max(0, s.multiplier - 0.5); } },
   trap:    { role: 'normal', passable: true,  color: '#d04a4a', icon: '☠️', label: 'Trap',  effectKind: 'danger', failsOnPass: true, onPass: (s) => { s.fail = true; } },

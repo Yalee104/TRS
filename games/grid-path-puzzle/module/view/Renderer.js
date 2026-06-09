@@ -13,6 +13,16 @@ import { injectStyles } from './styles.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
+// Count user-perceived characters (graphemes), so a single emoji that uses a
+// variation selector — '⚔️' is U+2694 U+FE0F — counts as 1, while '💥💥💥'
+// counts as 3. Falls back to code-point count where Intl.Segmenter is missing.
+const _seg = typeof Intl !== 'undefined' && Intl.Segmenter
+  ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+  : null;
+function glyphCount(str) {
+  return _seg ? [..._seg.segment(str)].length : [...str].length;
+}
+
 export class Renderer {
   constructor(root, nodeTypes) {
     this.root = root;
@@ -74,6 +84,8 @@ export class Renderer {
         if (glyph) {
           const span = document.createElement('span');
           span.className = def.icon ? 'gpp-icon' : 'gpp-label';
+          // Multi-glyph icons (e.g. '💥💥💥') get a class that shrinks them to fit.
+          if (def.icon && glyphCount(glyph) > 1) span.classList.add('gpp-icon-multi');
           span.textContent = glyph;
           cell.appendChild(span);
         }
