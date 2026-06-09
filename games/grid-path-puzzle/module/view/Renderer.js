@@ -47,6 +47,10 @@ export class Renderer {
   /** Repaint the whole board for a (new) level. */
   setLevel(level) {
     this.level = level;
+    // Set --cols/--rows on BOTH the grid (for its layout) and the wrap (so icon
+    // and floating-text font-sizes can scale with the grid via container units).
+    this.wrap.style.setProperty('--cols', level.cols);
+    this.wrap.style.setProperty('--rows', level.rows);
     this.gridEl.style.setProperty('--cols', level.cols);
     this.gridEl.style.setProperty('--rows', level.rows);
     this.gridEl.textContent = '';
@@ -64,12 +68,16 @@ export class Renderer {
         if (def.role === 'start') cell.classList.add('gpp-start');
         if (def.role === 'goal') cell.classList.add('gpp-goal');
         if (def.passable === false) cell.classList.add('gpp-blocker');
-        if (def.label) {
+        if (def.effectKind) cell.dataset.kind = def.effectKind; // tints pass animations
+        // A node's "sprite": prefer an icon glyph, else fall back to a text label.
+        const glyph = def.icon || def.label;
+        if (glyph) {
           const span = document.createElement('span');
-          span.className = 'gpp-label';
-          span.textContent = def.label;
+          span.className = def.icon ? 'gpp-icon' : 'gpp-label';
+          span.textContent = glyph;
           cell.appendChild(span);
         }
+        if (def.label) { cell.title = def.label; cell.setAttribute('aria-label', def.label); }
         this.gridEl.appendChild(cell);
         row.push(cell);
       }
@@ -80,8 +88,9 @@ export class Renderer {
     this.update([], { status: 'idle' });
   }
 
-  /** Reflect the current path: highlight cells, mark the head, draw the line. */
-  update(path, { pendingFail = false, status = 'idle' } = {}) {
+  /** Reflect the current path: highlight cells, mark the head, draw the line.
+   *  `added` = cells appended by the latest move; each plays a pass animation. */
+  update(path, { pendingFail = false, status = 'idle', added = [] } = {}) {
     for (const row of this.cellEls) {
       for (const c of row) c.classList.remove('gpp-in-path', 'gpp-head', 'gpp-fail');
     }
@@ -97,6 +106,34 @@ export class Renderer {
     }
     this.poly.setAttribute('points', path.map((c) => `${c.x + 0.5},${c.y + 0.5}`).join(' '));
     this.wrap.dataset.status = status;
+
+    // Pass animation: pop the icon + float its label, for each newly-entered
+    // cell that actually has an effect.
+    for (const c of added) {
+      const def = this.nodeTypes[this.level.cells[c.y][c.x]];
+      if (typeof def.onPass === 'function' || def.effectKind) this._playPass(c, def);
+    }
+  }
+
+  // One-shot "you passed through here" feedback: pop the glyph and float text up.
+  _playPass(cell, def) {
+    const el = this.cellEls[cell.y]?.[cell.x];
+    const icon = el?.querySelector('.gpp-icon, .gpp-label');
+    if (icon) { // retrigger the CSS animation
+      icon.classList.remove('gpp-pop');
+      void icon.offsetWidth; // force reflow so the animation restarts
+      icon.classList.add('gpp-pop');
+    }
+    const float = document.createElement('div');
+    float.className = 'gpp-float';
+    if (def.effectKind) float.dataset.kind = def.effectKind;
+    float.textContent = def.floatText || def.label || def.icon || '';
+    float.style.left = `${((cell.x + 0.5) / this.level.cols) * 100}%`;
+    float.style.top = `${((cell.y + 0.5) / this.level.rows) * 100}%`;
+    this.wrap.appendChild(float);
+    const remove = () => float.remove();
+    float.addEventListener('animationend', remove);
+    setTimeout(remove, 1200); // safety net if animationend doesn't fire
   }
 
   destroy() {

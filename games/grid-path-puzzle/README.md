@@ -55,6 +55,15 @@ const nodeTypes = {
 - `onPass(state, ctx)` mutates a host-shaped run-state object, applied in path order.
 - Exactly one `role:'start'` and one `role:'goal'` per level.
 
+**Optional visual fields** (the module renders these but ignores their meaning):
+- `icon`: a glyph/emoji shown as the node's sprite (e.g. `'❄️'`, `'⚔️'`).
+- `label`: short text (used as a fallback sprite, the tooltip, and the float text).
+- `effectKind`: `'buff' | 'debuff' | 'skill' | 'danger'` — tints the pass animation.
+- `floatText`: overrides the text that floats up when the path passes the node.
+
+When the path enters a node that has an `onPass`/`effectKind`, the renderer pops the
+icon and floats its label — green for buff/skill, red for debuff/danger.
+
 ## Rules (fixed by design)
 
 Orthogonal movement only, **no cell revisited**, reach the goal to win. Drag back

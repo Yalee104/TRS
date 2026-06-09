@@ -14,28 +14,40 @@
 import { GridPathPuzzle } from './module/GridPathPuzzle.js';
 
 // --- 1. The node catalog (host-owned meaning) --------------------------------
+// Each type can carry an `icon` (its sprite glyph) and an `effectKind`
+// ('buff' | 'debuff' | 'skill' | 'danger') that tints the pass animation.
+// `skills` is just an array the host defines — add as many skill nodes as you
+// like (here: Freeze / Confuse / Drain / Chain / Multihack).
 const nodeTypes = {
-  start:       { role: 'start',  passable: true,  color: '#f2f2f2', label: 'START' },
-  goal:        { role: 'goal',   passable: true,  color: '#3ad07a', label: 'EXE' },
-  normal:      { role: 'normal', passable: true,  color: '#39404e' },
-  blue:        { role: 'normal', passable: true,  color: '#3a7bd0', label: '+DMG',  onPass: (s) => { s.multiplier += 0.5; } },
-  yellow:      { role: 'normal', passable: true,  color: '#e6c84a', label: 'Freeze', onPass: (s) => { s.skills.push('Freeze'); } },
-  purple:      { role: 'normal', passable: true,  color: '#9b59b6', label: 'UP',     onPass: (s) => { s.multiplier *= 1.25; } },
-  trapPenalty: { role: 'normal', passable: true,  color: '#aa8855', label: '-MULT', onPass: (s) => { s.multiplier = Math.max(0, s.multiplier - 0.5); } },
-  trap:        { role: 'normal', passable: true,  color: '#d04a4a', label: 'TRAP', failsOnPass: true, onPass: (s) => { s.fail = true; } },
-  blocker:     { role: 'normal', passable: false, color: '#2a2e39' },
-};
-const weights = { normal: 4, blue: 3, yellow: 2, purple: 1, trapPenalty: 2, trap: 1, blocker: 3 };
+  start:   { role: 'start',  passable: true,  color: '#eef2f7', icon: '🚀', label: 'Start' },
+  goal:    { role: 'goal',   passable: true,  color: '#2fae62', icon: '🏁', label: 'Goal' },
+  normal:  { role: 'normal', passable: true,  color: '#39404e' },
 
-// A hand-authored level to show the "authored" path (vs. the generator).
+  dmg:     { role: 'normal', passable: true,  color: '#3a7bd0', icon: '⚔️', label: '+DMG', effectKind: 'buff',  onPass: (s) => { s.multiplier += 0.5; } },
+  upgrade: { role: 'normal', passable: true,  color: '#9b59b6', icon: '⭐', label: '×1.25', effectKind: 'buff', onPass: (s) => { s.multiplier *= 1.25; } },
+
+  freeze:    { role: 'normal', passable: true, color: '#56c5e6', icon: '❄️', label: 'Freeze',    effectKind: 'skill', onPass: (s) => { s.skills.push('Freeze'); } },
+  confuse:   { role: 'normal', passable: true, color: '#c58cff', icon: '🌀', label: 'Confuse',   effectKind: 'skill', onPass: (s) => { s.skills.push('Confuse'); } },
+  drain:     { role: 'normal', passable: true, color: '#7fd66b', icon: '🩸', label: 'Drain',     effectKind: 'skill', onPass: (s) => { s.skills.push('Drain'); } },
+  chain:     { role: 'normal', passable: true, color: '#e6a24a', icon: '🔗', label: 'Chain',     effectKind: 'skill', onPass: (s) => { s.skills.push('Chain'); } },
+  multihack: { role: 'normal', passable: true, color: '#ff9f43', icon: '💥', label: 'Multihack', effectKind: 'skill', onPass: (s) => { s.skills.push('Multihack'); } },
+
+  penalty: { role: 'normal', passable: true,  color: '#aa8855', icon: '➖', label: '-MULT', effectKind: 'debuff', onPass: (s) => { s.multiplier = Math.max(0, s.multiplier - 0.5); } },
+  trap:    { role: 'normal', passable: true,  color: '#d04a4a', icon: '☠️', label: 'Trap',  effectKind: 'danger', failsOnPass: true, onPass: (s) => { s.fail = true; } },
+  blocker: { role: 'normal', passable: false, color: '#2a2e39', icon: '⛔' },
+};
+const weights = { normal: 5, dmg: 3, upgrade: 1, freeze: 1.4, confuse: 1.4, drain: 1.4, chain: 1.4, multihack: 1, penalty: 2, trap: 1.2, blocker: 3 };
+
+// A hand-authored level (the safe route runs along the top row, then down the
+// right column — so it's solvable; the generator-blocked detours add the risk).
 const authoredLevel = {
   grid: [
-    ['start', 'blue',  'normal', 'blocker', 'normal', 'purple'],
-    ['normal', 'trap', 'blue',   'normal',  'trap',   'normal'],
-    ['blue',  'normal', 'yellow', 'blocker', 'blue',  'normal'],
-    ['normal', 'blocker', 'normal', 'normal', 'trapPenalty', 'blue'],
-    ['yellow', 'normal', 'trap',  'blue',    'normal', 'normal'],
-    ['normal', 'blue',  'normal', 'normal',  'yellow', 'goal'],
+    ['start',   'dmg',     'normal', 'normal', 'normal',  'upgrade'],
+    ['normal',  'trap',    'blocker', 'trap',  'blocker', 'normal'],
+    ['dmg',     'normal',  'freeze', 'normal', 'confuse', 'normal'],
+    ['normal',  'blocker', 'normal', 'trap',   'normal',  'dmg'],
+    ['chain',   'normal',  'dmg',    'normal', 'penalty', 'normal'],
+    ['normal',  'drain',   'normal', 'normal', 'multihack', 'goal'],
   ],
   start: { x: 0, y: 0 },
   goal: { x: 5, y: 5 },
@@ -127,7 +139,7 @@ function resetHud() {
 
 // --- legend ------------------------------------------------------------------
 $('legend').innerHTML = Object.entries(nodeTypes)
-  .map(([k, d]) => `<span><i class="sw" style="background:${d.color}"></i>${d.label || k}</span>`)
+  .map(([k, d]) => `<span><i class="sw" style="background:${d.color}"></i>${d.icon ? d.icon + ' ' : ''}${d.label || k}</span>`)
   .join('');
 
 resetHud();

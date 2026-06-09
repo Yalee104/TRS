@@ -39,7 +39,10 @@ export class PointerController {
   _onDown(e) {
     const cell = this._cellFromPoint(e.clientX, e.clientY);
     if (!cell) return;
-    if (this.facade.tryBegin(cell)) {
+    // tryBegin starts a fresh path from START; tryResume re-attaches to an
+    // in-progress path when you press on a cell that's already on the line
+    // (so releasing mid-draw and clicking the head continues from there).
+    if (this.facade.tryBegin(cell) || this.facade.tryResume(cell)) {
       this.dragging = true;
       try { this.gridEl.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
       e.preventDefault();

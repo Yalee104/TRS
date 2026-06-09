@@ -192,6 +192,20 @@ export class GridPathPuzzle {
     return true;
   }
 
+  // Re-attach an interrupted drag: if you press on a cell already on the path,
+  // continue from there (clicking an earlier cell trims the tail back to it).
+  // This is what lets you release the mouse mid-draw and pick up where you left
+  // off instead of restarting from START.
+  tryResume(cell) {
+    if (this.state.status !== 'drawing' || this.state.path.length === 0) return false;
+    const idx = this.state.path.findIndex((c) => c.x === cell.x && c.y === cell.y);
+    if (idx < 0) return false; // pressed off the path — not a resume
+    this.state.path = this.state.path.slice(0, idx + 1);
+    this.state.pendingFail = false;
+    this._afterChange();
+    return true;
+  }
+
   tryMoveTo(cell) {
     if (this.state.status !== 'drawing') return;
     const path = this.state.path;
@@ -214,6 +228,9 @@ export class GridPathPuzzle {
   // A fast drag can skip cells; this keeps the line continuous and stops at the
   // first illegal step (so you can't tunnel through a blocker or teleport).
   _extendToward(target) {
+    const startLen = this.state.path.length;
+    // `added` = the cells appended by this move; the renderer animates them.
+    const finish = (extra) => this._afterChange({ added: this.state.path.slice(startLen), ...extra });
     let guard = 0;
     while (guard++ < 256) {
       const head = this.state.path[this.state.path.length - 1];
@@ -224,7 +241,7 @@ export class GridPathPuzzle {
 
       // Budget: refuse to grow past the move budget.
       if (this.level.moveBudget != null && this.state.path.length + 1 > this.level.moveBudget) {
-        this._afterChange({ budgetReached: true });
+        finish({ budgetReached: true });
         return;
       }
 
@@ -234,12 +251,12 @@ export class GridPathPuzzle {
         // commitFail: step in, flag failure, and stop drawing further.
         this.state.path.push(step);
         this.state.pendingFail = true;
-        this._afterChange();
+        finish();
         return;
       }
       this.state.path.push(step);
     }
-    this._afterChange();
+    finish();
   }
 
   // Candidate next cells that reduce distance to target, preferring the longer
@@ -297,9 +314,10 @@ export class GridPathPuzzle {
     });
   }
 
-  // Re-render + broadcast a live preview after any path change.
-  _afterChange(extra = {}) {
-    this.renderer.update(this.state.path, { pendingFail: this.state.pendingFail, status: this.state.status });
+  // Re-render + broadcast a live preview after any path change. `added` (cells
+  // appended by this move) is forwarded to the renderer for pass animations.
+  _afterChange({ added = [], ...extra } = {}) {
+    this.renderer.update(this.state.path, { pendingFail: this.state.pendingFail, status: this.state.status, added });
     this._fire('onPathChange', 'pathChange', {
       path: describePath(this.state.path, this.level),
       steps: this.state.path.length,
