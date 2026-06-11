@@ -1,99 +1,128 @@
 // =============================================================================
-//  demo.js  —  a host that USES the grid-path-puzzle module
+//  demo.js  —  a host that USES the grid-path-puzzle module + ComboEngine
 // =============================================================================
 //
-//  This file is the "developer who embeds the module" side. It does three jobs:
-//   1. Defines a nodeTypes catalog — what each node MEANS in THIS game.
-//   2. Mounts a GridPathPuzzle and wires the controls (size/difficulty/seed...).
-//   3. Reacts to the module's events to draw a live HUD + result.
+//  This is the "embedding game" side. It:
+//   1. Loads an Offensive OR Defensive config (pure JSON data).
+//   2. Builds the module's nodeTypes catalog FROM that config, and asks the
+//      module to generate a board with the config's route-first generation plan.
+//   3. Reads the module's ordered path on every change, runs the generic
+//      ComboEngine over the skill sequence, and renders a live combo readout.
 //
-//  Note: nothing in module/ knows about any of this. The module just emits
-//  events and runs the onPass callbacks we define below.
+//  Nothing in module/ knows about combos — it just emits the path; the engine
+//  (combo/) is generic and driven entirely by the chosen config.
 // =============================================================================
 
 import { GridPathPuzzle } from './module/GridPathPuzzle.js';
+import { evaluate } from './combo/ComboEngine.js';
+import { effectBadges } from './combo/effects.js';
+import OFFENSIVE from './combo/configs/offensive.json';
+import DEFENSIVE from './combo/configs/defensive.json';
 
-// --- 1. The node catalog (host-owned meaning) --------------------------------
-// Each type can carry an `icon` (its sprite glyph) and an `effectKind`
-// ('buff' | 'debuff' | 'skill' | 'danger') that tints the pass animation.
-// `skills` is just an array the host defines — add as many skill nodes as you
-// like (here: Freeze / Confuse / Drain / Chain / Multihack).
-const nodeTypes = {
-  start:   { role: 'start',  passable: true,  color: '#eef2f7', icon: '🚀', label: 'Start' },
-  goal:    { role: 'goal',   passable: true,  color: '#2fae62', icon: '🏁', label: 'Goal' },
-  normal:  { role: 'normal', passable: true,  color: '#39404e' },
-
-  dmg:     { role: 'normal', passable: true,  color: '#3a7bd0', icon: '⚔️', label: '+DMG', effectKind: 'buff',  onPass: (s) => { s.multiplier += 0.5; } },
-  upgrade: { role: 'normal', passable: true,  color: '#9b59b6', icon: '⭐', label: '×1.25', effectKind: 'buff', onPass: (s) => { s.multiplier *= 1.25; } },
-
-  freeze:    { role: 'normal', passable: true, color: '#56c5e6', icon: '❄️', label: 'Freeze',    effectKind: 'skill', onPass: (s) => { s.skills.push('Freeze'); } },
-  confuse:   { role: 'normal', passable: true, color: '#c58cff', icon: '🌀', label: 'Confuse',   effectKind: 'skill', onPass: (s) => { s.skills.push('Confuse'); } },
-  drain:     { role: 'normal', passable: true, color: '#7fd66b', icon: '🩸', label: 'Drain',     effectKind: 'skill', onPass: (s) => { s.skills.push('Drain'); } },
-  chain:     { role: 'normal', passable: true, color: '#e6a24a', icon: '🔗', label: 'Chain',     effectKind: 'skill', onPass: (s) => { s.skills.push('Chain'); } },
-  multihack: { role: 'normal', passable: true, color: '#ff9f43', icon: '💥💥💥', label: 'Multihack', effectKind: 'skill', onPass: (s) => { s.skills.push('Multihack'); } },
-
-  penalty: { role: 'normal', passable: true,  color: '#aa8855', icon: '➖', label: '-MULT', effectKind: 'debuff', onPass: (s) => { s.multiplier = Math.max(0, s.multiplier - 0.5); } },
-  trap:    { role: 'normal', passable: true,  color: '#d04a4a', icon: '☠️', label: 'Trap',  effectKind: 'danger', failsOnPass: true, onPass: (s) => { s.fail = true; } },
-  blocker: { role: 'normal', passable: false, color: '#2a2e39', icon: '⛔' },
-};
-const weights = { normal: 5, dmg: 3, upgrade: 1, freeze: 1.4, confuse: 1.4, drain: 1.4, chain: 1.4, multihack: 1, penalty: 2, trap: 1.2, blocker: 3 };
-
-// A hand-authored level (the safe route runs along the top row, then down the
-// right column — so it's solvable; the generator-blocked detours add the risk).
-const authoredLevel = {
-  grid: [
-    ['start',   'dmg',     'normal', 'normal', 'normal',  'upgrade'],
-    ['normal',  'trap',    'blocker', 'trap',  'blocker', 'normal'],
-    ['dmg',     'normal',  'freeze', 'normal', 'confuse', 'normal'],
-    ['normal',  'blocker', 'normal', 'trap',   'normal',  'dmg'],
-    ['chain',   'normal',  'dmg',    'normal', 'penalty', 'normal'],
-    ['normal',  'drain',   'normal', 'normal', 'multihack', 'goal'],
-  ],
-  start: { x: 0, y: 0 },
-  goal: { x: 5, y: 5 },
-  moveBudget: 16,
-};
-
-// --- 2. Mount the game -------------------------------------------------------
+const CONFIGS = { offensive: OFFENSIVE, defensive: DEFENSIVE };
 const $ = (id) => document.getElementById(id);
-const board = $('board');
+const round = (n) => Math.round(n * 100) / 100;
 
-const game = new GridPathPuzzle({
-  mount: board,
-  nodeTypes,
-  generate: { size: 8, difficulty: 0.5, seed: 1, weights },
-  trapEntryMode: 'commitFail',
-  onPathChange: updateHud,
-  onComplete: onComplete,
-  onFail: onFail,
-  onTick: onTick,
-});
-window.__puzzle = game; // live tinkering in DevTools
+let mode = 'offensive';
+let config = CONFIGS[mode];
+let game = null;
 
-// --- 3. HUD + event reactions ------------------------------------------------
-function updateHud(info) {
-  $('mult').textContent = `×${info.previewRunState.multiplier.toFixed(2)}`;
-  $('skills').textContent = info.previewRunState.skills.length ? info.previewRunState.skills.join(' → ') : '—';
+// Build the module's nodeTypes from a config: the base cells + the skills +
+// any power-ups. Extra config fields (class, value, tiers…) are ignored by the
+// module and consumed by the engine.
+function catalogFromConfig(cfg) {
+  const nt = { ...cfg.base };
+  for (const [k, d] of Object.entries(cfg.skills)) nt[k] = { role: 'normal', passable: true, ...d };
+  if (cfg.powerups) for (const [k, d] of Object.entries(cfg.powerups)) nt[k] = { role: 'normal', passable: true, ...d };
+  return nt;
+}
+
+// The engine's input: the skill-node keys the path crossed, in order.
+const skillSeqFromPath = (pathDesc) => pathDesc.map((c) => c.typeKey).filter((k) => config.skills[k]);
+
+function currentSize() { return Number($('size').value); }
+function currentSeed() { return Number($('seed').value); }
+
+function buildGame() {
+  if (game) game.destroy();
+  config = CONFIGS[mode];
+  const nodeTypes = catalogFromConfig(config);
+  game = new GridPathPuzzle({
+    mount: $('board'),
+    nodeTypes,
+    generate: { size: currentSize(), seed: currentSeed(), routePlan: config.generation },
+    trapEntryMode: 'commitFail',
+    onPathChange: onPathChange,
+    onComplete: onComplete,
+    onFail: onFail,
+    onTick: onTick,
+  });
+  window.__puzzle = game;
+  renderLegend();
+  resetReadout();
+}
+
+function regenerate() {
+  config = CONFIGS[mode];
+  game.loadLevel({ size: currentSize(), seed: currentSeed(), routePlan: config.generation });
+  resetReadout();
+}
+
+// ---- combo readout ----------------------------------------------------------
+function renderCombo(result, isFinal) {
+  const panel = $('combo');
+  if (!result || (result.items.length === 0 && !result.special)) {
+    panel.innerHTML = '<div class="combo-empty">Draw through skill nodes to build a combo…</div>';
+    return;
+  }
+  let html = '';
+  if (result.special) {
+    html += `<div class="banner beam">⚡ ${result.special.name}</div>`;
+    const applied = (result.special.applies || []).map((k) => config.skills[k]?.icon || k).join(' ');
+    html += `<div class="combo-sub">applies ${applied} to <b>all</b> for ${result.special.durationSec}s</div>`;
+  } else if (result.label && mode === 'defensive') {
+    html += `<div class="banner fortress">🏰 ${result.label}</div>`;
+  }
+  for (const it of result.items) {
+    const sk = config.skills[it.skill] || {};
+    const badges = effectBadges(it.effects).map((b) => `<span class="badge ${b.fxClass}">${b.label}</span>`).join('');
+    const gv = it.gameValue != null ? `${round(it.gameValue)} ${it.unit || ''}` : '';
+    const dur = it.durationSec != null ? ` · ${round(it.durationSec)}s` : '';
+    const tgt = it.targets === 'all' ? ' · 🎯 all' : '';
+    html += `<div class="combo-item"><span class="ci-icon">${sk.icon || ''}</span>`
+      + `<span class="ci-tier">${it.tier}</span>`
+      + `<span class="ci-val">${gv}${dur}${tgt}</span> ${badges}</div>`;
+  }
+  panel.innerHTML = html;
+  if (isFinal) { panel.classList.remove('fx'); void panel.offsetWidth; panel.classList.add('fx'); }
+}
+
+function onPathChange(info) {
+  renderCombo(evaluate(skillSeqFromPath(info.path), config), false);
+  window.__combo = evaluate(skillSeqFromPath(info.path), config);
   $('steps').textContent = `${info.steps} / ${info.budget.max ?? '∞'}`;
   const reach = $('reach');
   reach.textContent = info.canReachGoal ? 'yes' : 'no';
-  reach.className = info.canReachGoal ? 'stat' : 'stat warn';
-  $('result').textContent = '';
-  $('result').className = '';
+  reach.className = info.canReachGoal ? '' : 'warn';
+  $('status').textContent = '';
+  $('status').className = '';
 }
 
 function onComplete(result) {
-  const el = $('result');
+  const combo = evaluate(skillSeqFromPath(result.path), config);
+  renderCombo(combo, true); // isFinal → FX flourish
+  const el = $('status');
   el.className = 'win';
-  el.innerHTML = `✅ Reached goal! Final <b>×${result.runState.multiplier.toFixed(2)}</b>`
-    + (result.runState.skills.length ? ` · ${result.runState.skills.join(' → ')}` : '');
+  el.textContent = combo.special ? `✅ ${combo.special.name} unleashed!`
+    : combo.label && mode === 'defensive' ? `✅ ${combo.label} raised!`
+    : `✅ Combo executed: ${combo.items[0]?.tier ?? '—'}`;
 }
 
 function onFail(info) {
-  const el = $('result');
+  const el = $('status');
   el.className = 'lose';
   el.textContent = info.reason === 'timeout' ? '⏱ Time up — failed!'
-    : info.reason === 'trap' ? '💥 Hit a trap — failed!' : '❌ Failed.';
+    : info.reason === 'trap' ? '💥 Hit a hazard — failed!' : '❌ Failed.';
 }
 
 function onTick(info) {
@@ -102,44 +131,43 @@ function onTick(info) {
     : `${(info.remainingMs / 1000).toFixed(1)}s left`;
 }
 
-// --- the level/options controls ---------------------------------------------
-function readGenerateOpts() {
-  const budget = $('budget').value === '' ? null : Number($('budget').value);
-  const timelimitS = $('timelimit').value === '' ? null : Number($('timelimit').value);
-  return {
-    size: Number($('size').value),
-    difficulty: Number($('diff').value),
-    seed: Number($('seed').value),
-    moveBudget: budget,
-    timeLimitMs: timelimitS == null ? null : timelimitS * 1000,
-    weights,
-  };
-}
-
-$('size').addEventListener('input', (e) => { $('sizeVal').textContent = e.target.value; $('sizeVal2').textContent = e.target.value; });
-$('diff').addEventListener('input', (e) => { $('diffVal').textContent = e.target.value; });
-$('trapmode').addEventListener('change', (e) => { game.options.trapEntryMode = e.target.value; });
-
-$('generate').addEventListener('click', () => { game.loadLevel(readGenerateOpts()); resetHud(); });
-$('authored').addEventListener('click', () => { game.loadLevel(authoredLevel); resetHud(); });
-$('reset').addEventListener('click', () => { game.reset(); resetHud(); });
-$('execute').addEventListener('click', () => game.execute());
-
-function resetHud() {
-  $('mult').textContent = '×1.00';
-  $('skills').textContent = '—';
+function resetReadout() {
+  renderCombo(null, false);
+  $('status').textContent = '';
+  $('status').className = '';
   $('time').textContent = '—';
   $('reach').textContent = 'yes';
-  $('reach').className = 'stat';
-  $('result').textContent = '';
-  $('result').className = '';
+  $('reach').className = '';
   const st = game.getState();
   $('steps').textContent = `0 / ${st.level.moveBudget ?? '∞'}`;
+  $('combo-title').textContent = `Combo — ${config.title}`;
 }
 
-// --- legend ------------------------------------------------------------------
-$('legend').innerHTML = Object.entries(nodeTypes)
-  .map(([k, d]) => `<span><i class="sw" style="background:${d.color}"></i>${d.icon ? d.icon + ' ' : ''}${d.label || k}</span>`)
-  .join('');
+function renderLegend() {
+  const cfg = config;
+  const entries = [
+    ...Object.entries(cfg.base).filter(([k]) => k !== 'normal'),
+    ...Object.entries(cfg.skills),
+    ...Object.entries(cfg.powerups || {}),
+  ];
+  $('legend').innerHTML = entries
+    .map(([k, d]) => `<span><i class="sw" style="background:${d.color || '#333'}"></i>${d.icon ? d.icon + ' ' : ''}${d.label || k}</span>`)
+    .join('');
+}
 
-resetHud();
+// ---- controls ---------------------------------------------------------------
+function setMode(next) {
+  mode = next;
+  $('mode-offensive').classList.toggle('active', mode === 'offensive');
+  $('mode-defensive').classList.toggle('active', mode === 'defensive');
+  buildGame();
+}
+$('mode-offensive').addEventListener('click', () => setMode('offensive'));
+$('mode-defensive').addEventListener('click', () => setMode('defensive'));
+$('size').addEventListener('input', (e) => { $('sizeVal').textContent = e.target.value; $('sizeVal2').textContent = e.target.value; });
+$('generate').addEventListener('click', regenerate);
+$('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); regenerate(); });
+$('reset').addEventListener('click', () => { game.reset(); resetReadout(); });
+$('execute').addEventListener('click', () => game.execute());
+
+buildGame();

@@ -504,8 +504,8 @@ function shuffle(arr, rng) {
 function primaryTarget(mode, start, goal, cols, rows) {
   const min = manhattan(start, goal) + 1;
   if (typeof mode === 'number') return clamp(mode, min, cols * rows);
-  if (mode === 'long') return Math.min(Math.round(min * 2.0), Math.floor(cols * rows * 0.7));
-  if (mode === 'medium') return Math.min(Math.round(min * 1.4), Math.floor(cols * rows * 0.6));
+  if (mode === 'long') return Math.min(Math.round(min * 1.6), Math.floor(cols * rows * 0.5));
+  if (mode === 'medium') return Math.min(Math.round(min * 1.3), Math.floor(cols * rows * 0.45));
   return min; // 'shortest'
 }
 function pickEndpoints(cols, rows, mode, rng) {

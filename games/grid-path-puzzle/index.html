@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Grid Path Puzzle — demo</title>
+    <title>Grid Path Puzzle — combo demo</title>
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
@@ -11,75 +11,97 @@
         font-family: system-ui, sans-serif; }
       a.back { position: fixed; top: 12px; left: 14px; color: #8a90a0; font-size: 13px; text-decoration: none; }
       a.back:hover { color: #cdd2da; }
-      .layout { max-width: 980px; margin: 0 auto; padding: 46px 20px 60px;
-        display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 26px; align-items: start; }
+      .layout { max-width: 1000px; margin: 0 auto; padding: 46px 20px 60px;
+        display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 26px; align-items: start; }
       h1 { grid-column: 1 / -1; font-size: 20px; margin: 0 0 2px; }
       p.sub { grid-column: 1 / -1; color: #9aa0aa; margin: 0 0 8px; font-size: 13px; }
       #board { width: 100%; }
-      .panel { background: #191c24; border: 1px solid #2a2e3a; border-radius: 12px; padding: 16px; }
-      .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
-        color: #8a90a0; margin: 0 0 12px; }
+      .panel { background: #191c24; border: 1px solid #2a2e3a; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+      .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #8a90a0; margin: 0 0 12px; }
       .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 9px 0; font-size: 13px; }
       .row label { color: #aeb4c0; }
-      input[type="range"] { width: 130px; }
-      input[type="number"] { width: 76px; background: #0e0f13; color: #e6e6e6;
-        border: 1px solid #2a2e3a; border-radius: 6px; padding: 4px 6px; }
-      select { background: #0e0f13; color: #e6e6e6; border: 1px solid #2a2e3a; border-radius: 6px; padding: 4px 6px; }
-      button { cursor: pointer; background: #2b3a55; color: #eaf0ff; border: 1px solid #3a4d70;
-        border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+      input[type="range"] { width: 150px; }
+      input[type="number"] { width: 84px; background: #0e0f13; color: #e6e6e6; border: 1px solid #2a2e3a; border-radius: 6px; padding: 4px 6px; }
+      button { cursor: pointer; background: #2b3a55; color: #eaf0ff; border: 1px solid #3a4d70; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
       button:hover { background: #34466a; }
       .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-      .hud b { color: #fff; }
       .stat { font-variant-numeric: tabular-nums; }
-      #skills { color: #e6c84a; }
-      #result { margin-top: 12px; font-size: 14px; min-height: 22px; }
-      #result.win { color: #5ef08a; }
-      #result.lose { color: #ff6a6a; }
-      .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; grid-column: 1 / -1; font-size: 12px; color: #9aa0aa; margin-top: 4px; }
+
+      /* mode segmented control */
+      .modeseg { display: grid; grid-template-columns: 1fr 1fr; gap: 0; grid-column: 1 / -1; max-width: 360px;
+        border: 1px solid #3a4d70; border-radius: 9px; overflow: hidden; margin-bottom: 6px; }
+      .modeseg button { border: 0; border-radius: 0; background: #15171f; color: #aeb4c0; padding: 9px; }
+      .modeseg button.active { background: #2b3a55; color: #fff; }
+
+      /* combo readout */
+      #combo { min-height: 120px; }
+      .combo-empty { color: #6f7686; font-size: 13px; }
+      .banner { font-weight: 800; font-size: 15px; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; text-align: center; letter-spacing: .03em; }
+      .banner.beam { background: linear-gradient(90deg,#3a2b55,#553a4d); color: #ffd6f0; box-shadow: 0 0 14px rgba(255,120,200,.4); }
+      .banner.fortress { background: linear-gradient(90deg,#22405a,#244a3a); color: #d6f0ff; box-shadow: 0 0 14px rgba(120,200,255,.35); }
+      .combo-sub { font-size: 12px; color: #aeb4c0; margin: -4px 0 10px; text-align: center; }
+      .combo-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid #23262f; flex-wrap: wrap; }
+      .ci-icon { font-size: 18px; }
+      .ci-tier { font-weight: 700; color: #fff; }
+      .ci-val { color: #b6c2d6; font-variant-numeric: tabular-nums; font-size: 13px; }
+      .badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: #2a2e3a; color: #cdd2da; }
+      .badge.fx-shatter, .badge.fx-blast, .badge.fx-pierce, .badge.fx-own { background: #4a2b2b; color: #ffc9c9; }
+      .badge.fx-shield, .badge.fx-reflect, .badge.fx-invuln, .badge.fx-ward { background: #243a55; color: #c9e0ff; }
+      .badge.fx-regen, .badge.fx-immunity, .badge.fx-max { background: #234a33; color: #c9ffd9; }
+      .badge.fx-beam, .badge.fx-pull { background: #45305a; color: #f0d6ff; }
+      #combo.fx { animation: comboPop .5s ease; }
+      @keyframes comboPop { 0% { transform: scale(1); } 30% { transform: scale(1.04); box-shadow: 0 0 24px rgba(120,180,255,.5); } 100% { transform: scale(1); } }
+
+      #status { margin-top: 10px; font-size: 14px; min-height: 20px; }
+      #status.win { color: #5ef08a; } #status.lose { color: #ff6a6a; }
+      .meta { display: flex; gap: 16px; font-size: 12px; color: #9aa0aa; margin-top: 8px; }
+      .meta b { color: #cdd2da; }
+      .warn { color: #ff8a5a; }
+      .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; grid-column: 1 / -1; font-size: 12px; color: #9aa0aa; }
       .legend span { display: inline-flex; align-items: center; gap: 5px; }
       .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-      .warn { color: #ff8a5a; }
     </style>
   </head>
   <body>
     <a class="back" href="/">← all games</a>
     <div class="layout">
-      <h1>🧩 Grid Path Puzzle</h1>
-      <p class="sub">Drag from the white <b>START</b> to the green <b>GOAL</b>. Collect blue/yellow/purple
-        for reward; gray blocks; red is a trap. Drag back along the line to erase. (Keyboard: focus the
-        grid, use arrow keys, Enter to finish.)</p>
+      <h1>🧩 Grid Path Puzzle — Combo Demo</h1>
+      <p class="sub">Drag from <b>START</b> 🚀 to <b>GOAL</b> 🏁. The <b>order</b> you pass skills builds a
+        combo (skill nodes feed it; ☠️ traps fail you; ⛔ blocks). Take the short safe route for a weak
+        combo, or the long route for a big one. Drag back to erase. Keyboard: focus grid, arrows, Enter.</p>
+
+      <div class="modeseg">
+        <button id="mode-offensive" class="active">⚔️ Offensive</button>
+        <button id="mode-defensive">🛡️ Defensive</button>
+      </div>
+      <div></div>
 
       <div id="board"></div>
 
       <div>
-        <div class="panel hud">
-          <h2>Run</h2>
-          <div class="row"><label>Multiplier</label><b id="mult" class="stat">×1.00</b></div>
-          <div class="row"><label>Skills</label><span id="skills" class="stat">—</span></div>
-          <div class="row"><label>Steps / budget</label><span id="steps" class="stat">0 / ∞</span></div>
-          <div class="row"><label>Time</label><span id="time" class="stat">—</span></div>
-          <div class="row"><label>Can reach goal?</label><span id="reach" class="stat">yes</span></div>
-          <div id="result"></div>
+        <div class="panel">
+          <h2 id="combo-title">Combo</h2>
+          <div id="combo"><div class="combo-empty">Draw through skill nodes to build a combo…</div></div>
+          <div id="status"></div>
+          <div class="meta">
+            <span>Steps <b id="steps">0 / ∞</b></span>
+            <span>Time <b id="time">—</b></span>
+            <span>Reach goal <b id="reach">yes</b></span>
+          </div>
           <div class="btns">
             <button id="execute">Execute</button>
             <button id="reset">Reset</button>
           </div>
         </div>
 
-        <div class="panel" style="margin-top:14px;">
+        <div class="panel">
           <h2>Level</h2>
-          <div class="row"><label>Size <span id="sizeVal">8</span>×<span id="sizeVal2">8</span></label>
-            <input id="size" type="range" min="4" max="15" value="8" /></div>
-          <div class="row"><label>Difficulty <span id="diffVal">0.5</span></label>
-            <input id="diff" type="range" min="0" max="1" step="0.05" value="0.5" /></div>
+          <div class="row"><label>Size <span id="sizeVal">10</span>×<span id="sizeVal2">10</span></label>
+            <input id="size" type="range" min="4" max="15" value="10" /></div>
           <div class="row"><label>Seed</label><input id="seed" type="number" value="1" /></div>
-          <div class="row"><label>Move budget</label><input id="budget" type="number" placeholder="∞" /></div>
-          <div class="row"><label>Time limit (s)</label><input id="timelimit" type="number" placeholder="off" /></div>
-          <div class="row"><label>Trap on touch</label>
-            <select id="trapmode"><option value="commitFail">fail on release</option><option value="block">block entry</option></select></div>
           <div class="btns">
             <button id="generate">Generate</button>
-            <button id="authored">Authored level</button>
+            <button id="random">🎲 Random</button>
           </div>
         </div>
       </div>
