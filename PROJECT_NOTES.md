@@ -20,6 +20,7 @@ TRS/
   games/
     fighting/           # 🥊 Phaser 3 + Yuka fighting game
     grid-path-puzzle/    # 🧩 reusable, zero-dependency DOM/SVG puzzle module
+    shmup/              # ✈️ Canvas 2D shooter that embeds the puzzle as a "hack"
 ```
 
 ---
@@ -48,6 +49,16 @@ Reusable DOM/CSS+SVG module, **zero dependencies**. Drag a path START→GOAL; th
 - The combo engine + configs live in the **host layer** `combo/` (JSON, no YAML/parser dep);
   `module/` stays generic and only emits the ordered path. The combo-focused board dropped the
   old +DMG/upgrade/penalty multiplier nodes.
+
+### ✈️ Hack & Blast (`games/shmup/`)
+Vanilla **Canvas 2D** vertical shooter that **embeds the puzzle as the hack mechanic**. Player
+auto-fires at a boss (cycles aimed/spread/radial patterns) + 3 smalls; **Hack** opens the offensive
+puzzle (effects hit enemies), **Protect** the defensive (buffs the player). Fixed-timestep loop with
+`timeScale` → **slow-mo while a puzzle is open**; one puzzle at a time; per-side success/fail cooldowns.
+Everything in `config/game.json`; effects are a data-driven handler registry; the puzzle/combo modules
+are imported, never modified. **Verified:** `npm run test:shmup` (36 tests: patterns, fire cadence,
+collision, status, win/lose, effect application via REAL combo results, bridge gating) + headless
+browser (move/fire, Hack→slow-mo, solve→boss effect + cooldown). Debug: `window.__shmup`.
 
 ---
 

@@ -24,6 +24,7 @@ export default defineConfig({
         menu: resolve(__dirname, 'index.html'),
         fighting: resolve(__dirname, 'games/fighting/index.html'),
         puzzle: resolve(__dirname, 'games/grid-path-puzzle/index.html'),
+        shmup: resolve(__dirname, 'games/shmup/index.html'),
       },
     },
   },

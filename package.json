@@ -6,6 +6,7 @@
   "scripts": {
     "build:sprites": "node games/fighting/tools/build-spritesheet.mjs",
     "test:puzzle": "node games/grid-path-puzzle/tests/run.mjs",
+    "test:shmup": "node games/shmup/tests/run.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
