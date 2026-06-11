@@ -1,0 +1,80 @@
+{
+  "mode": "defensive",
+  "title": "Defensive — layer many safety nets",
+  "rules": {
+    "maxSlots": 5,
+    "lockToFirstPayload": false,
+    "stacking": "longestAdjacentRun",
+    "amplifierOrderMatters": true,
+    "multiplicativeAmplifiers": true,
+    "punishNearMiss": false
+  },
+  "stackCurve": [1.0, 2.5, 4.5, 7.0, 10.0],
+  "base": {
+    "start":   { "role": "start",  "passable": true,  "color": "#eef2f7", "icon": "🚀", "label": "Start" },
+    "goal":    { "role": "goal",   "passable": true,  "color": "#2fae62", "icon": "🏁", "label": "Goal" },
+    "normal":  { "role": "normal", "passable": true,  "color": "#39404e" },
+    "blocker": { "role": "normal", "passable": false, "color": "#2a2e39", "icon": "⛔" },
+    "trap":    { "role": "normal", "passable": true,  "color": "#d04a4a", "icon": "☠️", "label": "Hazard", "failsOnPass": true }
+  },
+  "skills": {
+    "shield": {
+      "class": "payload", "icon": "🛡️", "color": "#5b8def", "signature": "magnitude", "baseDurationSec": 4,
+      "value": { "kind": "linear", "base": 25, "unit": "HP absorb" },
+      "tiers": [
+        { "atStack": 1, "name": "Plating" },
+        { "atStack": 2, "name": "Shield" },
+        { "atStack": 3, "name": "Bulwark", "effects": ["reflect"] },
+        { "atStack": 4, "name": "Aegis", "effects": ["reflect", "invuln"] }
+      ]
+    },
+    "cleanse": {
+      "class": "payload", "icon": "🧹", "color": "#56c5e6", "signature": "removal",
+      "tiers": [
+        { "atStack": 1, "name": "Purge" },
+        { "atStack": 2, "name": "Cleanse" },
+        { "atStack": 3, "name": "Decontaminate", "effects": ["immunityShort"] },
+        { "atStack": 4, "name": "Purity", "effects": ["ward"] }
+      ]
+    },
+    "overclock": {
+      "class": "payload", "icon": "⚡", "color": "#e6c84a", "signature": "duration", "baseDurationSec": 5,
+      "value": { "kind": "linear", "base": 15, "unit": "% fire-rate" },
+      "tiers": [
+        { "atStack": 1, "name": "Boost" },
+        { "atStack": 2, "name": "Overclock" },
+        { "atStack": 3, "name": "Surge", "effects": ["pierce"] },
+        { "atStack": 4, "name": "Overdrive", "effects": ["maxRate"] }
+      ]
+    },
+    "prolong": { "class": "amplifier", "icon": "⏳", "color": "#9b59b6", "op": "multiply", "duration": 1.5 },
+    "amplify": { "class": "amplifier", "icon": "💪", "color": "#e6a24a", "op": "multiply", "magnitude": 1.5 }
+  },
+  "powerups": {
+    "repair": { "icon": "🔧", "color": "#7fd66b", "label": "Repair", "effect": "instantHeal", "base": 30, "unit": "HP" }
+  },
+  "named": {
+    "fortress": {
+      "when": { "payloads": ["shield", "cleanse", "overclock"], "amplifiers": ["prolong", "amplify"] },
+      "label": "Fortress / Overdrive"
+    }
+  },
+  "generation": {
+    "place": [
+      { "type": "shield",    "count": { "exact": 1 }, "placement": "onPrimaryRoute", "order": 0 },
+      { "type": "cleanse",   "count": { "exact": 1 }, "placement": "onPrimaryRoute", "order": 1 },
+      { "type": "overclock", "count": { "exact": 1 }, "placement": "onPrimaryRoute", "order": 2 },
+      { "type": "prolong",   "count": { "exact": 1 }, "placement": "lateOnRoute",    "order": 10 },
+      { "type": "amplify",   "count": { "exact": 1 }, "placement": "lateOnRoute",    "order": 11 },
+      { "type": "repair",    "count": { "min": 1, "max": 2 }, "placement": "offRoute", "order": 0 }
+    ],
+    "alternateRoutes": 1,
+    "primaryLengthTarget": "medium",
+    "safeLengthMode": { "maxExtra": 2 },
+    "trapDensity": 0.12,
+    "blockerDensity": 0.2,
+    "channeling": "soft",
+    "lateGap": { "min": 1, "max": 3 },
+    "endpointMode": "edgeRandom"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "mode": "offensive",
+  "title": "Offensive — commit & unleash",
+  "rules": {
+    "maxSlots": 5,
+    "lockToFirstPayload": true,
+    "leadingRunOnly": true,
+    "amplifierOrderMatters": true,
+    "multiplicativeAmplifiers": true,
+    "punishNearMiss": true
+  },
+  "stackCurve": [1.0, 2.5, 4.5, 7.0, 10.0],
+  "base": {
+    "start":   { "role": "start",  "passable": true,  "color": "#eef2f7", "icon": "🚀", "label": "Start" },
+    "goal":    { "role": "goal",   "passable": true,  "color": "#2fae62", "icon": "🏁", "label": "Goal" },
+    "normal":  { "role": "normal", "passable": true,  "color": "#39404e" },
+    "blocker": { "role": "normal", "passable": false, "color": "#2a2e39", "icon": "⛔" },
+    "trap":    { "role": "normal", "passable": true,  "color": "#d04a4a", "icon": "☠️", "label": "Trap", "failsOnPass": true }
+  },
+  "skills": {
+    "freeze": {
+      "class": "payload", "icon": "❄️", "color": "#56c5e6", "signature": "duration",
+      "value": { "kind": "linear", "base": 0.4, "unit": "s frozen" },
+      "tiers": [
+        { "atStack": 1, "name": "Chill" },
+        { "atStack": 2, "name": "Freeze" },
+        { "atStack": 3, "name": "Deep Freeze", "effects": ["shatter"] },
+        { "atStack": 4, "name": "Absolute Zero", "effects": ["shatter", "blast"] }
+      ]
+    },
+    "confuse": {
+      "class": "payload", "icon": "🌀", "color": "#c58cff", "signature": "potency",
+      "value": { "kind": "linear", "base": 0.5, "unit": "s redirect" },
+      "tiers": [
+        { "atStack": 1, "name": "Glitch" },
+        { "atStack": 2, "name": "Confuse" },
+        { "atStack": 3, "name": "Mass Hysteria", "effects": ["pullIn"] },
+        { "atStack": 4, "name": "Civil War", "effects": ["ownDamage"] }
+      ]
+    },
+    "drain": {
+      "class": "payload", "icon": "🩸", "color": "#7fd66b", "signature": "amount",
+      "value": { "kind": "linear", "base": 20, "unit": "HP" },
+      "tiers": [
+        { "atStack": 1, "name": "Leech" },
+        { "atStack": 2, "name": "Drain" },
+        { "atStack": 3, "name": "Siphon", "effects": ["shield"] },
+        { "atStack": 4, "name": "Vampiric Surge", "effects": ["regen"] }
+      ]
+    },
+    "chain":     { "class": "amplifier", "icon": "🔗", "color": "#e6a24a", "op": "multiply", "potency": 1.5, "duration": 1.5 },
+    "multihack": { "class": "amplifier", "icon": "💥", "color": "#ff9f43", "op": "scope", "targets": "all" }
+  },
+  "specialCombos": [
+    {
+      "id": "beam",
+      "name": "System Beam",
+      "requires": { "payloads": ["freeze", "confuse", "drain"], "eachCount": 1, "anyOrder": true },
+      "finisher": ["chain", "multihack"],
+      "result": { "type": "beam", "durationSec": 5, "targets": "all", "applies": ["freeze", "confuse", "drain"], "effects": ["beam"] }
+    }
+  ],
+  "generation": {
+    "place": [
+      { "type": "freeze",    "count": { "exact": 3 }, "placement": "onPrimaryRoute", "cluster": true,  "order": 0 },
+      { "type": "chain",     "count": { "exact": 1 }, "placement": "lateOnRoute",                       "order": 10 },
+      { "type": "multihack", "count": { "exact": 1 }, "placement": "lateOnRoute",                       "order": 11 },
+      { "type": "confuse",   "count": { "exact": 1 }, "placement": "offRoute",                          "order": 0 },
+      { "type": "drain",     "count": { "exact": 1 }, "placement": "offRoute",                          "order": 0 }
+    ],
+    "alternateRoutes": 1,
+    "primaryLengthTarget": "long",
+    "safeLengthMode": "shortest",
+    "trapDensity": 0.2,
+    "blockerDensity": 0.18,
+    "channeling": "strong",
+    "lateGap": { "min": 1, "max": 2 },
+    "endpointMode": "edgeRandom"
+  }
+}

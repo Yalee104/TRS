@@ -8,5 +8,8 @@ await import('./pathRules.test.mjs');
 console.log('\neffects.test.mjs');
 await import('./effects.test.mjs');
 
+console.log('\ncomboEngine.test.mjs');
+await import('./comboEngine.test.mjs');
+
 const { summary } = await import('./harness.mjs');
 summary();
