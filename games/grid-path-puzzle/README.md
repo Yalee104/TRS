@@ -114,7 +114,10 @@ data-driven **combo system** on top, with an Offensive/Defensive toggle:
   look, the combo math, and level generation.
 - **`combo/formulas.js`** (`linear`/`multiply`/`table`) and **`combo/effects.js`**
   (named effect → HUD badge). "Value" is abstract; the host maps it to game units.
-  See `COMBO_DESIGN_OFFENSIVE.md` / `COMBO_DESIGN_DEFENSIVE.md` for the full design.
+
+**Tuning the JSON configs — including the `generation` (level-gen) node — is documented
+in [`CONFIG_GUIDE.md`](./CONFIG_GUIDE.md)** (with recipes/examples). For the combo design
+rationale see `COMBO_DESIGN_OFFENSIVE.md` / `COMBO_DESIGN_DEFENSIVE.md`.
 
 ## Route-first level generation
 
