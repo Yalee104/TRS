@@ -34,14 +34,20 @@ browser (renders, tints, hits, AI transitions). Still runs unchanged after being
 relocated into `games/fighting/`.
 
 ### 🧩 Grid Path Puzzle (`games/grid-path-puzzle/`)
-Reusable DOM/CSS+SVG module, **zero dependencies** (~8 KB gzipped). Drag a path
-START→GOAL; node effects accumulate; reach goal to "execute". **Verified:**
-- `npm run test:puzzle` — **all headless logic tests pass** (generator solvability across
-  sizes 4–15 × many seeds; path rules; effect ordering).
-- Headless browser: real mouse-drag to goal completes with correct result + HUD; backtrack
-  shrinks the path; trap-fail, **block** mode, **move-budget** cap, and **timeout** all behave;
-  no runtime errors (only the cosmetic `favicon.ico` 404).
-- `npm run build` compiles all three pages.
+Reusable DOM/CSS+SVG module, **zero dependencies**. Drag a path START→GOAL; the
+**order** you cross skill nodes builds a combo; reach goal to "execute". Now has a
+**data-driven combo system** with an **Offensive/Defensive mode toggle** and a
+**route-first "designer" generator**. **Verified:**
+- `npm run test:puzzle` — **all headless tests pass**: path rules, effect ordering,
+  generator solvability (4–15 × seeds), the **ComboEngine** (offensive lock-to-first /
+  Beam / near-miss; defensive layered buffs / Fortress), and the **route-first generator**
+  (two distinct routes, exact node counts, achievable ordering, reproducible, fallback).
+- Headless browser: mode toggle swaps catalog+config; offensive board has exactly one 🔗 +
+  one 💥; driving the primary route yields **Deep Freeze ×6.75 · 🎯 all · Shatter**; defensive
+  layers Plating/Purge/Boost and raises the **Fortress** banner. No runtime errors (favicon only).
+- The combo engine + configs live in the **host layer** `combo/` (JSON, no YAML/parser dep);
+  `module/` stays generic and only emits the ordered path. The combo-focused board dropped the
+  old +DMG/upgrade/penalty multiplier nodes.
 
 ---
 
@@ -76,16 +82,18 @@ npm run test:puzzle    # headless logic tests for the puzzle
 | File | Teaches |
 |---|---|
 | `module/core/pathRules.js` | path-validity rules (one source of truth for pointer + keyboard) |
-| `module/core/generator.js` | seeded PCG + BFS solvability guarantee (no AI, no deps, NOT Yuka) |
-| `module/core/effects.js` | apply `onPass` in path order |
+| `module/core/generator.js` | seeded PCG: `generate` (simple spine) + `generateRouteFirst` (designer: primary+safe routes, constrained placement, channeling hazards). No AI/deps. |
 | `module/view/Renderer.js` | DOM grid + SVG path overlay (viewBox = cell units → exact centers) |
-| `module/input/PointerController.js` | drag-to-draw + backtrack |
+| `module/input/PointerController.js` | drag-to-draw + backtrack + resume |
 | `module/GridPathPuzzle.js` | the facade (rules orchestration, timer, events) |
-| `demo.js` | a host embedding the module |
+| `combo/ComboEngine.js` | **generic combo evaluation**, branches on config rule toggles |
+| `combo/configs/*.json` | offensive/defensive data: skills, curve, tiers, rules, `generation` plan |
+| `demo.js` | host: mode toggle, builds catalog from config, runs the engine, combo readout |
 
-Tunables: `nodeTypes` catalog (host-defined power-ups/obstacles), `generate` opts
-(size/difficulty/seed/weights), `moveBudget`, `timeLimitMs`, `trapEntryMode`
-(`'commitFail'`|`'block'`). Full API in `games/grid-path-puzzle/README.md`.
+Tunables: the **active JSON config** (`combo/configs/offensive|defensive.json`) drives
+skills/tiers/curve/rules + the `generation` routePlan; per-game `nodeTypes`, `generate`
+opts (size/seed/`routePlan`), `moveBudget`, `timeLimitMs`, `trapEntryMode`. Full API +
+combo design in `games/grid-path-puzzle/README.md` and the two `COMBO_DESIGN_*.md` docs.
 
 ---
 
@@ -99,13 +107,14 @@ Tunables: `nodeTypes` catalog (host-defined power-ups/obstacles), `generate` opt
 - **Assets:** swap in CC0 art (kenney.nl/itch.io) keeping frame names; author in Aseprite; Tiled stage.
 - **(Stretch)** learned AI via self-play (TensorFlow.js) — honestly overkill; experiment only.
 
-### 🧩 Puzzle
-- **More effect types** in the demo catalog (Confuse/Drain/Chain/Multihack from the PDF) and a
-  "skill chain" combo readout, matching the Pragmata "path combination" idea.
-- **Theming hook:** the module already uses `nodeType.color` + scoped CSS; add a documented
-  CSS-variable theme so hosts restyle without touching the module.
+### 🧩 Puzzle  *(DONE: combo engine offensive+defensive, mode toggle, route-first generator, resume-drag, sprite icons)*
+- **Two boards at once** — the defensive doc envisions offense + defense side-by-side sharing the
+  engine; we shipped a single-board toggle. A dual-board host is the natural next step.
+- **Real effect handlers** — `combo/effects.js` returns HUD badges only; wire actual gameplay
+  (mock targets that freeze/shatter/shield) if we ever add combat.
+- **Theming hook:** document a CSS-variable theme so hosts restyle without touching the module.
 - **Non-square grids** (`{cols, rows}`) — `gridModel` already uses (x,y); generalize generator/loader.
-- **Undo/Hint buttons** (deferred from v1) — undo = truncate path by one; hint = reveal next spine cell.
+- **Undo/Hint buttons** (deferred) — undo = truncate by one; hint = reveal the next primary-route cell.
 - **Animated path draw / particle on execute** — the "juice" that transfers to the work project.
 - **Embed it in a real game loop** (e.g. as the fighting game's "special move" minigame) to prove reuse.
 

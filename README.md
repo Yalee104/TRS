@@ -34,11 +34,14 @@ steering). Controls: **← →** move · **↑** jump · **A** punch · **S** ki
 ### 🧩 `games/grid-path-puzzle/` — Grid Path Puzzle (DOM/CSS + SVG)
 A reusable, **zero-dependency**, framework-agnostic module: drag a path from
 START to GOAL weighing risk vs. reward. Configurable grid size (4×4–15×15) and
-developer-defined node types (power-ups / obstacles). Teaches a **DOM/SVG
-renderer**, a **drag-to-draw interaction**, **pure rules/effects**, and
-**procedural generation with a solvability guarantee**. See
-`games/grid-path-puzzle/README.md` for the full module API. Live-tinker via
-`window.__puzzle`.
+developer-defined node types. The demo adds a **data-driven combo system** with an
+**Offensive/Defensive mode toggle** (skills combine by order — Freeze/Confuse/Drain
++ Chain/Multihack, the Beam; Shield/Cleanse/Overclock + Prolong/Amplify, the
+Fortress) and a **route-first "designer" generator**. Teaches a **DOM/SVG renderer**,
+a **drag-to-draw interaction**, **pure rules/effects**, **procedural generation with
+a solvability guarantee**, and a **generic config-driven engine**. See
+`games/grid-path-puzzle/README.md` + `COMBO_DESIGN_*.md`. Live-tinker via
+`window.__puzzle` / `window.__combo`.
 
 ## Layout
 

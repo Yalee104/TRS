@@ -91,3 +91,38 @@ Enter to finish. Grid size is clamped to **4×4 .. 15×15**.
 | `demo.js` | a host that embeds the module (this page) |
 
 Headless logic tests: `npm run test:puzzle`.
+
+---
+
+## Combo system (host layer, `combo/`) + Offensive/Defensive modes
+
+The module stays generic — it only emits the ordered path. The **demo** layers a
+data-driven **combo system** on top, with an Offensive/Defensive toggle:
+
+- **`combo/ComboEngine.js`** — `evaluate(skillSeq, config)` over the ordered skill
+  keys the path crossed. Behaviour is driven by `rules` toggles in the config:
+  - **Offensive**: lock to the first payload, count its leading consecutive run
+    (a different payload wastes the rest), amplifiers boost it in order
+    (🔗 Chain ×1.5, 💥 Multihack → all targets), and the **Beam** special
+    (Freeze+Confuse+Drain → 🔗 → 💥); near-misses fall back.
+  - **Defensive**: every distinct payload applies (longest *adjacent* run per
+    skill), with separate **Magnitude** (💪 Amplify) and **Duration** (⏳ Prolong)
+    tracks; the **Fortress** label emerges from all 3 payloads + both amplifiers.
+- **`combo/configs/offensive.json` / `defensive.json`** — pure data (skills,
+  `stackCurve`, tiers, amplifier ops, rule toggles, specials) **plus** a
+  `generation` block (the route-first plan, below). One file drives the board's
+  look, the combo math, and level generation.
+- **`combo/formulas.js`** (`linear`/`multiply`/`table`) and **`combo/effects.js`**
+  (named effect → HUD badge). "Value" is abstract; the host maps it to game units.
+  See `COMBO_DESIGN_OFFENSIVE.md` / `COMBO_DESIGN_DEFENSIVE.md` for the full design.
+
+## Route-first level generation
+
+`generate({ ..., routePlan })` (in the module's generic generator) builds a
+*designed* board instead of random noise: an intended **high-combo primary route**
+(payloads placed in order, amplifiers reserved near the goal), a shorter
+**reward-free safe route**, and hazards that channel a real risk/reward choice.
+The `routePlan` is a generic placement vocabulary (`place[]` with
+`count`/`placement`/`cluster`/`order`, plus `alternateRoutes`, density and
+`endpointMode` knobs) — no combo semantics in the generator. Always solvable
+(BFS-validated, with a relaxation ladder + fallback).
