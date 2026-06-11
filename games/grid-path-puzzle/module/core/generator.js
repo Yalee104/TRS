@@ -332,9 +332,12 @@ function tryBuildRouteLevel({ cols, rows, nodeTypes, cats, plan, rng, opts }) {
   if (primary.length < 3) return null;
   const onPrimary = new Set(primary.map((c) => cellKey(c.x, c.y)));
 
-  // 3) plan where the valuable nodes go along the primary interior
+  // 3) plan where the valuable nodes go along the primary interior.
+  //    resolvePlace turns generic `{oneOf}`/`{min,max}` constraints into concrete
+  //    types/counts (seeded) so each board features DIFFERENT skills.
   const interior = primary.slice(1, -1);
-  const slots = planRouteSlots(interior, plan.place, plan.lateGap, rng);
+  const resolvedPlace = resolvePlace(plan.place, rng);
+  const slots = planRouteSlots(interior, resolvedPlace, plan.lateGap, rng);
   if (!slots.ok) return null;
 
   // 4) a shorter, safe alternate route through DIFFERENT cells
@@ -395,7 +398,36 @@ function tryBuildRouteLevel({ cols, rows, nodeTypes, cats, plan, rng, opts }) {
   return level;
 }
 
-// Assign valuable node types to primary-route interior cells per the constraints.
+// Resolve generic placement constraints into concrete ones (SEEDED, so it's
+// reproducible but VARIED across seeds):
+//   - `type: { oneOf:[...], distinctGroup? }` -> pick one; entries sharing a
+//     distinctGroup pick DIFFERENT types (so a board features a different skill
+//     each time, and other skills still appear).
+//   - `count: { min, max }` -> pick a count in that range.
+function resolvePlace(place, rng) {
+  const usedByGroup = {};
+  return place.map((p) => {
+    let type = p.type;
+    if (type && typeof type === 'object' && Array.isArray(type.oneOf)) {
+      let pool = type.oneOf.slice();
+      const g = type.distinctGroup;
+      if (g) {
+        const used = usedByGroup[g] || (usedByGroup[g] = new Set());
+        const fresh = pool.filter((t) => !used.has(t));
+        if (fresh.length) pool = fresh;
+      }
+      type = pool[Math.floor(rng() * pool.length)];
+      if (g) usedByGroup[g].add(type);
+    }
+    let count = p.count;
+    if (count && count.min != null && count.max != null) count = { exact: randInt(rng, count.min, count.max) };
+    return { ...p, type, count };
+  });
+}
+
+// Assign valuable node types to primary-route interior cells per the (resolved)
+// constraints. The clustered run is placed at a RANDOM offset (not always near
+// start), and non-clustered nodes are shuffled + spread for variety.
 function planRouteSlots(interior, place, lateGap, rng) {
   const countOf = (p) => p.count?.exact ?? p.count?.min ?? 1;
   const routeNodes = place.filter((p) => p.placement === 'onPrimaryRoute').sort((a, b) => a.order - b.order);
@@ -418,15 +450,20 @@ function planRouteSlots(interior, place, lateGap, rng) {
   }
   const leadEnd = interior.length - lateTotal - gap; // payloads must finish before this
 
-  // clustered route nodes form a contiguous block at the front; others spread out
-  let cursor = 0;
-  for (const p of routeNodes.filter((p) => p.cluster)) {
+  const clustered = routeNodes.filter((p) => p.cluster);
+  const nonClustered = shuffleCopy(routeNodes.filter((p) => !p.cluster), rng);
+  const clusteredTotal = clustered.reduce((s, p) => s + countOf(p), 0);
+  const leadNeed = clusteredTotal + nonClustered.length;
+  const slack = Math.max(0, leadEnd - leadNeed);
+
+  // clustered run starts at a random offset within the slack (position variety)
+  let cursor = clusteredTotal > 0 ? randInt(rng, 0, slack) : 0;
+  for (const p of clustered) {
     for (let i = 0; i < countOf(p); i++) {
       const c = interior[cursor++];
       assignments.set(cellKey(c.x, c.y), p.type);
     }
   }
-  const nonClustered = routeNodes.filter((p) => !p.cluster);
   if (nonClustered.length) {
     const span = Math.max(1, Math.floor((leadEnd - cursor) / nonClustered.length));
     let pos = cursor;
@@ -437,6 +474,12 @@ function planRouteSlots(interior, place, lateGap, rng) {
     }
   }
   return { ok: true, assignments, offRoute };
+}
+
+function shuffleCopy(arr, rng) {
+  const a = arr.slice();
+  shuffle(a, rng);
+  return a;
 }
 
 // Paint blockers/traps onto off-route cells, biased next to the primary route

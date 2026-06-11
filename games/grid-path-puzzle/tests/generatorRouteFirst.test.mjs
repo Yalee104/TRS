@@ -37,29 +37,38 @@ test('solvable across sizes 4..15 (offensive + defensive), never crashes', () =>
   }
 });
 
-test('offensive: exact amplifier/payload counts on ample grids', () => {
-  for (let seed = 0; seed < 8; seed++) {
+test('offensive: exactly one of each amplifier; a varied featured payload stack', () => {
+  const featuredSeen = new Set();
+  for (let seed = 0; seed < 10; seed++) {
     const lvl = generate({ size: 10, nodeTypes: OFF_NT, seed, routePlan: OFF.generation });
     if (!lvl.primaryRoute) continue; // fell back (shouldn't at 10x10) — skip
     const t = tally(lvl);
     assert(t.chain === 1, `exactly one chain (got ${t.chain})`);
     assert(t.multihack === 1, `exactly one multihack (got ${t.multihack})`);
-    assert(t.freeze === 3, `clustered freeze run of 3 (got ${t.freeze})`);
+    const payloads = ['freeze', 'confuse', 'drain'];
+    const counts = payloads.map((k) => t[k] || 0);
+    const present = counts.filter((c) => c > 0).length;
+    const featuredCount = Math.max(...counts);
+    assert(present === 3, `all three payloads considered (present ${present})`);
+    assert(featuredCount >= 2 && featuredCount <= 4, `one featured stack of 2..4 (got ${featuredCount})`);
+    featuredSeen.add(payloads[counts.indexOf(featuredCount)]);
   }
+  assert(featuredSeen.size > 1, `featured payload varies across seeds (saw ${[...featuredSeen].join(',')})`);
 });
 
-test('offensive: amplifiers come AFTER payloads along the primary route', () => {
+test('offensive: amplifiers come AFTER all payloads along the primary route', () => {
   for (let seed = 0; seed < 8; seed++) {
     const lvl = generate({ size: 11, nodeTypes: OFF_NT, seed, routePlan: OFF.generation });
     if (!lvl.primaryRoute) continue;
     const seq = lvl.primaryRoute
       .map((c) => lvl.cells[c.y][c.x])
       .filter((k) => OFF.skills[k]); // skill nodes only, in route order
-    const lastFreeze = seq.lastIndexOf('freeze');
+    const isPayload = (k) => OFF.skills[k].class === 'payload';
+    const lastPayload = seq.map(isPayload).lastIndexOf(true);
     const chainAt = seq.indexOf('chain');
     const multiAt = seq.indexOf('multihack');
-    assert(chainAt > lastFreeze && multiAt > chainAt,
-      `order freeze… → chain → multihack (got ${seq.join(',')})`);
+    assert(chainAt > lastPayload && multiAt > chainAt,
+      `order payloads… → chain → multihack (got ${seq.join(',')})`);
   }
 });
 

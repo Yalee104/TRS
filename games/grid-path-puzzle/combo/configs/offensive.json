@@ -60,13 +60,13 @@
       "result": { "type": "beam", "durationSec": 5, "targets": "all", "applies": ["freeze", "confuse", "drain"], "effects": ["beam"] }
     }
   ],
-  "generation": {
+    "generation": {
     "place": [
-      { "type": "freeze",    "count": { "exact": 3 }, "placement": "onPrimaryRoute", "cluster": true,  "order": 0 },
-      { "type": "chain",     "count": { "exact": 1 }, "placement": "lateOnRoute",                       "order": 10 },
-      { "type": "multihack", "count": { "exact": 1 }, "placement": "lateOnRoute",                       "order": 11 },
-      { "type": "confuse",   "count": { "exact": 1 }, "placement": "offRoute",                          "order": 0 },
-      { "type": "drain",     "count": { "exact": 1 }, "placement": "offRoute",                          "order": 0 }
+      { "type": { "oneOf": ["freeze", "confuse", "drain"], "distinctGroup": "payload" }, "count": { "min": 2, "max": 4 }, "placement": "onPrimaryRoute", "cluster": true, "order": 0 },
+      { "type": { "oneOf": ["freeze", "confuse", "drain"], "distinctGroup": "payload" }, "count": { "exact": 1 }, "placement": "onPrimaryRoute", "order": 1 },
+      { "type": { "oneOf": ["freeze", "confuse", "drain"], "distinctGroup": "payload" }, "count": { "exact": 1 }, "placement": "offRoute", "order": 0 },
+      { "type": "chain",     "count": { "exact": 1 }, "placement": "lateOnRoute", "order": 10 },
+      { "type": "multihack", "count": { "exact": 1 }, "placement": "lateOnRoute", "order": 11 }
     ],
     "alternateRoutes": 1,
     "primaryLengthTarget": "long",

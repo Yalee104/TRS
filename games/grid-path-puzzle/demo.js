@@ -23,6 +23,34 @@ const CONFIGS = { offensive: OFFENSIVE, defensive: DEFENSIVE };
 const $ = (id) => document.getElementById(id);
 const round = (n) => Math.round(n * 100) / 100;
 
+// Hand-authored levels (one per mode) — for fixed/custom maps. The intended
+// combo runs along the top row, then down the right column (a clean solvable
+// path); hazards sit off it. These showcase each mode's signature combo.
+const AUTHORED = {
+  offensive: {
+    grid: [
+      ['start', 'freeze', 'freeze', 'freeze', 'chain', 'multihack'],
+      ['normal', 'trap', 'blocker', 'trap', 'normal', 'normal'],
+      ['confuse', 'normal', 'drain', 'blocker', 'trap', 'normal'],
+      ['normal', 'blocker', 'normal', 'normal', 'normal', 'normal'],
+      ['normal', 'trap', 'normal', 'blocker', 'trap', 'normal'],
+      ['normal', 'normal', 'normal', 'normal', 'normal', 'goal'],
+    ],
+    start: { x: 0, y: 0 }, goal: { x: 5, y: 5 }, moveBudget: 16,
+  },
+  defensive: {
+    grid: [
+      ['start', 'shield', 'cleanse', 'overclock', 'prolong', 'amplify'],
+      ['normal', 'trap', 'blocker', 'normal', 'blocker', 'normal'],
+      ['repair', 'normal', 'normal', 'normal', 'trap', 'normal'],
+      ['normal', 'blocker', 'trap', 'normal', 'normal', 'normal'],
+      ['normal', 'normal', 'normal', 'blocker', 'trap', 'normal'],
+      ['normal', 'repair', 'normal', 'normal', 'normal', 'goal'],
+    ],
+    start: { x: 0, y: 0 }, goal: { x: 5, y: 5 }, moveBudget: 16,
+  },
+};
+
 let mode = 'offensive';
 let config = CONFIGS[mode];
 let game = null;
@@ -167,6 +195,7 @@ $('mode-defensive').addEventListener('click', () => setMode('defensive'));
 $('size').addEventListener('input', (e) => { $('sizeVal').textContent = e.target.value; $('sizeVal2').textContent = e.target.value; });
 $('generate').addEventListener('click', regenerate);
 $('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); regenerate(); });
+$('authored').addEventListener('click', () => { game.loadLevel(AUTHORED[mode]); resetReadout(); });
 $('reset').addEventListener('click', () => { game.reset(); resetReadout(); });
 $('execute').addEventListener('click', () => game.execute());
 
