@@ -61,20 +61,20 @@
   },
   "generation": {
     "place": [
-      { "type": "shield",    "count": { "exact": 1 }, "placement": "onPrimaryRoute", "order": 0 },
-      { "type": "cleanse",   "count": { "exact": 1 }, "placement": "onPrimaryRoute", "order": 1 },
-      { "type": "overclock", "count": { "exact": 1 }, "placement": "onPrimaryRoute", "order": 2 },
-      { "type": "prolong",   "count": { "exact": 1 }, "placement": "lateOnRoute",    "order": 10 },
-      { "type": "amplify",   "count": { "exact": 1 }, "placement": "lateOnRoute",    "order": 11 },
-      { "type": "repair",    "count": { "min": 1, "max": 2 }, "placement": "offRoute", "order": 0 }
+      { "type": { "oneOf": ["shield", "cleanse", "overclock"], "distinctGroup": "payload" }, "count": { "min": 2, "max": 4 }, "placement": "onPrimaryRoute", "cluster": true, "order": 0 },
+      { "type": { "oneOf": ["shield", "cleanse", "overclock"], "distinctGroup": "payload" }, "count": { "exact": 1 }, "placement": "onPrimaryRoute", "order": 1 },
+      { "type": { "oneOf": ["shield", "cleanse", "overclock"], "distinctGroup": "payload" }, "count": { "exact": 1 }, "placement": "offRoute", "order": 0 },
+      { "type": "prolong", "count": { "exact": 1 }, "placement": "lateOnRoute", "order": 10 },
+      { "type": "amplify", "count": { "exact": 1 }, "placement": "lateOnRoute", "order": 11 },
+      { "type": "repair",  "count": { "min": 1, "max": 2 }, "placement": "offRoute", "order": 0 }
     ],
     "alternateRoutes": 1,
-    "primaryLengthTarget": "medium",
-    "safeLengthMode": { "maxExtra": 2 },
-    "trapDensity": 0.12,
-    "blockerDensity": 0.2,
-    "channeling": "soft",
-    "lateGap": { "min": 1, "max": 3 },
+    "primaryLengthTarget": "long",
+    "safeLengthMode": "shortest",
+    "trapDensity": 0.2,
+    "blockerDensity": 0.18,
+    "channeling": "strong",
+    "lateGap": { "min": 1, "max": 2 },
     "endpointMode": "edgeRandom"
   }
 }

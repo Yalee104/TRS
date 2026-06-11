@@ -72,15 +72,24 @@ test('offensive: amplifiers come AFTER all payloads along the primary route', ()
   }
 });
 
-test('defensive: one of each buff + amplifier, repair present', () => {
-  for (let seed = 0; seed < 8; seed++) {
+test('defensive: one of each amplifier; a varied featured buff stack; repair present', () => {
+  const featuredSeen = new Set();
+  for (let seed = 0; seed < 10; seed++) {
     const lvl = generate({ size: 10, nodeTypes: DEF_NT, seed, routePlan: DEF.generation });
     if (!lvl.primaryRoute) continue;
     const t = tally(lvl);
-    assert(t.shield === 1 && t.cleanse === 1 && t.overclock === 1, 'one of each defensive payload');
-    assert(t.prolong === 1 && t.amplify === 1, 'one of each amplifier');
+    assert(t.prolong === 1, `exactly one prolong (got ${t.prolong})`);
+    assert(t.amplify === 1, `exactly one amplify (got ${t.amplify})`);
     assert((t.repair || 0) >= 1, 'at least one repair power-up');
+    const buffs = ['shield', 'cleanse', 'overclock'];
+    const counts = buffs.map((k) => t[k] || 0);
+    const present = counts.filter((c) => c > 0).length;
+    const featuredCount = Math.max(...counts);
+    assert(present === 3, `all three buffs considered (present ${present})`);
+    assert(featuredCount >= 2 && featuredCount <= 4, `one featured stack of 2..4 (got ${featuredCount})`);
+    featuredSeen.add(buffs[counts.indexOf(featuredCount)]);
   }
+  assert(featuredSeen.size > 1, `featured buff varies across seeds (saw ${[...featuredSeen].join(',')})`);
 });
 
 test('two genuinely distinct routes: safe route is shorter and reward-free', () => {
