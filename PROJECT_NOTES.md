@@ -53,17 +53,20 @@ Reusable DOM/CSS+SVG module, **zero dependencies**. Drag a path START→GOAL; th
 ### ✈️ Hack & Blast (`games/shmup/`)
 Vanilla **Canvas 2D** vertical shooter that **embeds the puzzle as the hack mechanic**. Player
 auto-fires at a boss (cycles aimed/spread/radial patterns) + 3 smalls; **Hack** opens the offensive
-puzzle (effects hit enemies), **Protect** the defensive (buffs the player). Fixed-timestep loop with
-`timeScale` → **slow-mo while a puzzle is open**; one puzzle at a time; per-side success/fail cooldowns.
+puzzle (effects hit enemies), **Protect** the defensive (buffs the player). The puzzle opens as a
+**right-side panel** (never overlaps the game) with a big **countdown timer** (one-decimal, flashes
+red <5s, starts on open so idling times out); **fail/timeout doubles** that side's cooldown
+(`cooldowns.failCooldownMult`). Fixed-timestep loop with `timeScale` → **slow-mo while a puzzle is
+open**; one puzzle at a time; per-side cooldowns.
 Everything in `config/game.json`; effects are a data-driven handler registry; the puzzle/combo modules
 are imported, never modified. **Enemy shields:** each enemy has a shield = `tuning.enemyShieldMult`×HP
 (default 5×, chips/no-regen) that absorbs fire; a winning **offensive** puzzle disables ALL enemy shields
 for `tuning.shieldDisableMs` (5s) — the strategic payoff — and **Drain** bypasses shields
 (`tuning.shieldBypassSkills`). Shields render as enemy rings (+break/restore flashes) and a boss shield bar.
-**Verified:** `npm run test:shmup` (49 tests: patterns, fire cadence, collision, status, win/lose,
-`damageEnemy` shield routing, drain bypass, shield-disable scope, effect application via REAL combo
-results, bridge gating) + headless browser (move/fire, Hack→slow-mo, solve→boss effect + cooldown).
-Debug: `window.__shmup`.
+**Verified:** `npm run test:shmup` (51 tests: patterns, fire cadence, collision, status, win/lose,
+`damageEnemy` shield routing, drain bypass, shield-disable scope, doubled fail cooldown, countdown
+wiring, effect application via REAL combo results, bridge gating) + headless browser (move/fire,
+Hack→slow-mo, solve→boss effect + cooldown). Debug: `window.__shmup`.
 
 ---
 

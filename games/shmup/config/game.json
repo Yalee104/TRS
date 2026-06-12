@@ -27,14 +27,15 @@
     },
     "smalls": [
       { "kind": "small", "hp": 38, "radius": 16, "pos": { "x": 120, "y": 230 }, "fireMs": 1300, "bulletSpeed": 160, "bulletDmg": 8, "color": "#ff8a3d" },
-      { "kind": "small", "hp": 38, "radius": 16, "pos": { "x": 240, "y": 205 }, "fireMs": 1300, "bulletSpeed": 160, "bulletDmg": 8, "color": "#ff8a3d" },
+      { "kind": "small", "hp": 38, "radius": 16, "pos": { "x": 240, "y": 250 }, "fireMs": 1300, "bulletSpeed": 160, "bulletDmg": 8, "color": "#ff8a3d" },
       { "kind": "small", "hp": 38, "radius": 16, "pos": { "x": 360, "y": 230 }, "fireMs": 1300, "bulletSpeed": 160, "bulletDmg": 8, "color": "#ff8a3d" }
     ]
   },
 
   "cooldowns": {
-    "offensiveSuccessMs": 5000, "offensiveFailMs": 11000,
-    "defensiveSuccessMs": 5000, "defensiveFailMs": 11000,
+    "offensiveSuccessMs": 5000,
+    "defensiveSuccessMs": 5000,
+    "failCooldownMult": 2,
     "tickBy": "wall"
   },
 

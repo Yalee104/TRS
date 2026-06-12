@@ -9,9 +9,14 @@ tide:
 - **🛡️ Protect** (bottom button / `K`) → the **defensive** puzzle. The result
   buffs the player (Shield / Overclock / Cleanse; Repair power-up).
 
-While a puzzle is open the battle runs in **slow motion** (the puzzle's own time
-limit runs at real time). One puzzle at a time; each side has its own cooldown,
-shorter on success than on fail/timeout. Clear all enemies = win; HP 0 = lose.
+The puzzle opens as a **panel to the right of the game** (it never overlaps the
+battle, which keeps running in **slow motion** beside it). A big **countdown
+timer** sits above the board (one decimal, e.g. `10.5s`) and **flashes red under
+5s**; it runs at real time and starts the moment the puzzle opens, so idling
+still times out. A timeout (or any fail) **doubles that side's cooldown** as a
+penalty (`cooldowns.failCooldownMult`). The entry cell shows a flashing
+**START** label. One puzzle at a time; each side has its own cooldown. Clear all
+enemies = win; HP 0 = lose.
 
 Run: `npm run dev` → open `/games/shmup/`. Tests: `npm run test:shmup`.
 
@@ -64,8 +69,10 @@ Configure it all in `config/game.json`:
 
 ## Tuning ideas (all JSON)
 - Slower/faster hacking pause: `slowFps` (set `0` for a hard pause).
-- Difficulty: enemy `patterns` rates/counts, `cooldowns`, puzzle `size`/`timeLimitMs`,
+- Difficulty: enemy `patterns` rates/counts, puzzle `size`/`timeLimitMs` (the countdown),
   `enemyShieldMult` (shield wall thickness) and `shieldDisableMs` (reward window).
+- Cooldowns: `cooldowns.{offensive,defensive}SuccessMs` + `cooldowns.failCooldownMult`
+  (fail/timeout cooldown = success × this; default 2 = doubled).
 - Combo strength/feel: the puzzle's own `combo/configs/*.json` (see that module's
   `CONFIG_GUIDE.md`) + `tuning` here (shatter bonus, beam drain, cleansable debuffs).
 

@@ -15,7 +15,9 @@ const OFF = readJson('../../grid-path-puzzle/combo/configs/offensive.json');
 const DEF = readJson('../../grid-path-puzzle/combo/configs/defensive.json');
 
 class FakePuzzle {
-  constructor(opts) { this.opts = opts; FakePuzzle.last = this; this.destroyed = false; }
+  constructor(opts) { this.opts = opts; FakePuzzle.last = this; this.destroyed = false; this.started = false; this.handlers = {}; }
+  start() { this.started = true; }
+  on(evt, fn) { this.handlers[evt] = fn; }
   destroy() { this.destroyed = true; }
 }
 const mkBridge = (state) => createBridge({
@@ -32,6 +34,14 @@ test('open() flips to slow-mo puzzle phase; one puzzle at a time', () => {
   assert(state.timeScale < 1, 'slow-mo engaged');
   assert(!!state.activePuzzle, 'activePuzzle set');
   assert(bridge.open('defensive') === false, 'second puzzle blocked while one is active');
+});
+
+test('open() starts the countdown immediately and subscribes to ticks', () => {
+  const state = createState(CONFIG);
+  const bridge = mkBridge(state);
+  bridge.open('offensive');
+  assert(FakePuzzle.last.started === true, 'timer started on open (idling still times out)');
+  assert(typeof FakePuzzle.last.handlers.tick === 'function', 'subscribed to tick for the live countdown');
 });
 
 test('success: combo applied, success cooldown set, state restored', () => {
@@ -75,7 +85,8 @@ test('fail: no effect applied, fail cooldown set', () => {
   const bridge = mkBridge(state);
   bridge.open('defensive');
   FakePuzzle.last.opts.onFail({ reason: 'timeout' });
-  assert(state.cooldowns.defensive === CONFIG.cooldowns.defensiveFailMs, 'fail cooldown applied');
+  const expectedFailCd = CONFIG.cooldowns.defensiveSuccessMs * (CONFIG.cooldowns.failCooldownMult ?? 2);
+  assert(state.cooldowns.defensive === expectedFailCd, 'fail cooldown = success x mult (doubled)');
   assert(state.player.hp === before && state.player.shield.amount === 0, 'no buff applied on fail');
   assert(state.phase === 'playing' && state.timeScale === 1, 'state restored');
 });

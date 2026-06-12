@@ -24,17 +24,35 @@ export function createBridge({
   PuzzleClass = GridPathPuzzle,
   evaluateFn = evaluate,
 }) {
+  // Build the side panel: a big countdown timer above the puzzle mount. Returns
+  // { host, panel, timerEl }; `host` is what the GridPathPuzzle mounts into.
   function makeOverlay() {
-    if (typeof document === 'undefined' || !overlayEl) return { dummy: true };
-    const el = document.createElement('div');
-    el.className = 'gpp-host';
-    overlayEl.appendChild(el);
+    if (typeof document === 'undefined' || !overlayEl) {
+      return { host: { appendChild() {} }, panel: null, timerEl: null, dummy: true };
+    }
+    const panel = document.createElement('div');
+    panel.className = 'gpp-panel';
+    const timerEl = document.createElement('div');
+    timerEl.className = 'gpp-timer';
+    const host = document.createElement('div');
+    host.className = 'gpp-host';
+    panel.appendChild(timerEl);
+    panel.appendChild(host);
+    overlayEl.appendChild(panel);
     overlayEl.style.display = 'flex';
-    return el;
+    return { host, panel, timerEl };
   }
-  function removeOverlay(el) {
-    if (el && el.remove && !el.dummy) el.remove();
+  function removeOverlay(ov) {
+    if (ov && ov.panel && ov.panel.remove) ov.panel.remove();
     if (overlayEl) overlayEl.style.display = 'none';
+  }
+
+  // Countdown text (one decimal); flashes 'urgent' under 5s remaining.
+  function showTime(timerEl, ms) {
+    if (!timerEl) return;
+    const remain = Math.max(0, ms);
+    timerEl.textContent = `${(remain / 1000).toFixed(1)}s`;
+    timerEl.classList.toggle('urgent', remain <= 5000);
   }
 
   function open(mode) {
@@ -44,9 +62,9 @@ export function createBridge({
     if (state.cooldowns[mode] > 0) return false;      // on cooldown
     const cfg = configs[mode];
     const refs = state.config.puzzle[mode];
-    const mount = makeOverlay();
+    const ov = makeOverlay();
     const instance = new PuzzleClass({
-      mount,
+      mount: ov.host,
       nodeTypes: catalogFromConfig(cfg),
       generate: { size: refs.size, routePlan: cfg.generation },
       timeLimitMs: refs.timeLimitMs,
@@ -54,9 +72,15 @@ export function createBridge({
       onComplete: (result) => finish(mode, cfg, result, true),
       onFail: () => finish(mode, cfg, null, false),
     });
-    state.activePuzzle = { mode, instance, mount };
+    state.activePuzzle = { mode, instance, overlay: ov };
     state.phase = 'puzzle';
     state.timeScale = state.config.slowFps / state.config.normalFps;
+
+    // Run the countdown immediately (wall-clock, independent of slow-mo) so the
+    // timer is live the moment the puzzle opens — idling still times out.
+    showTime(ov.timerEl, refs.timeLimitMs);
+    if (typeof instance.on === 'function') instance.on('tick', (t) => showTime(ov.timerEl, t.remainingMs));
+    if (typeof instance.start === 'function') instance.start();
     return true;
   }
 
@@ -83,7 +107,10 @@ export function createBridge({
         }
       }
     }
-    const cd = state.config.cooldowns[`${mode}${success ? 'Success' : 'Fail'}Ms`];
+    // Fail (incl. timeout) doubles the cooldown as a penalty (mult is configurable).
+    const cds = state.config.cooldowns;
+    const successMs = cds[`${mode}SuccessMs`];
+    const cd = success ? successMs : successMs * (cds.failCooldownMult ?? 2);
     state.cooldowns[mode] = cd;
     state.cooldownMax[mode] = cd || 1;
     teardown(state);
@@ -92,7 +119,7 @@ export function createBridge({
   function teardown(state) {
     if (!state.activePuzzle) return;
     try { state.activePuzzle.instance.destroy(); } catch { /* idempotent */ }
-    removeOverlay(state.activePuzzle.mount);
+    removeOverlay(state.activePuzzle.overlay);
     state.activePuzzle = null;
     if (state.phase === 'puzzle') state.phase = 'playing';
     state.timeScale = 1;
