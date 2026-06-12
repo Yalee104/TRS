@@ -8,7 +8,7 @@
 //    (which Cleanse later removes), unless the player has 'immunity'.
 // =============================================================================
 
-import { hasStatus, getStatus, addStatus, spawnBullet } from '../core/state.js';
+import { hasStatus, getStatus, addStatus, spawnBullet, damageEnemy } from '../core/state.js';
 
 function hit(a, b) {
   const dx = a.pos.x - b.pos.x;
@@ -31,7 +31,7 @@ export function stepCollision(state) {
         let dmg = b.dmg;
         const fr = getStatus(e, 'freeze');
         if (fr && fr.meta && fr.meta.shatter) dmg += tuning.shatterBonus;
-        e.hp -= dmg;
+        damageEnemy(e, dmg); // shield absorbs first (unless disabled), then HP
         b._dead = true;
         break;
       }

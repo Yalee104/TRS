@@ -32,7 +32,7 @@ export function drawPlayer(ctx, p) {
   drawStatusAura(ctx, p);
 }
 
-export function drawEnemy(ctx, e) {
+export function drawEnemy(ctx, e, time = 0) {
   ctx.fillStyle = e.color || '#ff6680';
   if (e.kind === 'boss') {
     polygon(ctx, e.pos.x, e.pos.y, e.radius, 6);
@@ -49,7 +49,34 @@ export function drawEnemy(ctx, e) {
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, e.radius + 6, 0, Math.PI * 2); ctx.stroke();
   }
+  drawShield(ctx, e, time);
   drawStatusAura(ctx, e);
+}
+
+// The enemy shield: a ring at radius+9. ACTIVE = solid, thinning as it's chipped
+// (alpha/width scale with amount/max). DISABLED = dashed + faint + pulsing, so it
+// visibly reads as "down" during the offensive-puzzle reward window.
+function drawShield(ctx, e, time) {
+  const sh = e.shield;
+  if (!sh || sh.amount <= 0) return;
+  const frac = sh.max ? sh.amount / sh.max : 1;
+  const r = e.radius + 9;
+  if (sh.disabledMs > 0) {
+    const pulse = 0.35 + 0.25 * Math.sin(time * 0.02);
+    ctx.save();
+    ctx.strokeStyle = `rgba(255,150,70,${pulse})`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 7]);
+    ctx.lineDashOffset = -time * 0.04; // drift the dashes so it shimmers
+    ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  } else {
+    ctx.save();
+    ctx.strokeStyle = `rgba(120,200,255,${0.35 + 0.5 * frac})`;
+    ctx.lineWidth = 1.5 + 3 * frac;
+    ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawStatusAura(ctx, ent) {
@@ -85,6 +112,18 @@ export function drawFx(ctx, f) {
   } else if (f.kind === 'beam') {
     ctx.globalAlpha = a * 0.8; ctx.fillStyle = '#ff8af0';
     ctx.fillRect(f.pos.x - 30, 0, 60, 9999);
+    ctx.globalAlpha = 1;
+  } else if (f.kind === 'shieldBreak') {
+    // shield disabled: an orange ring bursting OUTWARD off the body, fading.
+    const base = (f.radius || 20) + 9;
+    ctx.globalAlpha = a; ctx.strokeStyle = '#ffae46'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(f.pos.x, f.pos.y, base + (1 - a) * 26, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  } else if (f.kind === 'shieldUp') {
+    // shield re-enabled: a cyan ring snapping INWARD to the body, brightening.
+    const base = (f.radius || 20) + 9;
+    ctx.globalAlpha = a; ctx.strokeStyle = '#78c8ff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(f.pos.x, f.pos.y, base + a * 26, 0, Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
   }
 }

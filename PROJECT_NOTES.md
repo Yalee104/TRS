@@ -56,9 +56,14 @@ auto-fires at a boss (cycles aimed/spread/radial patterns) + 3 smalls; **Hack** 
 puzzle (effects hit enemies), **Protect** the defensive (buffs the player). Fixed-timestep loop with
 `timeScale` → **slow-mo while a puzzle is open**; one puzzle at a time; per-side success/fail cooldowns.
 Everything in `config/game.json`; effects are a data-driven handler registry; the puzzle/combo modules
-are imported, never modified. **Verified:** `npm run test:shmup` (36 tests: patterns, fire cadence,
-collision, status, win/lose, effect application via REAL combo results, bridge gating) + headless
-browser (move/fire, Hack→slow-mo, solve→boss effect + cooldown). Debug: `window.__shmup`.
+are imported, never modified. **Enemy shields:** each enemy has a shield = `tuning.enemyShieldMult`×HP
+(default 5×, chips/no-regen) that absorbs fire; a winning **offensive** puzzle disables ALL enemy shields
+for `tuning.shieldDisableMs` (5s) — the strategic payoff — and **Drain** bypasses shields
+(`tuning.shieldBypassSkills`). Shields render as enemy rings (+break/restore flashes) and a boss shield bar.
+**Verified:** `npm run test:shmup` (49 tests: patterns, fire cadence, collision, status, win/lose,
+`damageEnemy` shield routing, drain bypass, shield-disable scope, effect application via REAL combo
+results, bridge gating) + headless browser (move/fire, Hack→slow-mo, solve→boss effect + cooldown).
+Debug: `window.__shmup`.
 
 ---
 

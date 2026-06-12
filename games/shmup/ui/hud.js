@@ -37,10 +37,16 @@ export function createHud({ bridge, onRestart }) {
     $('hp-player-fill').style.width = pct(state.player.hp, state.player.maxHp);
     $('hp-shield-fill').style.width = pct(state.player.shield.amount, state.player.maxHp);
 
-    // boss HP
+    // boss HP + shield (the 5x wall; bar goes dashed/orange while disabled)
     const boss = state.enemies.find((e) => e.kind === 'boss');
+    const hasShield = boss && boss.shield && boss.shield.max > 0;
     $('hp-boss-wrap').style.visibility = boss ? 'visible' : 'hidden';
+    $('hp-boss-shield').style.visibility = hasShield && boss.shield.amount > 0 ? 'visible' : 'hidden';
     if (boss) $('hp-boss-fill').style.width = pct(boss.hp, boss.maxHp);
+    if (hasShield) {
+      $('hp-boss-shield-fill').style.width = pct(boss.shield.amount, boss.shield.max);
+      $('hp-boss-shield').classList.toggle('down', boss.shield.disabledMs > 0);
+    }
 
     // status chips (player)
     $('status-row').innerHTML = state.player.statuses

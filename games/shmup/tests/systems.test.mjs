@@ -6,7 +6,7 @@ import { stepPlayerFire } from '../systems/playerFire.js';
 import { stepCollision } from '../systems/collision.js';
 import { stepStatus } from '../systems/status.js';
 import { stepWinLose } from '../systems/winLose.js';
-import { addStatus } from '../core/state.js';
+import { addStatus, damageEnemy } from '../core/state.js';
 
 const baseConfig = { bulletDefaults: { enemyRadius: 6, enemyColor: '#f00' }, tuning: { shatterBonus: 24, drainRegenPerTick: 0 } };
 const mkBoss = (patterns) => ({
@@ -59,6 +59,40 @@ test('collision: player bullet damages enemy (+shatter bonus when frozen)', () =
   state.bullets = [{ owner: 'player', srcId: 'player', pos: { x: 100, y: 100 }, vel: { x: 0, y: -1 }, dmg: 10, radius: 4 }];
   stepCollision(state);
   assert(enemy.hp === 100 - 10 - 24, 'shatter adds bonus damage');
+});
+
+test('damageEnemy: shield absorbs first then HP; bypass + disabled + missing-shield hit HP', () => {
+  const e = { hp: 100, shield: { amount: 30, max: 30, disabledMs: 0 } };
+  damageEnemy(e, 12);
+  assert(e.shield.amount === 18 && e.hp === 100, 'shield 30→18, hp intact');
+  damageEnemy(e, 25); // 18 absorbed, 7 spills to hp
+  assert(e.shield.amount === 0 && e.hp === 93, 'shield emptied, 7 spilled to hp');
+  damageEnemy(e, 10);
+  assert(e.hp === 83, 'further damage hits hp (no regen)');
+  // bypass ignores an active shield
+  const b = { hp: 100, shield: { amount: 50, max: 50, disabledMs: 0 } };
+  damageEnemy(b, 20, { bypassShield: true });
+  assert(b.shield.amount === 50 && b.hp === 80, 'bypass hits hp, shield untouched');
+  // a DISABLED shield is bypassed by normal damage
+  const d = { hp: 100, shield: { amount: 50, max: 50, disabledMs: 3000 } };
+  damageEnemy(d, 20);
+  assert(d.shield.amount === 50 && d.hp === 80, 'disabled shield does not absorb');
+  // bare literal (no shield field) → straight to hp (guards older tests)
+  const m = { hp: 100 };
+  damageEnemy(m, 15);
+  assert(m.hp === 85, 'no shield field → hp damage');
+});
+
+test('collision: enemy shield absorbs player fire unless disabled', () => {
+  const mk = (shield) => ({ id: 1, kind: 'boss', pos: { x: 100, y: 100 }, radius: 20, hp: 100, shield, statuses: [] });
+  const bullet = () => ({ owner: 'player', srcId: 'player', pos: { x: 100, y: 100 }, vel: { x: 0, y: -1 }, dmg: 10, radius: 4 });
+  const mkState = (e) => ({ player: { pos: { x: 0, y: 0 }, radius: 14, hp: 100, maxHp: 100, shield: { amount: 0, remainingMs: 0 }, statuses: [] }, enemies: [e], bullets: [bullet()], config: baseConfig });
+  let e = mk({ amount: 40, max: 40, disabledMs: 0 });
+  stepCollision(mkState(e));
+  assert(e.shield.amount === 30 && e.hp === 100, 'shield up → 40→30 absorbed, hp intact');
+  e = mk({ amount: 40, max: 40, disabledMs: 5000 });
+  stepCollision(mkState(e));
+  assert(e.shield.amount === 40 && e.hp === 90, 'shield disabled → bypassed, hp 100→90');
 });
 
 test('collision: shield absorbs enemy bullet before HP', () => {

@@ -5,7 +5,7 @@ export function createRenderer(ctx) {
   return function draw(state) {
     drawBackground(ctx, state);
     for (const b of state.bullets) drawBullet(ctx, b);
-    for (const e of state.enemies) drawEnemy(ctx, e);
+    for (const e of state.enemies) drawEnemy(ctx, e, state.time);
     if (state.phase !== 'lost') drawPlayer(ctx, state.player);
     for (const f of state.fx) drawFx(ctx, f);
 

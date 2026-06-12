@@ -29,10 +29,11 @@ export function createState(config) {
     input: { left: false, right: false, firing: true },
   };
 
+  const shieldMult = config.tuning?.enemyShieldMult ?? 0;
   const enemies = [];
   const boss = config.enemies.boss;
-  enemies.push(makeEnemy(boss));
-  for (const s of config.enemies.smalls) enemies.push(makeEnemy(s));
+  enemies.push(makeEnemy(boss, shieldMult));
+  for (const s of config.enemies.smalls) enemies.push(makeEnemy(s, shieldMult));
 
   return {
     config,
@@ -51,7 +52,11 @@ export function createState(config) {
   };
 }
 
-function makeEnemy(def) {
+function makeEnemy(def, shieldMult = 0) {
+  // Shield = HP × multiplier (per-enemy `shieldMult` overrides the global default).
+  // `disabledMs > 0` means the shield is temporarily bypassed (offensive-puzzle reward).
+  // Chips, no regen: `amount` only ever decreases.
+  const s = def.hp * (def.shieldMult ?? shieldMult);
   return {
     id: uid(),
     kind: def.kind,
@@ -59,6 +64,7 @@ function makeEnemy(def) {
     hp: def.hp, maxHp: def.maxHp ?? def.hp,
     radius: def.radius,
     color: def.color,
+    shield: { amount: s, max: s, disabledMs: 0 },
     fireTimer: def.fireMs ?? 0,     // smalls use a simple timer
     patternState: { index: 0, phaseTimer: 0, telegraphing: false },
     statuses: [],
@@ -95,6 +101,20 @@ export function addStatus(entity, type, remainingMs, magnitude = 0, meta = {}) {
 export function removeStatusesOfType(entity, types) {
   const set = new Set(types);
   entity.statuses = entity.statuses.filter((s) => !set.has(s.type));
+}
+
+// Deal `amount` damage to an enemy, routed through its shield. An active shield
+// (amount left AND not disabled) absorbs first; the remainder spills to HP.
+// `bypassShield` (e.g. the Drain skill) ignores the shield and hits HP directly.
+// Enemies without a `shield` field (bare test literals) just take HP damage.
+export function damageEnemy(enemy, amount, { bypassShield = false } = {}) {
+  const sh = enemy.shield;
+  if (!bypassShield && sh && sh.amount > 0 && sh.disabledMs <= 0) {
+    const absorbed = Math.min(sh.amount, amount);
+    sh.amount -= absorbed;
+    amount -= absorbed;
+  }
+  if (amount > 0) enemy.hp -= amount;
 }
 
 // Spawn a bullet into the state (used by player + enemy fire systems).

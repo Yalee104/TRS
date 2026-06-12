@@ -45,6 +45,23 @@ test('success: combo applied, success cooldown set, state restored', () => {
   assert(FakePuzzle.last.destroyed, 'puzzle instance destroyed');
 });
 
+test('offensive success disables ALL enemy shields for the configured window', () => {
+  const state = createState(CONFIG);
+  const bridge = mkBridge(state);
+  bridge.open('offensive');
+  FakePuzzle.last.opts.onComplete({ path: skillPath(['freeze', 'freeze', 'freeze']) });
+  assert(state.enemies.length > 1 && state.enemies.every((e) => e.shield.disabledMs === CONFIG.tuning.shieldDisableMs),
+    'every enemy shield disabled for shieldDisableMs');
+});
+
+test('defensive success does NOT disable enemy shields', () => {
+  const state = createState(CONFIG);
+  const bridge = mkBridge(state);
+  bridge.open('defensive');
+  FakePuzzle.last.opts.onComplete({ path: skillPath(['shield', 'shield']) });
+  assert(state.enemies.every((e) => e.shield.disabledMs === 0), 'enemy shields untouched by the defensive puzzle');
+});
+
 test('cooldown gates re-opening', () => {
   const state = createState(CONFIG);
   state.cooldowns.offensive = 3000;

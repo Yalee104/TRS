@@ -9,7 +9,7 @@
 //  mirroring the puzzle's own effects.js, so a new tier name never crashes.
 // =============================================================================
 
-import { addStatus, removeStatusesOfType } from '../core/state.js';
+import { addStatus, removeStatusesOfType, damageEnemy } from '../core/state.js';
 
 const flash = (state, targets, color) => {
   for (const t of targets) state.fx.push({ kind: 'flash', pos: { x: t.pos.x, y: t.pos.y }, color, remainingMs: 360 });
@@ -29,7 +29,10 @@ export const HANDLERS = {
     flash(state, ctx.targets, '#c58cff');
   },
   drain(state, ctx) {
-    for (const t of ctx.targets) t.hp -= ctx.gameValue;
+    // Drain is special: it can bypass enemy shields (data-driven — which skills
+    // bypass is configured in tuning.shieldBypassSkills, so it isn't hard-coded).
+    const bypass = (state.config.tuning.shieldBypassSkills || []).includes('drain');
+    for (const t of ctx.targets) damageEnemy(t, ctx.gameValue, { bypassShield: bypass });
     state.player.hp = Math.min(state.player.maxHp, state.player.hp + ctx.gameValue);
     flash(state, ctx.targets, '#7fd66b');
   },

@@ -30,6 +30,10 @@
       .hpbar { position: absolute; height: 12px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; overflow: hidden; }
       #hp-boss-wrap { top: 10px; left: 40px; right: 40px; }
       #hp-boss-fill { height: 100%; width: 100%; background: linear-gradient(90deg,#ff6a6a,#ff3b3b); }
+      /* enemy shield wall (5x HP) shown as a thin bar above the boss HP bar */
+      #hp-boss-shield { top: 25px; left: 40px; right: 40px; height: 5px; }
+      #hp-boss-shield-fill { height: 100%; width: 100%; background: linear-gradient(90deg,#5fb0ff,#9fd4ff); transition: background .2s; }
+      #hp-boss-shield.down #hp-boss-shield-fill { background: repeating-linear-gradient(90deg,#ffae46 0 6px,transparent 6px 12px); }
       #hp-player-wrap { bottom: 8px; left: 40px; right: 40px; }
       #hp-player-fill { height: 100%; width: 100%; background: linear-gradient(90deg,#3ad36a,#5ef08a); }
       #hp-shield-fill { position: absolute; inset: 0; height: 100%; width: 0%; background: rgba(120,170,255,.7); }
@@ -71,6 +75,7 @@
       <canvas id="game"></canvas>
       <div class="hud">
         <div id="hp-boss-wrap" class="hpbar"><div id="hp-boss-fill"></div></div>
+        <div id="hp-boss-shield" class="hpbar"><div id="hp-boss-shield-fill"></div></div>
         <button id="hack" class="hackbtn"><div id="hack-cd" class="cd-fill"></div><span class="cd-label"></span> 🔓 Hack</button>
         <button id="protect" class="hackbtn"><div id="protect-cd" class="cd-fill"></div><span class="cd-label"></span> 🛡️ Protect</button>
         <div id="status-row"></div>

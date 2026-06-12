@@ -34,6 +34,16 @@ test('Beam applies freeze + confuse to all enemies', () => {
   assert(state.enemies.every((e) => hasStatus(e, 'freeze') && hasStatus(e, 'confuse')), 'all frozen + confused');
 });
 
+test('offensive Drain bypasses the enemy shield and hits HP', () => {
+  const state = fresh();
+  const boss = bossOf(state);
+  const hp0 = boss.hp, sh0 = boss.shield.amount;
+  assert(sh0 > 0, 'boss starts with a shield');
+  applyComboResult(state, evaluate(['drain', 'drain', 'drain'], OFF), 'offensive');
+  assert(boss.hp < hp0, 'boss HP dropped despite a full shield');
+  assert(boss.shield.amount === sh0, 'shield left untouched by drain');
+});
+
 test('defensive Shield grants the player a shield pool', () => {
   const state = fresh();
   applyComboResult(state, evaluate(['shield', 'shield', 'amplify'], DEF), 'defensive');

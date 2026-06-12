@@ -43,9 +43,29 @@ each with its own `rateMs` / `count` / `bulletSpeed` / `telegraphMs` (and an
 optional `inflict` debuff). Small enemies fire one aimed shot on a timer. Add a
 new pattern = one `case` in `systems/enemyAI.js` + data here.
 
+## Enemy shields (the puzzle as core strategy)
+
+Every enemy spawns with a **shield = HP × `tuning.enemyShieldMult`** (default 5×) that absorbs
+incoming fire before HP. It **chips but never regenerates** — grinding it down with normal fire is
+slow by design. **Passing the offensive (Hack) puzzle disables ALL enemy shields for
+`tuning.shieldDisableMs` (default 5s)** — the main window to actually burn HP. The **Drain** skill
+**bypasses** the shield and hits HP directly (which skills bypass is the `tuning.shieldBypassSkills`
+list — not hard-coded). Shields render as a ring around each enemy (solid + thinning while up,
+dashed/pulsing while disabled) with break/restore flashes, plus a thin shield bar above the boss HP bar.
+
+Configure it all in `config/game.json`:
+| Key | Meaning |
+|---|---|
+| `tuning.enemyShieldMult` | shield = N × HP (global default) |
+| `enemies.boss.shieldMult` / `enemies.smalls[].shieldMult` | per-enemy override of the default |
+| `tuning.shieldDisableMs` | how long an offensive-puzzle win disables shields |
+| `tuning.shieldBypassSkills` | offensive skills that ignore the shield (e.g. `["drain"]`) |
+| `enemies.boss.pos.y` | boss vertical position (kept clear of the Hack button) |
+
 ## Tuning ideas (all JSON)
 - Slower/faster hacking pause: `slowFps` (set `0` for a hard pause).
-- Difficulty: enemy `patterns` rates/counts, `cooldowns`, puzzle `size`/`timeLimitMs`.
+- Difficulty: enemy `patterns` rates/counts, `cooldowns`, puzzle `size`/`timeLimitMs`,
+  `enemyShieldMult` (shield wall thickness) and `shieldDisableMs` (reward window).
 - Combo strength/feel: the puzzle's own `combo/configs/*.json` (see that module's
   `CONFIG_GUIDE.md`) + `tuning` here (shatter bonus, beam drain, cleansable debuffs).
 

@@ -17,7 +17,7 @@
   "enemies": {
     "boss": {
       "kind": "boss", "hp": 520, "maxHp": 520, "radius": 38,
-      "pos": { "x": 240, "y": 120 }, "color": "#d05bff",
+      "pos": { "x": 240, "y": 150 }, "color": "#d05bff",
       "patterns": [
         { "type": "aimed",  "rateMs": 850,  "count": 1,  "bulletSpeed": 210, "bulletDmg": 12, "telegraphMs": 220 },
         { "type": "spread", "rateMs": 1500, "count": 5,  "spreadDeg": 70, "bulletSpeed": 175, "bulletDmg": 10, "telegraphMs": 380 },
@@ -49,6 +49,9 @@
     "statusStackPolicy": "refreshMaxMagnitude",
     "drainRegenPerTick": 2,
     "confuseFriendlyFireTier": "ownDamage",
-    "beamDrain": 30
+    "beamDrain": 30,
+    "enemyShieldMult": 5,
+    "shieldDisableMs": 5000,
+    "shieldBypassSkills": ["drain"]
   }
 }

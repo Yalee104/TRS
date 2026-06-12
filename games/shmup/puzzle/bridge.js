@@ -72,6 +72,16 @@ export function createBridge({
           if (def) applyPowerup(state, c.typeKey, def);
         }
       }
+      // Hacking the system drops EVERY enemy's shield for a few seconds — the main
+      // window to actually burn HP down (the core strategic payoff of the puzzle).
+      if (mode === 'offensive') {
+        const ms = state.config.tuning.shieldDisableMs ?? 0;
+        for (const e of state.enemies) {
+          if (!e.shield || e.shield.amount <= 0) continue;
+          e.shield.disabledMs = ms;
+          state.fx.push({ kind: 'shieldBreak', pos: { x: e.pos.x, y: e.pos.y }, radius: e.radius, remainingMs: 520 });
+        }
+      }
     }
     const cd = state.config.cooldowns[`${mode}${success ? 'Success' : 'Fail'}Ms`];
     state.cooldowns[mode] = cd;
