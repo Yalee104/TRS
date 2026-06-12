@@ -7,15 +7,21 @@
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100vh; background: #07080c; color: #e6e6e6;
+      /* Fill the viewport exactly so the whole game is visible without scrolling. */
+      body { margin: 0; height: 100vh; overflow: hidden; background: #07080c; color: #e6e6e6;
         font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; }
       a.back { position: fixed; top: 10px; left: 14px; color: #8a90a0; font-size: 13px; text-decoration: none; }
-      h1 { font-size: 17px; margin: 12px 0 4px; }
-      .hint { font-size: 12px; color: #9aa0aa; margin: 0 0 10px; }
+      h1 { font-size: 16px; margin: 8px 0 2px; }
+      .hint { font-size: 12px; color: #9aa0aa; margin: 0 0 8px; text-align: center; padding: 0 10px; }
       .hint kbd { background: #2a2d36; border: 1px solid #3a3e49; border-radius: 4px; padding: 0 5px; }
 
-      .stage { position: relative; width: 480px; height: 720px; border-radius: 8px; overflow: hidden;
-        box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+      /* The canvas backing store stays 480×720; this just scales the on-screen size.
+         Width is the single driver (smallest of the design width, the viewport width,
+         and the width that keeps the 2:3 box within the leftover viewport height), so
+         aspect-ratio derives the height and the stage can never overflow the screen. */
+      .stage { position: relative; aspect-ratio: 480 / 720;
+        width: min(480px, 94vw, calc((100vh - 96px) * 2 / 3));
+        border-radius: 8px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
       #game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
       /* HUD overlay */
@@ -24,11 +30,11 @@
       .hpbar { position: absolute; height: 12px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; overflow: hidden; }
       #hp-boss-wrap { top: 10px; left: 40px; right: 40px; }
       #hp-boss-fill { height: 100%; width: 100%; background: linear-gradient(90deg,#ff6a6a,#ff3b3b); }
-      #hp-player-wrap { bottom: 12px; left: 40px; right: 40px; }
+      #hp-player-wrap { bottom: 8px; left: 40px; right: 40px; }
       #hp-player-fill { height: 100%; width: 100%; background: linear-gradient(90deg,#3ad36a,#5ef08a); }
       #hp-shield-fill { position: absolute; inset: 0; height: 100%; width: 0%; background: rgba(120,170,255,.7); }
 
-      #status-row { position: absolute; bottom: 30px; left: 40px; display: flex; gap: 6px; }
+      #status-row { position: absolute; bottom: 72px; left: 40px; display: flex; gap: 6px; }
       .chip { font-size: 11px; background: rgba(20,24,34,.85); border: 1px solid #2a2e3a; border-radius: 999px; padding: 1px 7px; }
 
       .hackbtn { pointer-events: auto; position: absolute; left: 50%; transform: translateX(-50%);
@@ -37,7 +43,8 @@
       .hackbtn:hover { background: #2b3a5e; }
       .hackbtn.disabled { opacity: .55; cursor: not-allowed; }
       #hack { top: 30px; background: #4a2350; border-color: #743a70; }
-      #protect { bottom: 44px; background: #1f4a3a; border-color: #2e7a5a; }
+      /* sits in the reserved bottom strip, clear of the (raised) player ship */
+      #protect { bottom: 26px; background: #1f4a3a; border-color: #2e7a5a; }
       .cd-fill { position: absolute; left: 0; bottom: 0; width: 100%; height: 0%; background: rgba(0,0,0,.55); pointer-events: none; }
       .cd-label { position: relative; z-index: 1; }
 
@@ -57,8 +64,8 @@
   <body>
     <a class="back" href="/">← all games</a>
     <h1>✈️ Hack &amp; Blast</h1>
-    <p class="hint">Move <kbd>←</kbd><kbd>→</kbd> (auto-fire). <b>Hack</b> (top) = offensive puzzle ·
-      <b>Protect</b> (bottom) = defensive puzzle. Keys <kbd>J</kbd>/<kbd>K</kbd> also open them.</p>
+    <p class="hint">Move <kbd>←</kbd><kbd>→</kbd> (auto-fire) · <b>Hack</b> <kbd>J</kbd> = offensive ·
+      <b>Protect</b> <kbd>K</kbd> = defensive</p>
 
     <div class="stage">
       <canvas id="game"></canvas>
