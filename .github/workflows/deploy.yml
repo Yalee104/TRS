@@ -1,0 +1,48 @@
+name: Deploy to GitHub Pages
+
+# Builds the Vite multi-page site and publishes it to GitHub Pages.
+# Runs on every push to main, or on demand from the Actions tab (workflow_dispatch).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Permissions the deploy step needs to publish to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; newer pushes cancel an in-flight run.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      # npm install (not npm ci): the runner is a fresh Ubuntu VM each run, so this
+      # resolves cleanly and avoids cross-machine lockfile / native-binary mismatches.
+      - run: npm install
+      # --base=/TRS/ so assets resolve under the project-repo subpath on Pages.
+      - run: npm run build -- --base=/TRS/
+      # Make the bare https://<user>.github.io/TRS/ URL open Hack & Blast directly.
+      # Only the built dist/index.html is overwritten; the source dev menu is untouched.
+      - run: |
+          echo '<!doctype html><meta http-equiv="refresh" content="0; url=./games/shmup/">' > dist/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
