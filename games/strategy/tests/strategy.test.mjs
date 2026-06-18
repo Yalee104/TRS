@@ -264,7 +264,7 @@ test('bridge: solving makes a pending action via the real ComboEngine, then targ
   assert(bridge.open('weapon') === true, 'opened attack puzzle');
   s.activePuzzle.instance.fireComplete([{ typeKey: 'freeze' }, { typeKey: 'freeze' }, { typeKey: 'freeze' }]);
   assert(s.pendingAction && s.pendingAction.effect === 'freeze', 'pending freeze created');
-  assert(s.pendingAction.potency === evaluate(['freeze', 'freeze', 'freeze'], offensivePalette('weapon')).items[0].value, 'potency from ComboEngine');
+  assert(s.pendingAction.potency === evaluate(['freeze', 'freeze', 'freeze'], offensivePalette('weapon', {}, CONFIG.potency)).items[0].value, 'potency from ComboEngine');
   assert(s.creditLeftMs === s.creditMs - CONFIG.phase.actionCostMs, 'credit spent on solve');
   assert(s.activePuzzle === null, 'puzzle torn down');
   assert(bridge.open('tower') === false, 'cannot open another puzzle while a target is pending');
@@ -284,6 +284,15 @@ test('bridge: a failed puzzle spends fail cost and cools the component down', ()
 });
 
 // --- real generator + ComboEngine (the half FakePuzzle skips) ----------------
+test('potency stackCurve is config-driven: a 3-stack route reads from config.potency.stackCurve', () => {
+  const three = evaluate(['freeze', 'freeze', 'freeze'], offensivePalette('weapon', {}, CONFIG.potency)).items[0].value;
+  assert(three === CONFIG.potency.stackCurve[2], `3-stack potency = stackCurve[2] (${CONFIG.potency.stackCurve[2]}), got ${three}`);
+  // a steeper custom curve flows straight through
+  const custom = { stackCurve: [2, 4, 9], chainMultiplier: 1.5 };
+  const got = evaluate(['freeze', 'freeze', 'freeze'], offensivePalette('weapon', {}, custom)).items[0].value;
+  assert(got === 9, `custom stackCurve[2] = 9, got ${got}`);
+});
+
 test('each component palette generates a solvable board whose primary route yields its combo', () => {
   for (const [componentId, expected] of [['weapon', 'freeze'], ['generator', 'drain'], ['launchpad', 'burning'], ['engine', 'shatter'], ['tower', 'confuse']]) {
     const cfg = offensivePalette(componentId);

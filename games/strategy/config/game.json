@@ -14,6 +14,12 @@
     "trapEntryMode": "commitFail"
   },
 
+  "potency": {
+    "_comment": "POTENCY is the raw worth of a solved TRS route: the ComboEngine scores how many payload cells you chained on the path (the 'stack', 1..5) by looking it up in `stackCurve`; a Chain amplifier on the route multiplies the result by `chainMultiplier`. The resulting number (≈1..15) is then turned into game effect via the per-potency multipliers in `effects`/`defense`. Tune the FEEL of routing here (how much a longer/cleaner route is worth); tune the EFFECT of that worth in effects/defense.",
+    "stackCurve": [1.0, 2.5, 4.5, 7.0, 10.0],
+    "chainMultiplier": 1.5
+  },
+
   "cooldowns": {
     "failCooldownMult": 2
   },

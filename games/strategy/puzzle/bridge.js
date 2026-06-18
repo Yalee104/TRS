@@ -73,7 +73,7 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     if (!canOpen(state, componentId, isAttack)) return false;
 
     const trsMods = systemState(state.player, state.config).trsMods;
-    const cfg = isAttack ? offensivePalette(componentId, trsMods) : defensivePalette(componentId, trsMods);
+    const cfg = isAttack ? offensivePalette(componentId, trsMods, state.config.potency) : defensivePalette(componentId, trsMods, state.config.potency);
     const size = state.config.puzzle.size + (trsMods.sizeDelta || 0);
     // Solve timer = the puzzle limit (≤10s by config), but never longer than the credit
     // you have left — so the last action can't exceed the remaining phase budget.

@@ -12,7 +12,9 @@
 
 import { ATTACK_EFFECT, DEFENSE_VERB } from '../core/components.js';
 
+// Defaults if no potency config is supplied (kept in sync with config/game.json#potency).
 const STACK_CURVE = [1.0, 2.5, 4.5, 7.0, 10.0];
+const CHAIN_MULT = 1.5;
 
 const BASE_CELLS = {
   start:   { role: 'start',  passable: true,  color: '#eef2f7', label: 'START' },
@@ -38,7 +40,7 @@ const DEFENSE_META = {
   overclock: { icon: '⚡', color: '#e6c84a', name: 'Overclock' },
 };
 
-const CHAIN = { class: 'amplifier', icon: '🔗', color: '#e6a24a', op: 'multiply', potency: 1.5 };
+const CHAIN = { class: 'amplifier', icon: '🔗', color: '#e6a24a', op: 'multiply', potency: CHAIN_MULT };
 
 function genPlan(skillKey, withChain, trsMods = {}) {
   const place = [
@@ -61,30 +63,30 @@ function genPlan(skillKey, withChain, trsMods = {}) {
 }
 
 /** Offensive palette config for a component (its effect = ATTACK_EFFECT[id]). */
-export function offensivePalette(componentId, trsMods = {}) {
+export function offensivePalette(componentId, trsMods = {}, potencyCfg = {}) {
   const effect = ATTACK_EFFECT[componentId];
   const meta = OFFENSE_META[effect];
   return {
     mode: 'offensive',
     rules: { maxSlots: 5, lockToFirstPayload: true, leadingRunOnly: true, amplifierOrderMatters: true, multiplicativeAmplifiers: true },
-    stackCurve: STACK_CURVE,
+    stackCurve: potencyCfg.stackCurve || STACK_CURVE,
     base: BASE_CELLS,
     skills: {
       [effect]: { class: 'payload', icon: meta.icon, color: meta.color, value: { kind: 'linear', base: 1, unit: '' }, tiers: [{ atStack: 1, name: meta.name }] },
-      chain: CHAIN,
+      chain: { ...CHAIN, potency: potencyCfg.chainMultiplier ?? CHAIN_MULT },
     },
     generation: genPlan(effect, true, trsMods),
   };
 }
 
 /** Defensive palette config for a component (its verb = DEFENSE_VERB[id]). */
-export function defensivePalette(componentId, trsMods = {}) {
+export function defensivePalette(componentId, trsMods = {}, potencyCfg = {}) {
   const verb = DEFENSE_VERB[componentId];
   const meta = DEFENSE_META[verb];
   return {
     mode: 'defensive',
     rules: { maxSlots: 5, lockToFirstPayload: false, stacking: 'longestAdjacentRun' },
-    stackCurve: STACK_CURVE,
+    stackCurve: potencyCfg.stackCurve || STACK_CURVE,
     base: BASE_CELLS,
     skills: {
       [verb]: { class: 'payload', icon: meta.icon, color: meta.color, value: { kind: 'linear', base: 1, unit: '' }, tiers: [{ atStack: 1, name: meta.name }] },

@@ -101,6 +101,27 @@ So one action does double duty: its **status** lands on a chosen enemy part (and
 part during the enemy's defense phase — e.g. **Freeze cancels that part's contribution** to the
 enemy's next attack), while its **potency** feeds the firepower pool that detonates at Resolve.
 
+#### Potency — what a solved TRS route is worth ✅ config-driven
+**Potency is the raw worth of a solved route.** When you solve, the ComboEngine counts how many
+payload cells you chained along the path (the *stack*, 1→5) and looks that up in a **`stackCurve`**;
+a **Chain** amplifier on the route multiplies the result by **`chainMultiplier`**. Defaults:
+
+| Stack (payload cells on the route) | 1 | 2 | 3 | 4 | 5 | +Chain |
+|---|---|---|---|---|---|---|
+| **Potency** | 1.0 | 2.5 | 4.5 | 7.0 | 10.0 | ×1.5 |
+
+So "potency 6" ≈ a clean 3–4-stack route. Longer/cleaner routes are worth more. Potency is then
+turned into game effect by the **per-potency multipliers**: attack damage `= potency ×
+effects[effect].dmgPerPotency`, status duration `= clamp(round(potency/divisor), min, max)`,
+Drain heal `= potency × healPerPotency`; defense `shield = potency × absorbPerPotency`, `repair =
+potency × hpPerPotency`, Harden `= potency × reductionPerPotency` (capped), etc.
+
+**Two tuning layers, both in `config/game.json`:**
+- **`potency`** (`stackCurve`, `chainMultiplier`) — tunes how much *routing skill* is worth (the
+  feel of stacking a longer combo).
+- **`effects` / `defense`** (the `*PerPotency` numbers + status `turns` divisors) — tunes how much
+  that worth *does* in combat.
+
 ### 3.3 Resolve ✅ (revised — pick the firepower Focus now)
 On **▶ Resolve Attack**, pick **one enemy component as the Focus**. The whole firepower pool
 concentrates there; **enemy loses HP only here**:
