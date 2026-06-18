@@ -117,7 +117,14 @@ function cardHtml(state, side, id) {
   let tel = '';
   if (side === 'player' && state.telegraph && state.telegraph.visible) {
     const e = state.telegraph.entries.find((x) => x.component === id);
-    if (e) tel = `<span class="tel" title="incoming">⚠️${e.status ? STATUS_ICON[e.status] || '' : ''}</span>`;
+    if (e) {
+      // keep the ⚠️ strike marker colored; show the status it WILL apply greyed, since
+      // it isn't active yet and Cleanse this turn can't catch it (it lands after defenses).
+      const carried = e.status
+        ? `<span class="st pending" title="incoming ${e.status} — applied AFTER your defenses; Cleanse this turn can't remove it">${STATUS_ICON[e.status] || ''}</span>`
+        : '';
+      tel = `<span class="tel" title="incoming strike">⚠️</span>${carried}`;
+    }
   }
 
   const role = roleHint(side, id, state);

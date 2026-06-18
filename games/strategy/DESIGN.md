@@ -368,6 +368,11 @@ Component HP carries between battles within a run (Rest heals); death loses the 
 - Cascade magnitudes; archetype roster; Trophy catalog breadth.
 - Spike numbers (reflect %), Evade/Harden reduction caps, Overclock system-boost magnitudes.
 - Telegraph fidelity (exact target vs. fuzzy intent) once the loop is balanced.
+- **v2 — "Status Ward":** a defensive combo that grants a *ward / immunity* which **pre-empts the
+  next incoming status** (blocks or reflects it). In v1, Cleanse only strips statuses already on a
+  part and runs *before* the strike, so it cannot stop an incoming status (incoming statuses are
+  shown greyed to make this timing clear). A Ward would be the deliberate counter to status-heavy
+  enemies (Disruptor/Saboteur), resolving at the start of the mitigation order, before the strike.
 
 ---
 

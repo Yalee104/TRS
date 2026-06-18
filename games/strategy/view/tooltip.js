@@ -39,7 +39,7 @@ function verbDesc(verb, config) {
   switch (verb) {
     case 'shield': return `Shield — absorbs incoming damage; +${d.shield?.absorbPerPotency} per potency, stacks additively.`;
     case 'repair': return `Repair — restores HP to the target part; +${d.repair?.hpPerPotency} per potency.`;
-    case 'cleanse': return 'Cleanse — strips all offensive statuses off the target before the hit lands.';
+    case 'cleanse': return 'Cleanse — removes statuses ALREADY on the target (from earlier rounds). It runs before the incoming strike, so it can’t stop a status that strike applies this turn (incoming statuses land after your defenses — shown greyed).';
     case 'harden':
       return `Harden — flat damage reduction on the target: +${Math.round((d.harden?.reductionPerPotency || 0) * 100)}% per potency, capped at ${Math.round((d.harden?.maxReduction || 0) * 100)}% from Harden alone. It then combines with Overclock + Engine evasion, up to a 90% total cap when the hit resolves. e.g. potency 5 → 20% less damage to that part.`;
     case 'overclock':

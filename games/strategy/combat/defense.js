@@ -36,16 +36,30 @@ export function finalizeDefenseTarget(state, targetId) {
   if (!p || !target || !isAlive(target)) return null;
   const d = state.config.defense;
   const def = target.defenses;
-  if (p.verb === 'shield') def.shield = (def.shield || 0) + p.potency * d.shield.absorbPerPotency;
-  else if (p.verb === 'repair') def.repair = (def.repair || 0) + p.potency * d.repair.hpPerPotency;
-  else if (p.verb === 'cleanse') def.cleanse = true;
-  else if (p.verb === 'harden') def.harden = Math.min(d.harden.maxReduction, (def.harden || 0) + p.potency * d.harden.reductionPerPotency);
-  else if (p.verb === 'overclock') def.overclock = (def.overclock || 0) + p.potency * d.overclock.boostPerPotency;
+  let added; // a human breakdown of how much this solve contributed
+  if (p.verb === 'shield') {
+    const amt = p.potency * d.shield.absorbPerPotency;
+    def.shield = (def.shield || 0) + amt;
+    added = `+${Math.round(amt)} absorb (potency ${p.potency.toFixed(1)} × ${d.shield.absorbPerPotency})`;
+  } else if (p.verb === 'repair') {
+    const amt = p.potency * d.repair.hpPerPotency;
+    def.repair = (def.repair || 0) + amt;
+    added = `+${Math.round(amt)} HP (potency ${p.potency.toFixed(1)} × ${d.repair.hpPerPotency})`;
+  } else if (p.verb === 'cleanse') {
+    def.cleanse = true;
+    added = '(removes already-active statuses at resolve)';
+  } else if (p.verb === 'harden') {
+    def.harden = Math.min(d.harden.maxReduction, (def.harden || 0) + p.potency * d.harden.reductionPerPotency);
+    added = `+${Math.round(p.potency * d.harden.reductionPerPotency * 100)}% reduction (cap ${Math.round(d.harden.maxReduction * 100)}%)`;
+  } else if (p.verb === 'overclock') {
+    def.overclock = (def.overclock || 0) + p.potency * d.overclock.boostPerPotency;
+    added = `+${Math.round(p.potency * d.overclock.boostPerPotency * 100)}% reduction`;
+  }
 
   p.target = targetId;
   state.queue.push(p);
   state.pendingDefense = null;
-  logEvent(state, `Queued ${p.verb} → ${NAME(state, targetId)} (now ${describeDefenses(def)}).`);
+  logEvent(state, `Queued ${p.verb} ${added} → ${NAME(state, targetId)} (now ${describeDefenses(def)}).`);
   return p;
 }
 

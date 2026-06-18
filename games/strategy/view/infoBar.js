@@ -3,7 +3,6 @@
 // =============================================================================
 
 import { PHASES } from '../core/state.js';
-import { ATTACK_EFFECT } from '../core/components.js';
 import { combatCondition, firepowerMult, totalFirepower } from '../core/firepower.js';
 import { validAttackTargets } from '../combat/attack.js';
 import { currentBudget } from '../combat/enemyAI.js';
@@ -46,7 +45,7 @@ function attackHelp(state) {
   if (state.pickFocus) {
     return `<b>▶ FOCUS</b> Click the <span class="en">enemy part</span> to concentrate firepower. Pool ≈ <b>${Math.round(pool.fire)}</b> (×synergy if it has Shatter/Frozen). Statuses placed: ${queuedList(state)}.`;
   }
-  return `<b>ATTACK ①</b> Click one of <b>your</b> weapons to play its TRS (${Object.values(ATTACK_EFFECT).join('/')}). <span class="sep">|</span> Placed: ${queuedList(state)} <span class="sep">|</span> Condition ${(pool.cond * 100).toFixed(0)}% → firepower ≈ ${Math.round(pool.fire)} <span class="sep">|</span> then <b>▶ Resolve</b> to pick the Focus.`;
+  return `<b>ATTACK ①</b> Click one of <b>your</b> components to play TRS. <span class="sep">|</span> Placed: ${queuedList(state)} <span class="sep">|</span> Condition ${(pool.cond * 100).toFixed(0)}% → firepower ≈ ${Math.round(pool.fire)} <span class="sep">|</span> then <b>▶ Resolve</b> to pick the Focus.`;
 }
 
 function defenseHelp(state) {
