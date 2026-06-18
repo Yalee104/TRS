@@ -111,6 +111,9 @@ function cardHtml(state, side, id) {
       .join('');
   }
 
+  const cd = (side === 'player' && state.cooldowns?.[id] > 0)
+    ? `<span class="cdbadge" title="recovering from a failed TRS — ${state.cooldowns[id]} round(s) left">⏳${state.cooldowns[id]}</span>` : '';
+
   let tel = '';
   if (side === 'player' && state.telegraph && state.telegraph.visible) {
     const e = state.telegraph.entries.find((x) => x.component === id);
@@ -123,7 +126,7 @@ function cardHtml(state, side, id) {
       <div class="cn">${c.name}</div>
       <div class="hpbar"><div class="hpfill" style="width:${pct}%"></div></div>
       <div class="hpnum">${Math.max(0, Math.round(c.hp))}/${c.maxHp}</div>
-      <div class="badges">${statuses}${pending}${defenses}${tel}</div>
+      <div class="badges">${statuses}${pending}${defenses}${cd}${tel}</div>
       ${role ? `<div class="role">${role}</div>` : ''}
     </div>`;
 }

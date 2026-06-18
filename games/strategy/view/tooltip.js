@@ -20,8 +20,8 @@ const SYSTEM = {
   core: 'The heart of the aircraft. If it reaches 0 HP the battle ends. Protected by an indestructible shield (below) until its shield-linked parts fall.',
   generator: 'Powers every system. Drives the largest share of your firepower (Combat Condition) and holds up the Reactor-Core shield.',
   weapon: 'Your base / automatic firepower. A big slice of Combat Condition.',
-  tower: 'Sensors. YOUR Tower lets you SEE the enemy’s telegraphed strike (defend blind without it). An owner’s Tower also governs ITS aim — destroyed, its strikes scatter to random parts and land ~40% softer.',
-  engine: 'Evasion: a healthy Engine dodges part of every hit. YOUR Engine reduces incoming damage in defense; the ENEMY’s Engine dodges part of your focus-fire in attack. Scales with HP, destroyed = no dodge. (Initiative/resolve-order is a v2 idea — no effect in v1.)',
+  tower: 'Sensors — two roles. VISION: YOUR Tower lets you SEE the enemy’s telegraphed strike before you defend; lose it and you defend blind. AIM: the owner’s Tower governs its targeting — destroy the ENEMY’s Tower and its strikes SCATTER to random parts and deal only ×0.6 damage (aimMult).',
+  engine: 'Evasion — dodges part of every hit (×0.15 at full HP, scaling down with HP). YOUR Engine reduces ALL incoming damage in defense; the ENEMY’s Engine dodges part of your focus-fire in attack. Destroyed → 0% (hits land in full). Initiative/resolve-order is parked for v2 — no effect in v1.',
   launchpad: 'Governs its OWNER’s TRS quality: healthy = easier grids (fewer blockers/traps), damaged = grids drift back to baseline, destroyed = congested. Also carries a share of attack strength.',
 };
 
@@ -33,13 +33,20 @@ const EFFECT_DESC = {
   shatter: 'Shatter — synergy: while Shattered the focus takes +50% from all your fire.',
 };
 
-const VERB_DESC = {
-  shield: 'Shield — absorbs incoming damage (stacks additively).',
-  repair: 'Repair — restores HP (applied to whichever part you target).',
-  cleanse: 'Cleanse — strips all offensive statuses off the target.',
-  harden: 'Harden — flat damage reduction (capped).',
-  overclock: 'Overclock — v1: a flat damage-reduction buff on the target (stacks with Harden, capped 90% total). The per-system boost (Tower vision / Engine evasion) is parked for v2.',
-};
+// Defence verb description, pulling the actual per-potency numbers from config.
+function verbDesc(verb, config) {
+  const d = config.defense || {};
+  switch (verb) {
+    case 'shield': return `Shield — absorbs incoming damage; +${d.shield?.absorbPerPotency} per potency, stacks additively.`;
+    case 'repair': return `Repair — restores HP to the target part; +${d.repair?.hpPerPotency} per potency.`;
+    case 'cleanse': return 'Cleanse — strips all offensive statuses off the target before the hit lands.';
+    case 'harden':
+      return `Harden — flat damage reduction on the target: +${Math.round((d.harden?.reductionPerPotency || 0) * 100)}% per potency, capped at ${Math.round((d.harden?.maxReduction || 0) * 100)}% from Harden alone. It then combines with Overclock + Engine evasion, up to a 90% total cap when the hit resolves. e.g. potency 5 → 20% less damage to that part.`;
+    case 'overclock':
+      return `Overclock — v1: a flat damage-reduction buff on the target (+${Math.round((d.overclock?.boostPerPotency || 0) * 100)}% per potency), stacks with Harden up to the 90% total cap. Per-system boost (Tower vision / Engine evasion) is parked for v2.`;
+    default: return '';
+  }
+}
 
 const CASCADE = {
   generator: { damaged: 'Core shield link + 40% firepower weight.', dead: 'Reactor shield contribution lost + brownout: all output ×0.5.' },
@@ -111,7 +118,12 @@ function dossier(state, side, id) {
   const eff = ATTACK_EFFECT[id];
   if (eff) rows.push(`<div class="tt-off"><b>Offence:</b> ${EFFECT_DESC[eff]}<br><span class="tt-dim">valid on: ${validTargetsText(state, side, eff)}</span></div>`);
   const verb = DEFENSE_VERB[id];
-  if (verb) rows.push(`<div class="tt-def"><b>Defence:</b> ${VERB_DESC[verb]}</div>`);
+  if (verb) rows.push(`<div class="tt-def"><b>Defence:</b> ${verbDesc(verb, state.config)}</div>`);
+
+  // Why a player part may be greyed out with no statuses: a failed TRS cools it down.
+  if (side === 'player' && state.cooldowns?.[id] > 0) {
+    rows.push(`<div class="tt-cd">⏳ Recovering from a failed TRS — unusable for ${state.cooldowns[id]} more round(s).</div>`);
+  }
 
   const casc = CASCADE[id];
   if (casc && (casc.damaged || casc.dead)) {
