@@ -94,14 +94,21 @@ export function resolveDefense(state) {
     }
 
     if (def.cleanse) cleanseComponent(target);
-    const reduction = Math.min(0.9, (def.harden || 0) + (def.overclock || 0) + evasion);
+    // build a human reason for the % reduced (which buff/system contributed how much)
+    const redParts = [];
+    if (def.harden) redParts.push(`harden ${Math.round(def.harden * 100)}%`);
+    if (def.overclock) redParts.push(`overclock ${Math.round(def.overclock * 100)}%`);
+    if (evasion) redParts.push(`evade ${Math.round(evasion * 100)}% (Engine)`);
+    const rawReduction = (def.harden || 0) + (def.overclock || 0) + evasion;
+    const reduction = Math.min(0.9, rawReduction);
     dmg *= 1 - reduction;
     let absorbed = 0;
     if (def.shield > 0) { absorbed = Math.min(dmg, def.shield); def.shield -= absorbed; dmg -= absorbed; }
     target.hp -= dmg;
 
     if (entry.status) applyStatus(target, entry.status, { turns: 2 });
-    logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)}${reduction ? `, −${Math.round(reduction * 100)}% reduced` : ''}${absorbed ? `, ${Math.round(absorbed)} shielded` : ''} → −${Math.round(dmg)} HP${entry.status ? ` (+${entry.status})` : ''}${isAlive(target) ? '' : ' — DESTROYED'}.`);
+    const redText = reduction ? `, −${Math.round(reduction * 100)}% reduced [${redParts.join(' + ')}${rawReduction > 0.9 ? ', capped at 90%' : ''}]` : '';
+    logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)}${redText}${absorbed ? `, ${Math.round(absorbed)} shielded` : ''} → −${Math.round(dmg)} HP${entry.status ? ` (+${entry.status})` : ''}${isAlive(target) ? '' : ' — DESTROYED'}.`);
     summary.hits.push({ component: target.id, damage: dmg });
     summary.totalDamage += dmg;
   }

@@ -38,7 +38,7 @@ const VERB_DESC = {
   repair: 'Repair — restores HP (applied to whichever part you target).',
   cleanse: 'Cleanse — strips all offensive statuses off the target.',
   harden: 'Harden — flat damage reduction (capped).',
-  overclock: 'Overclock — boosts the target system (Tower vision / Engine evasion / etc.).',
+  overclock: 'Overclock — v1: a flat damage-reduction buff on the target (stacks with Harden, capped 90% total). The per-system boost (Tower vision / Engine evasion) is parked for v2.',
 };
 
 const CASCADE = {

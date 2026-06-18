@@ -88,9 +88,37 @@ export function createConfigPanel(root, { onStart, onRestart, defaults }) {
       <div><b>Enemy</b> ${state.config.archetypes[state.archetype]?.label || state.archetype}</div>
       <div><b>Queued</b> ${state.queue.length} action(s)</div>
       <div><b>Time model</b> ${state.attackTimeModel}</div>`;
-    $('#cfg-log').innerHTML = state.log.slice(-8).reverse()
-      .map((l) => `<div>· ${l.msg}</div>`).join('');
+    renderLog($('#cfg-log'), state.log);
   }
 
   return { getUi, showConfig, showStatus, update };
+}
+
+function groupOf(phase) {
+  if (phase === PHASES.ATTACK_BUILD || phase === PHASES.ATTACK_RESOLVE) return { tag: 'ATTACK', icon: '⚔️' };
+  if (phase === PHASES.DEFENSE_BUILD || phase === PHASES.DEFENSE_RESOLVE) return { tag: 'DEFENSE', icon: '🛡️' };
+  if (phase === PHASES.WON || phase === PHASES.LOST) return { tag: 'RESULT', icon: '🏁' };
+  return { tag: 'SETUP', icon: '⚙️' };
+}
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
+ * Grouped, indented event log: a header per (round + Attack/Defense phase), the
+ * phase's events indented under it, and per-hit detail (· lines) indented deeper.
+ * Newest at the bottom; auto-scrolls so the latest is always in view.
+ */
+function renderLog(el, log) {
+  let html = '';
+  let curKey = null;
+  for (const l of log.slice(-40)) {
+    if (l.msg.startsWith('===')) continue; // header line is redundant with the group banner
+    const g = groupOf(l.phase);
+    const key = `${l.round}|${g.tag}`;
+    if (key !== curKey) { html += `<div class="log-grp">${g.icon} Round ${l.round} · ${g.tag}</div>`; curKey = key; }
+    const detail = /^[·•]/.test(l.msg);
+    const text = detail ? l.msg.replace(/^[·•]\s*/, '') : l.msg;
+    html += `<div class="log-line ${detail ? 'l2' : 'l1'}">${esc(text)}</div>`;
+  }
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
 }
