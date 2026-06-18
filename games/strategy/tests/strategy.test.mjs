@@ -117,6 +117,14 @@ test('Shatter + Frozen stack into the synergy multiplier', () => {
   assert(near(attackSynergyMult(c, CONFIG), 1.5 * 1.4, 0.001), 'synergy = 1.5×1.4');
 });
 
+test('Burning bypasses the Reactor shield — its DoT ticks even while the shield is UP', () => {
+  const s = fresh();
+  const core = s.enemy.components.core; // enemy generator alive → core shielded
+  applyStatus(core, 'burning', { turns: 2, dot: 7 });
+  const dot = tickAircraftStatuses(s.enemy);
+  assert(dot >= 7 && core.hp === core.maxHp - 7, 'burning DoT hit the shielded core');
+});
+
 // --- attack flow (pending → target) + resolve --------------------------------
 test('solving holds a pending action; Table B gates valid targets', () => {
   const s = fresh();
@@ -166,6 +174,17 @@ test('Wildfire: Burning + Confused on a part spreads Burning to a neighbour', ()
   const sum = resolveAttack(s, 'weapon');
   const spread = Object.values(s.enemy.components).some((c) => c.id !== 'weapon' && c.statuses.burning);
   assert(sum.wildfire != null && spread, 'burning spread to a neighbour');
+});
+
+test('a healthy enemy Engine dodges part of your focus-fire; destroying it lands full damage', () => {
+  const a = fresh();
+  attack(a, 'weapon', 5, 'weapon');               // freeze enemy weapon, focus weapon
+  const dodged = resolveAttack(a, 'weapon').damage;
+  const b = fresh();
+  b.enemy.components.engine.hp = 0;               // enemy has no evasion now
+  attack(b, 'weapon', 5, 'weapon');
+  const full = resolveAttack(b, 'weapon').damage;
+  assert(full > dodged, 'no-Engine enemy takes more focus damage');
 });
 
 // --- defense flow + stacking -------------------------------------------------

@@ -11,7 +11,6 @@
 // =============================================================================
 
 import { hasStatus, isAlive } from '../core/components.js';
-import { coreShieldUp } from '../core/cascade.js';
 
 /** Add or refresh a status (refresh = keep the stronger of turns/dot). */
 export function applyStatus(component, key, { turns = 1, potency = 0, dot = 0 } = {}) {
@@ -34,12 +33,13 @@ export function cleanseComponent(component) {
  * End-of-resolve tick on one aircraft: apply Burning DoT, then decay every
  * status by a turn and drop the expired ones. Returns total DoT dealt.
  */
-export function tickAircraftStatuses(aircraft, config) {
+export function tickAircraftStatuses(aircraft) {
   let dot = 0;
-  const coreSafe = config ? coreShieldUp(aircraft, config) : false; // shielded Core takes no DoT either
   for (const comp of Object.values(aircraft.components)) {
     const burn = comp.statuses.burning;
-    if (burn && burn.turns > 0 && burn.dot > 0 && !(comp.id === 'core' && coreSafe)) {
+    // Burning is the ONE thing that bypasses the Reactor shield (DESIGN §1) — its DoT
+    // ticks on the Core even while shielded, making it the anti-shield tool.
+    if (burn && burn.turns > 0 && burn.dot > 0) {
       comp.hp -= burn.dot;
       dot += burn.dot;
     }

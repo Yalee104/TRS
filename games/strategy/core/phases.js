@@ -61,8 +61,8 @@ export function commitDefense(state) {
 }
 
 function endOfRound(state) {
-  const ed = tickAircraftStatuses(state.enemy, state.config);
-  const pd = tickAircraftStatuses(state.player, state.config);
+  const ed = tickAircraftStatuses(state.enemy);
+  const pd = tickAircraftStatuses(state.player);
   if (ed) logEvent(state, `End of round: Burning dealt ${Math.round(ed)} to the enemy.`);
   if (pd) logEvent(state, `End of round: Burning dealt ${Math.round(pd)} to you.`);
   if (checkOutcome(state)) return;          // DoT can finish a Core

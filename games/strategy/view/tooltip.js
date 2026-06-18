@@ -21,7 +21,7 @@ const SYSTEM = {
   generator: 'Powers every system. Drives the largest share of your firepower (Combat Condition) and holds up the Reactor-Core shield.',
   weapon: 'Your base / automatic firepower. A big slice of Combat Condition.',
   tower: 'Sensors. YOUR Tower lets you SEE the enemy’s telegraphed strike (defend blind without it). An owner’s Tower also governs ITS aim — destroyed, its strikes scatter to random parts and land ~40% softer.',
-  engine: 'Initiative (who resolves first) and evasion.',
+  engine: 'Evasion: a healthy Engine dodges part of every hit. YOUR Engine reduces incoming damage in defense; the ENEMY’s Engine dodges part of your focus-fire in attack. Scales with HP, destroyed = no dodge. (Initiative/resolve-order is a v2 idea — no effect in v1.)',
   launchpad: 'Governs its OWNER’s TRS quality: healthy = easier grids (fewer blockers/traps), damaged = grids drift back to baseline, destroyed = congested. Also carries a share of attack strength.',
 };
 
@@ -45,7 +45,7 @@ const CASCADE = {
   generator: { damaged: 'Core shield link + 40% firepower weight.', dead: 'Reactor shield contribution lost + brownout: all output ×0.5.' },
   weapon: { damaged: '35% firepower weight; base damage scales with HP.', dead: 'Base firepower collapses (only weakened TRS add-ons remain).' },
   tower: { damaged: 'No change until destroyed (binary in v1).', dead: 'YOUR Tower → you defend blind (no telegraph preview). ENEMY Tower → its aim scatters to random parts and lands ~40% softer.' },
-  engine: { damaged: 'Evasion + initiative scale with HP.', dead: 'No evasion; lose initiative (other side resolves first).' },
+  engine: { damaged: 'Evasion fades with HP (less dodge, both in defense and vs your focus-fire).', dead: 'No evasion — incoming hits and your focus-fire on it land in full.' },
   launchpad: { damaged: 'TRS easing fades toward baseline; small attack-strength dip.', dead: 'Owner’s TRS congests (bigger grid, more blockers); loses its attack-strength share.' },
   core: { damaged: '', dead: 'Match over.' },
 };

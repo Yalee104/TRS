@@ -34,7 +34,7 @@ its own HP, condition, and live statuses. **TRS is the universal verb** — you 
 | **Power Generator** | powers all parts; **holds up the Core shield** (see §6) | 80 |
 | **Weapon Storage** | base/auto firepower | 70 |
 | **Tower (Sensors)** | **telegraph visibility** (yours) / **aim** (enemy) | 60 |
-| **Engine** | initiative (resolve order) + evasion | 60 |
+| **Engine** | **evasion** — dodges damage on both sides (defense + vs your focus-fire); *initiative parked v2* | 60 |
 | **Launch Pad** | powers **TRS quality** — healthy = easier grids, scaling with HP (§7); also a small firepower share | 70 |
 
 ---
@@ -121,6 +121,10 @@ contribute percentages summing to **≥ threshold** (`config.coreShield`). Defau
 = 100%** (kill it to expose the Core). A multi-part list (e.g. Generator 60 / Weapon 30 / Tower 10 /
 Engine 40) means several kills must add up to ≥100% before the Core can be damaged. The UI draws a
 **thick blue border** around a shielded Core. Shatter/Drain do **not** pierce the shield in v1.
+**Exception — Burning:** Burning DoT is the one effect that bypasses the shield: it ticks on the
+Core even while shielded, making Burning the deliberate **anti-shield** tool (apply it to the Core,
+then chip it down while you break the shield-linked parts). Direct focus-fire and enemy strikes are
+still fully blocked.
 
 ### 3.4 Table A — what each component produces (offense) · v1 ✅
 | Component | v1 effect | Thematic fit |
@@ -298,7 +302,7 @@ destruction. The cliff is always worse than the slope — that's what makes a ki
 | **Power Generator** | 40% firepower weight (no gradient on the Core shield — it's binary) | **Core shield drops** (its 100% contribution, by default) + **brownout**: all output ×0.5 |
 | **Weapon Storage** | 35% firepower weight; base damage scales | **base firepower collapses** (only weakened TRS add-ons remain) |
 | **Tower (Sensors)** | no change until destroyed (binary in v1) | **your** Tower → defend **blind** (no telegraph); **enemy** Tower → its aim **scatters to random parts** + lands ~40% softer (aimMult) |
-| **Engine** | evasion 15%→0% with HP; initiative scales | evasion → 0 + **lose initiative** (other side resolves first) |
+| **Engine** | evasion fades 15%→0% with HP (reduces incoming in defense; dodges the player's focus-fire when it's the *enemy's* Engine) | evasion → 0 (no dodge). *Initiative/resolve-order parked for v2 — no effect in v1's fixed turn order.* |
 | **Launch Pad** | **TRS quality scales with HP** — full HP *eases* your grids (fewer blockers/traps, smaller grid); damage fades the bonus to baseline. Also 7% firepower weight | TRS **congests** past baseline: grid +2, extra blockers/traps → routing harder, more fails. Loses its 7% firepower weight |
 | **Reactor Core** | — | **match over** |
 

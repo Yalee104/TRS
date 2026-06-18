@@ -14,7 +14,7 @@
 
 import { ATTACK_EFFECT, isEffectValidOn, statusTurns, hasStatus, isAlive } from '../core/components.js';
 import { totalFirepower, conditionReport } from '../core/firepower.js';
-import { coreShieldUp } from '../core/cascade.js';
+import { coreShieldUp, systemState } from '../core/cascade.js';
 import { logEvent } from '../core/state.js';
 import { applyStatus, attackSynergyMult, maybeWildfire } from './statuses.js';
 
@@ -81,7 +81,8 @@ export function resolveAttack(state, focusId) {
   const rawFire = totalFirepower(player, addon, config);
   const synergy = attackSynergyMult(focus, config);
   const shielded = focusId === 'core' && coreShieldUp(enemy, config);
-  const damage = shielded ? 0 : rawFire * synergy;
+  const enemyEvasion = systemState(enemy, config).evasion; // healthy enemy Engine dodges some fire
+  const damage = shielded ? 0 : rawFire * synergy * (1 - enemyEvasion);
   focus.hp -= damage;
 
   if (healed) { const core = player.components.core; core.hp = Math.min(core.maxHp, core.hp + healed); }
@@ -101,7 +102,8 @@ export function resolveAttack(state, focusId) {
     const syn = [];
     if (hasStatus(focus, 'shatter')) syn.push('Shatter +50%');
     if (hasStatus(focus, 'freeze')) syn.push('Frozen-brittle +40%');
-    logEvent(state, `RESOLVE → Focus enemy ${focus.name}: ${Math.round(rawFire)} firepower × synergy ${synergy.toFixed(2)}${syn.length ? ` (${syn.join(', ')})` : ''} = ${Math.round(damage)} dmg${isAlive(focus) ? '' : ' — DESTROYED'}.`);
+    const evaNote = enemyEvasion > 0 ? ` × evade ${Math.round((1 - enemyEvasion) * 100)}% (enemy Engine)` : '';
+    logEvent(state, `RESOLVE → Focus enemy ${focus.name}: ${Math.round(rawFire)} firepower × synergy ${synergy.toFixed(2)}${syn.length ? ` (${syn.join(', ')})` : ''}${evaNote} = ${Math.round(damage)} dmg${isAlive(focus) ? '' : ' — DESTROYED'}.`);
   }
   if (healed) logEvent(state, `Drain healed your Core +${Math.round(healed)}.`);
   if (summary.wildfire) logEvent(state, `Wildfire spread Burning to enemy ${NAME(state, 'enemy', summary.wildfire)}.`);
