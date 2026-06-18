@@ -75,19 +75,22 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     const trsMods = systemState(state.player, state.config).trsMods;
     const cfg = isAttack ? offensivePalette(componentId, trsMods) : defensivePalette(componentId, trsMods);
     const size = state.config.puzzle.size + (trsMods.sizeDelta || 0);
+    // Solve timer = the puzzle limit (≤10s by config), but never longer than the credit
+    // you have left — so the last action can't exceed the remaining phase budget.
+    const timeLimitMs = Math.max(1000, Math.min(state.config.puzzle.timeLimitMs, state.creditLeftMs));
     const ov = makeOverlay();
     const instance = new PuzzleClass({
       mount: ov.host,
       nodeTypes: catalogFromConfig(cfg),
       generate: { size, routePlan: cfg.generation },
-      timeLimitMs: state.config.puzzle.timeLimitMs,
+      timeLimitMs,
       trapEntryMode: state.config.puzzle.trapEntryMode || 'commitFail',
       onComplete: (result) => finish(componentId, cfg, isAttack, result, true),
       onFail: () => finish(componentId, cfg, isAttack, null, false),
     });
     state.activePuzzle = { component: componentId, mode: isAttack ? 'attack' : 'defense', instance, overlay: ov };
 
-    showTime(ov.timerEl, state.config.puzzle.timeLimitMs);
+    showTime(ov.timerEl, timeLimitMs);
     if (typeof instance.on === 'function') instance.on('tick', (t) => showTime(ov.timerEl, t.remainingMs));
     if (typeof instance.start === 'function') instance.start();
     return true;

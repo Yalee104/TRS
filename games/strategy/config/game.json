@@ -2,15 +2,15 @@
   "_comment": "TRS Command — v1 battle-loop tuning. Every number the loop leans on lives here so it can be playtested without touching code. See games/strategy/DESIGN.md (Parts A + B).",
 
   "phase": {
-    "creditMs": 120000,
-    "attackTimeModel": "cost",
+    "creditMs": 15000,
+    "attackTimeModel": "realtime",
     "actionCostMs": 20000,
     "failCostMs": 10000
   },
 
   "puzzle": {
     "size": 6,
-    "timeLimitMs": 12000,
+    "timeLimitMs": 10000,
     "trapEntryMode": "commitFail"
   },
 
@@ -104,8 +104,8 @@
 
   "ui": {
     "archetype": "saboteur",
-    "creditSeconds": 120,
-    "attackTimeModel": "cost",
+    "creditSeconds": 15,
+    "attackTimeModel": "realtime",
     "telegraphMode": "deterministic",
     "seed": 0
   }

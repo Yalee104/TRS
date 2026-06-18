@@ -204,7 +204,7 @@ class FakePuzzle {
 }
 
 test('bridge: solving makes a pending action via the real ComboEngine, then targeting queues it', () => {
-  const s = fresh();
+  const s = fresh({ attackTimeModel: 'cost', creditSeconds: 120 }); // assert the fixed-chunk cost here, not realtime
   const bridge = createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
   assert(bridge.open('weapon') === true, 'opened attack puzzle');
   s.activePuzzle.instance.fireComplete([{ typeKey: 'freeze' }, { typeKey: 'freeze' }, { typeKey: 'freeze' }]);
