@@ -10,7 +10,7 @@
 
 import { isAlive } from '../core/components.js';
 import { combatCondition, firepowerMult } from '../core/firepower.js';
-import { systemState, coreShieldUp } from '../core/cascade.js';
+import { systemState, coreShieldUp, towerActive, effectiveAim } from '../core/cascade.js';
 
 /** Resolve 'random' to a concrete archetype key. */
 export function resolveArchetype(key, rng) {
@@ -58,12 +58,12 @@ function targetOrder(arch, player, coreShielded) {
 export function planAttack(state) {
   const arch = state.config.archetypes[state.archetype];
   const coreShielded = coreShieldUp(state.player, state.config);
-  const enemyTowerAlive = isAlive(state.enemy.components.tower);
+  const enemyTowerOk = towerActive(state.enemy);   // destroyed OR frozen → aim breaks
   const spread = arch.spread || 0;
   const entries = [];
 
-  if (!enemyTowerAlive) {
-    // Enemy Tower destroyed → blind aim: targets SCATTER randomly (no archetype focus),
+  if (!enemyTowerOk) {
+    // Enemy Tower down/frozen → blind aim: targets SCATTER randomly (no archetype focus),
     // spread evenly across up to 3 parts. (It also hits softer — see currentBudget.)
     const pool = Object.keys(state.player.components).filter((id) => canTarget(id, state.player, coreShielded));
     const picks = shuffle(pool, state.rng).slice(0, 3);
@@ -86,9 +86,9 @@ export function planAttack(state) {
     }
   }
 
-  const sys = systemState(state.player, state.config);
-  const visible = state.config.telegraph.gated ? sys.telegraphVisible : true;
-  return { archetype: state.archetype, entries, visible, scattered: !enemyTowerAlive };
+  // You SEE the telegraph only if YOUR Tower is active (alive and not frozen).
+  const visible = state.config.telegraph.gated ? towerActive(state.player) : true;
+  return { archetype: state.archetype, entries, visible, scattered: !enemyTowerOk };
 }
 
 /**
@@ -98,6 +98,7 @@ export function planAttack(state) {
 export function currentBudget(state) {
   const arch = state.config.archetypes[state.archetype];
   const sys = systemState(state.enemy, state.config);
-  const scale = firepowerMult(combatCondition(state.enemy, state.config), state.config) * sys.brownout * sys.aimMult;
+  const aim = effectiveAim(state.enemy, state.config); // tower dead OR frozen → softer
+  const scale = firepowerMult(combatCondition(state.enemy, state.config), state.config) * sys.brownout * aim;
   return arch.damageBudget * scale;
 }

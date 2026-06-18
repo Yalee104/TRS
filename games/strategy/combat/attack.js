@@ -14,7 +14,7 @@
 
 import { ATTACK_EFFECT, isEffectValidOn, statusTurns, hasStatus, isAlive } from '../core/components.js';
 import { totalFirepower, conditionReport } from '../core/firepower.js';
-import { coreShieldUp, systemState } from '../core/cascade.js';
+import { coreShieldUp, effectiveEvasion } from '../core/cascade.js';
 import { logEvent } from '../core/state.js';
 import { applyStatus, attackSynergyMult, maybeWildfire } from './statuses.js';
 
@@ -81,7 +81,7 @@ export function resolveAttack(state, focusId) {
   const rawFire = totalFirepower(player, addon, config);
   const synergy = attackSynergyMult(focus, config);
   const shielded = focusId === 'core' && coreShieldUp(enemy, config);
-  const enemyEvasion = systemState(enemy, config).evasion; // healthy enemy Engine dodges some fire
+  const enemyEvasion = effectiveEvasion(enemy, config); // healthy, un-frozen enemy Engine dodges some fire
   const damage = shielded ? 0 : rawFire * synergy * (1 - enemyEvasion);
   focus.hp -= damage;
 

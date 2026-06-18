@@ -100,6 +100,21 @@ test('destroying the enemy Tower scatters its aim and softens the blow', () => {
   assert(currentBudget(s) < before, 'tower down → smaller budget (lost accuracy)');
 });
 
+test('Freeze suspends the part system: frozen enemy Tower scatters aim; frozen Engine kills evasion', () => {
+  const s = fresh();
+  applyStatus(s.enemy.components.tower, 'freeze', { turns: 2 });
+  assert(planAttack(s).scattered === true, 'frozen enemy Tower → scattered aim');
+
+  const a = fresh();
+  attack(a, 'tower', 5, 'weapon');                // confuse enemy weapon, focus weapon (engine NOT frozen)
+  const dodged = resolveAttack(a, 'weapon').damage;
+  const b = fresh();
+  applyStatus(b.enemy.components.engine, 'freeze', { turns: 2 }); // engine frozen → no evasion
+  attack(b, 'tower', 5, 'weapon');
+  const full = resolveAttack(b, 'weapon').damage;
+  assert(full > dodged, 'frozen enemy Engine → no dodge, focus-fire lands full');
+});
+
 // --- statuses + synergies ----------------------------------------------------
 test('Burning DoT ticks then statuses decay each round', () => {
   const s = fresh();

@@ -144,7 +144,7 @@ Kept (not dropped): an effect only does something on appropriate targets, so cho
 *and* your effects is a real matching decision (Confuse on a Generator is wasted).
 | Effect | Valid / meaningful targets | What it does there |
 |---|---|---|
-| **Freeze** | any *functional* part (not Core) | suspends that part's system for the duration |
+| **Freeze** | any *functional* part (not Core) | ×0 firepower contribution **and** suspends the part's system for the duration: frozen **Tower** → owner's aim scatters + ~40% softer; frozen **Engine** → no evasion. (Generator shield/brownout + Launch Pad TRS stay tied to destruction.) |
 | **Confuse** | parts that aim/fire — **Weapon Storage, Tower** | their fire scatters / telegraph mis-aims |
 | **Drain** | best on **Generator & Core** (HP on any) | siphon HP to you (heals your Core); kill the Generator to drop the Core shield |
 | **Burning** | any part | flat DoT; best on high-HP (Core, Generator) |

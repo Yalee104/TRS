@@ -11,7 +11,7 @@
 //    • Launch Pad — destroyed → TRS congests (bigger grid, more blockers, less budget)
 // =============================================================================
 
-import { isAlive, hpFrac } from './components.js';
+import { isAlive, hpFrac, hasStatus } from './components.js';
 
 export function systemState(aircraft, config) {
   const c = aircraft.components;
@@ -80,4 +80,25 @@ export function coreShieldStatus(aircraft, config) {
 /** Convenience boolean: is this aircraft's Core shield currently UP? */
 export function coreShieldUp(aircraft, config) {
   return coreShieldStatus(aircraft, config).up;
+}
+
+// --- freeze-suspends-system (DESIGN §3.4): Freeze knocks a part's system offline for
+//     its duration, on top of the firepower choke. Tower → aim; Engine → evasion.
+//     Generator (shield/brownout) and Launch Pad (TRS) stay tied to destruction.
+
+/** Is the Tower providing its system right now? (alive AND not frozen) */
+export function towerActive(aircraft) {
+  const t = aircraft.components.tower;
+  return isAlive(t) && !hasStatus(t, 'freeze');
+}
+
+/** Aim multiplier: full if the Tower is active, else the destroyed/jammed penalty. */
+export function effectiveAim(aircraft, config) {
+  return towerActive(aircraft) ? 1 : config.cascade.towerDestroyedAimMult;
+}
+
+/** Evasion this aircraft actually has — zero while its Engine is frozen. */
+export function effectiveEvasion(aircraft, config) {
+  if (hasStatus(aircraft.components.engine, 'freeze')) return 0;
+  return systemState(aircraft, config).evasion;
 }

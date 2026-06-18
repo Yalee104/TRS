@@ -11,7 +11,7 @@
 // =============================================================================
 
 import { DEFENSE_VERB, isAlive } from '../core/components.js';
-import { systemState, coreShieldUp } from '../core/cascade.js';
+import { systemState, coreShieldUp, effectiveEvasion } from '../core/cascade.js';
 import { conditionReport } from '../core/firepower.js';
 import { logEvent } from '../core/state.js';
 import { applyStatus, cleanseComponent } from './statuses.js';
@@ -64,7 +64,7 @@ export function resolveDefense(state) {
   const { player } = state;
   const entries = (state.telegraph && state.telegraph.entries) || planAttack(state).entries;
   const budget = currentBudget(state);
-  const evasion = systemState(player, state.config).evasion;
+  const evasion = effectiveEvasion(player, state.config); // 0 while your Engine is frozen
   const summary = { hits: [], totalDamage: 0 };
 
   // Show how the enemy's CURRENT condition (HP + your statuses on its offence) scaled

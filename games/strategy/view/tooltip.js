@@ -26,7 +26,7 @@ const SYSTEM = {
 };
 
 const EFFECT_DESC = {
-  freeze: 'Freeze — suspends the part for its duration (a frozen offence part ≈ ×0 firepower). Synergy: a Frozen focus is brittle (+dmg).',
+  freeze: 'Freeze — suspends the part for its duration: ×0 firepower contribution AND its system goes offline — a frozen Tower scatters its owner’s aim (+softer), a frozen Engine gives no evasion. Synergy: a Frozen focus is brittle (+40% dmg).',
   confuse: 'Confuse — the part misfires / mis-aims.',
   drain: 'Drain — siphons HP and heals your Core.',
   burning: 'Burning — damage-over-time each round. Burning + Confused → Wildfire spreads to a neighbour.',
