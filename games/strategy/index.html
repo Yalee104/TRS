@@ -80,17 +80,14 @@
       .role { font-size: 10px; color: #7f8696; margin-top: 4px; font-style: italic; }
       .cd { font-size: 9px; color: #ff8a3d; }
 
-      /* puzzle panel (mounted by the bridge) — centred + larger between the boards */
-      .trs-panel { width: 100%; max-width: 560px; max-height: 100%;
-        display: flex; flex-direction: column; min-height: 0; }
-      .trs-timer { font-size: 30px; font-weight: 800; text-align: center; margin-bottom: 10px;
-        color: #e6c84a; flex: 0 0 auto; }
+      /* puzzle panel (mounted by the bridge) — centred between the boards.
+         The board is square and sized by WIDTH (module default), so we cap the panel
+         width by the vertical room left between the two boards: the square then fits the
+         height too and scales down on short windows. clamp() keeps a visible floor, and
+         the overlay scrolls if a very short window still can't fit it. */
+      .trs-panel { width: 100%; max-width: clamp(220px, calc(100vh - 470px), 560px); }
+      .trs-timer { font-size: 30px; font-weight: 800; text-align: center; margin-bottom: 10px; color: #e6c84a; }
       .trs-timer.urgent { color: #ff5566; }
-      /* host fills the leftover height; the square board is sized by that (bounded) height
-         so it scales DOWN on short windows instead of overflowing onto the player board.
-         max-width caps it on very narrow windows; the overlay scrolls as a last resort. */
-      .trs-host { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
-      #puzzle-overlay .gpp-wrap { height: 100%; width: auto; max-width: 100%; aspect-ratio: 1 / 1; }
 
       /* info bar */
       .en { color: #ff7a8a; font-weight: 700; }
