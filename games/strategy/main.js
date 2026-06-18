@@ -1,0 +1,140 @@
+// =============================================================================
+//  main.js — BOOT: wire config → state → bridge → render → panels → input
+// =============================================================================
+//  Three-pane UI: left rail (config/status), center (boards + Resolve button),
+//  right (TRS puzzle overlay), bottom (phase-aware info bar).
+//
+//  Render ON DEMAND (after a click / puzzle solve / resolve), never every frame —
+//  rebuilding the board innerHTML continuously would destroy the element under the
+//  cursor mid-click and swallow clicks.
+//
+//  Flows:
+//   ATTACK build  — click your weapon → solve TRS → click an enemy part to apply the
+//                   status (valid only) → repeat → Resolve → click the enemy Focus.
+//   DEFENSE build — click your part → solve TRS → click the part to protect → repeat
+//                   → Resolve (enemy strikes your pre-loaded defenses).
+// =============================================================================
+
+import config from './config/game.json';
+import { createState, PHASES } from './core/state.js';
+import { startAttackBuild, commitAttack, commitDefense } from './core/phases.js';
+import { finalizeAttackTarget } from './combat/attack.js';
+import { finalizeDefenseTarget } from './combat/defense.js';
+import { createBridge } from './puzzle/bridge.js';
+import { createRenderer } from './view/render.js';
+import { createConfigPanel } from './view/configPanel.js';
+import { createInfoBar } from './view/infoBar.js';
+import { createTooltip } from './view/tooltip.js';
+import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, isEffectValidOn } from './core/components.js';
+
+const app = { state: createState(config), started: false };
+app.state.phase = PHASES.CONFIG;
+const getState = () => app.state;
+
+const centerEl = document.getElementById('center');
+const enemyEl = document.getElementById('enemy-wrap');
+const playerEl = document.getElementById('player-wrap');
+const overlayEl = document.getElementById('puzzle-overlay');
+const leftEl = document.getElementById('left');
+const infoEl = document.getElementById('infobar');
+const controlsEl = document.getElementById('controls');
+
+const bridge = createBridge({ getState, overlayEl, onChange: () => draw() });
+const renderer = createRenderer(centerEl, { enemy: enemyEl, player: playerEl }, onComponentClick);
+createTooltip(centerEl, getState);
+const infobar = createInfoBar(infoEl);
+const panel = createConfigPanel(leftEl, { onStart, onRestart, defaults: config.ui });
+panel.showConfig();
+
+function onComponentClick(side, id) {
+  const s = app.state;
+  if (!app.started || s.activePuzzle) return;
+
+  if (s.phase === PHASES.ATTACK_BUILD) {
+    if (s.pendingAction) {                                   // step ②: apply status to an enemy part
+      if (side === 'enemy' && isAlive(s.enemy.components[id]) && isEffectValidOn(s.pendingAction.effect, id)) finalizeAttackTarget(s, id);
+    } else if (s.pickFocus) {                                // resolve: pick the firepower Focus
+      if (side === 'enemy' && isAlive(s.enemy.components[id])) commitAttack(s, id);
+    } else if (side === 'player' && ATTACK_EFFECT[id]) {     // step ①: play a weapon's TRS
+      bridge.open(id);
+    }
+  } else if (s.phase === PHASES.DEFENSE_BUILD && side === 'player') {
+    if (s.pendingDefense) {                                  // step ②: choose the part to protect
+      if (isAlive(s.player.components[id])) finalizeDefenseTarget(s, id);
+    } else if (DEFENSE_VERB[id]) {                           // step ①: play a part's TRS
+      bridge.open(id);
+    }
+  }
+  draw();
+}
+
+function onStart(ui) {
+  app.state = createState(config, ui);
+  startAttackBuild(app.state);
+  app.started = true;
+  panel.showStatus();
+  draw();
+}
+
+function onRestart() {
+  bridge.abort();
+  app.state = createState(config);
+  app.state.phase = PHASES.CONFIG;
+  app.started = false;
+  panel.showConfig();
+  draw();
+}
+
+function renderControls() {
+  const s = app.state;
+  let html = '';
+  if (app.started && !s.activePuzzle) {
+    if (s.phase === PHASES.ATTACK_BUILD) {
+      if (s.pendingAction) html = '<span class="hint">↳ pick an enemy part to apply the status</span>';
+      else if (s.pickFocus) html = '<button id="cancel">✖ Cancel</button> <span class="hint">↳ click the enemy part to FOCUS firepower</span>';
+      else html = '<button id="resolve">▶ Resolve Attack</button>';
+    } else if (s.phase === PHASES.DEFENSE_BUILD) {
+      if (s.pendingDefense) html = '<span class="hint">↳ pick one of your parts to protect</span>';
+      else html = '<button id="resolve">▶ Resolve Defense</button>';
+    }
+  }
+  controlsEl.innerHTML = html;
+  const resolve = document.getElementById('resolve');
+  if (resolve) resolve.onclick = () => {
+    const st = app.state;
+    if (st.phase === PHASES.ATTACK_BUILD) st.pickFocus = true;       // enter Focus-pick; enemy click commits
+    else if (st.phase === PHASES.DEFENSE_BUILD) commitDefense(st);
+    draw();
+  };
+  const cancel = document.getElementById('cancel');
+  if (cancel) cancel.onclick = () => { app.state.pickFocus = false; draw(); };
+}
+
+function draw() {
+  renderer(app.state);
+  if (app.started) panel.update(app.state);
+  infobar(app.state);
+  renderControls();
+}
+
+draw(); // initial paint (config screen)
+
+window.__strategy = {
+  get state() { return app.state; },
+  bridge,
+  start: (ui) => onStart(ui || config.ui),
+  restart: onRestart,
+  redraw: draw,
+  commitAttack: (focusId) => { commitAttack(app.state, focusId); draw(); },
+  commitDefense: () => { commitDefense(app.state); draw(); },
+  solveActivePuzzle() {
+    const ap = app.state.activePuzzle;
+    if (!ap) return false;
+    const g = ap.instance;
+    const route = g.level.primaryRoute || [g.level.start, g.level.goal];
+    g.reset(); g.tryBegin(route[0]);
+    for (let i = 1; i < route.length; i++) g.tryMoveTo(route[i]);
+    g.endDrag();
+    return true;
+  },
+};

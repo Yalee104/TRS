@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRS Command — strategy</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: #0e0f13; color: #e6e6e6;
+        font-family: system-ui, sans-serif; font-size: 14px; }
+
+      #app { display: grid; height: 100vh;
+        grid-template-columns: 260px 1fr;
+        grid-template-rows: 1fr 104px;
+        grid-template-areas: "left center" "left info"; }
+
+      #left   { grid-area: left;  background: #14161d; border-right: 1px solid #262a36; padding: 14px; overflow:auto; }
+      #center { grid-area: center; display: flex; flex-direction: column; min-width: 0; overflow: auto; }
+      /* TRS view lives BETWEEN the two boards (centre), growing to push the player board down */
+      #puzzle-overlay { display: none; flex: 1 1 auto; min-height: 0;
+        align-items: center; justify-content: center; padding: 14px;
+        background: #101218; border-top: 1px solid #262a36; border-bottom: 1px solid #262a36; }
+      #infobar { grid-area: info; background: #14161d; border-top: 1px solid #262a36;
+        padding: 14px 22px; display: flex; align-items: center; line-height: 1.75; overflow: auto; }
+      #infobar b { margin: 0 .18em; }
+      #infobar b:first-child { margin-left: 0; }
+
+      /* left rail */
+      #left h2 { margin: 0 0 12px; font-size: 18px; }
+      #left label { display: block; margin: 10px 0; color: #aeb4c0; font-size: 12px; }
+      #left select, #left input[type=number] { width: 100%; margin-top: 4px; padding: 6px;
+        background: #0e0f13; color: #e6e6e6; border: 1px solid #2a2e3a; border-radius: 6px; }
+      #left input[type=range] { width: 100%; }
+      #left button { width: 100%; margin-top: 12px; padding: 9px; border: 0; border-radius: 8px;
+        background: #3a6df0; color: white; font-weight: 600; cursor: pointer; }
+      #left button#cfg-restart { background: #3a3f4d; }
+      .status #cfg-readout { margin: 12px 0; line-height: 1.8; }
+      .log-title { color: #8a90a0; font-size: 12px; margin-top: 8px; }
+      .log { font-size: 11px; color: #9aa0aa; line-height: 1.5; max-height: 40vh; overflow:auto; }
+
+      /* boards (enemy on top, player below — the TRS view slots between them) */
+      .board-wrap { padding: 10px 14px; flex: 0 0 auto; }
+      #controls { padding: 4px 14px 12px; min-height: 44px; flex: 0 0 auto; }
+      #controls button { padding: 10px 18px; border: 0; border-radius: 8px; background: #d05bff;
+        color: white; font-weight: 700; cursor: pointer; font-size: 15px; }
+      .board-label { color: #8a90a0; font-size: 12px; letter-spacing: .08em; margin: 4px 0; }
+      .phase-banner { text-align: center; color: #e6c84a; font-weight: 700; margin: 10px 0; }
+      .cards { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+      .comp { background: #191c24; border: 2px solid #2a2e3a; border-radius: 10px; padding: 8px;
+        cursor: pointer; transition: border-color .1s, transform .1s; min-height: 96px; }
+      .comp:hover { transform: translateY(-2px); border-color: #4a5570; }
+      .comp.core { border-color: #6a4a8a; }
+      .comp.core.shielded { border-color: #3aa0ff; border-width: 3px; box-shadow: 0 0 0 3px #3aa0ff66, inset 0 0 12px #3aa0ff33; }
+      .comp.dead { opacity: .35; filter: grayscale(1); cursor: default; }
+      .comp.focus { border-color: #ff5566; box-shadow: 0 0 0 2px #ff556655; }
+      .comp.selected { border-color: #5b8def; box-shadow: 0 0 0 2px #5b8def55; }
+      .comp.cooldown { opacity: .6; }
+      .comp.used { opacity: .4; filter: grayscale(.7); cursor: default; }
+      .comp.valid-target { border-color: #3ad17a; box-shadow: 0 0 0 2px #3ad17a66; }
+      .comp.invalid-target { opacity: .35; }
+      .comp.focus-candidate { border-color: #ff5566; box-shadow: 0 0 0 2px #ff556666; animation: pulse 1s infinite; }
+      .comp.noclick { cursor: default; }
+      @keyframes pulse { 50% { box-shadow: 0 0 0 4px #ff556633; } }
+      #controls .hint { color: #9aa0aa; margin-left: 10px; font-size: 13px; }
+      .cn { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+      .hpbar { height: 7px; background: #0e0f13; border-radius: 4px; overflow: hidden; }
+      .hpfill { height: 100%; background: linear-gradient(90deg,#3ad17a,#9be36a); }
+      .enemy-board .hpfill { background: linear-gradient(90deg,#ff7043,#ffb04a); }
+      .hpnum { font-size: 10px; color: #9aa0aa; margin-top: 3px; }
+      .badges { margin-top: 5px; min-height: 18px; display: flex; flex-wrap: wrap; gap: 3px; }
+      .st, .df, .tel { font-size: 11px; }
+      .st.pending { opacity: .5; filter: grayscale(.6); border: 1px dashed #5b8def88; border-radius: 4px; padding: 0 2px; }
+      .role { font-size: 10px; color: #7f8696; margin-top: 4px; font-style: italic; }
+      .cd { font-size: 9px; color: #ff8a3d; }
+
+      /* puzzle panel (mounted by the bridge) — centred + larger between the boards */
+      .trs-panel { width: 100%; max-width: 560px; }
+      .trs-timer { font-size: 30px; font-weight: 800; text-align: center; margin-bottom: 10px; color: #e6c84a; }
+      .trs-timer.urgent { color: #ff5566; }
+
+      /* info bar */
+      .en { color: #ff7a8a; font-weight: 700; }
+      .sep { color: #3a3f4d; margin: 0 8px; }
+
+      /* hover dossier (view/tooltip.js) */
+      .trs-tooltip { position: fixed; z-index: 50; max-width: 320px; pointer-events: none;
+        background: #1b1e27; color: #d8dce4; border: 1px solid #39414f;
+        border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.45;
+        box-shadow: 0 8px 28px #000a; }
+      .trs-tooltip .tt-h { font-size: 13px; margin-bottom: 3px; }
+      .trs-tooltip .tt-side { font-size: 10px; padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle; }
+      .trs-tooltip .tt-side.player { background: #1f3a66; color: #9cc2ff; }
+      .trs-tooltip .tt-side.enemy { background: #5a2230; color: #ff9caa; }
+      .trs-tooltip .tt-hp { color: #aeb4c0; margin-bottom: 4px; }
+      .trs-tooltip .tt-sys { color: #c2c7d2; margin-bottom: 6px; }
+      .trs-tooltip .tt-off, .trs-tooltip .tt-def, .trs-tooltip .tt-casc,
+      .trs-tooltip .tt-st, .trs-tooltip .tt-pending, .trs-tooltip .tt-defs,
+      .trs-tooltip .tt-tel, .trs-tooltip .tt-shield { margin-top: 5px; }
+      .trs-tooltip .tt-dim { color: #8a90a0; }
+      .trs-tooltip .tt-casc { color: #9aa0aa; font-size: 11px; }
+      .trs-tooltip .tt-shield.up { color: #6fc0ff; }
+      .trs-tooltip .tt-shield.down { color: #ffb04a; }
+      .trs-tooltip .tt-pending { color: #9cc2ff; }
+      .trs-tooltip .tt-tel { color: #ffb04a; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="left"></div>
+      <div id="center">
+        <div id="enemy-wrap" class="board-wrap"></div>
+        <div id="puzzle-overlay"></div>
+        <div id="player-wrap" class="board-wrap"></div>
+        <div id="controls"></div>
+      </div>
+      <div id="infobar"></div>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

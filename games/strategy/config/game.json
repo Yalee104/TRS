@@ -1,0 +1,112 @@
+{
+  "_comment": "TRS Command — v1 battle-loop tuning. Every number the loop leans on lives here so it can be playtested without touching code. See games/strategy/DESIGN.md (Parts A + B).",
+
+  "phase": {
+    "creditMs": 120000,
+    "attackTimeModel": "cost",
+    "actionCostMs": 20000,
+    "failCostMs": 10000
+  },
+
+  "puzzle": {
+    "size": 6,
+    "timeLimitMs": 12000,
+    "trapEntryMode": "commitFail"
+  },
+
+  "cooldowns": {
+    "failCooldownMult": 2
+  },
+
+  "components": {
+    "order": ["core", "generator", "weapon", "tower", "engine", "launchpad"],
+    "core":       { "name": "Reactor Core",   "hp": 200, "armor": 0 },
+    "generator":  { "name": "Power Generator","hp": 80,  "armor": 0 },
+    "weapon":     { "name": "Weapon Storage", "hp": 70,  "armor": 0 },
+    "tower":      { "name": "Tower",          "hp": 60,  "armor": 0 },
+    "engine":     { "name": "Engine",         "hp": 60,  "armor": 0 },
+    "launchpad":  { "name": "Launch Pad",     "hp": 70,  "armor": 0 }
+  },
+
+  "firepower": {
+    "base": 18,
+    "curve": "gradient",
+    "floor": 0.4,
+    "weights": { "generator": 0.40, "weapon": 0.35, "engine": 0.10, "tower": 0.08, "launchpad": 0.07 },
+    "debuffFactor": { "freeze": 0.0, "drain": 0.6, "confuse": 0.5, "burning": 0.85, "shatter": 1.0 },
+    "thresholds": [
+      { "min": 0.75, "mult": 1.0 },
+      { "min": 0.50, "mult": 0.8 },
+      { "min": 0.25, "mult": 0.6 },
+      { "min": 0.0,  "mult": 0.4 }
+    ]
+  },
+
+  "effects": {
+    "_comment": "Per-effect translation of a solved TRS combo's `value` (1..~15 potency) into game numbers. Statuses last whole TURNS (resolves): turns = clamp(round(potency/divisor), min, max).",
+    "freeze":  { "dmgPerPotency": 1.5, "turns": { "divisor": 4, "min": 1, "max": 3 } },
+    "confuse": { "dmgPerPotency": 1.0, "turns": { "divisor": 4, "min": 1, "max": 3 } },
+    "drain":   { "dmgPerPotency": 3.0, "healPerPotency": 2.0, "turns": { "divisor": 5, "min": 1, "max": 2 } },
+    "burning": { "dmgPerPotency": 1.0, "dotPerPotency": 1.2, "turns": { "divisor": 3, "min": 1, "max": 4 } },
+    "shatter": { "dmgPerPotency": 2.0, "turns": { "divisor": 3, "min": 1, "max": 3 } },
+    "synergy": {
+      "shatterAmp": 0.5,
+      "frozenBrittle": 0.4,
+      "wildfireSpreadFrac": 0.5
+    }
+  },
+
+  "defense": {
+    "_comment": "v1 defensive verbs; potency from the solved combo's `value`.",
+    "shield":    { "absorbPerPotency": 8 },
+    "repair":    { "hpPerPotency": 6 },
+    "cleanse":   { "removesAll": true },
+    "harden":    { "reductionPerPotency": 0.04, "maxReduction": 0.6 },
+    "overclock": { "boostPerPotency": 0.1, "durationPhases": 1 }
+  },
+
+  "coreShield": {
+    "_comment": "The Reactor Core is protected by an indestructible shield: while UP, any attack on the Core deals 0 HP damage (statuses can still be applied, they just don't chip the Core). The shield falls only when enough shield-linked parts are destroyed. Each listed part contributes its percentage when DESTROYED; the shield drops once the destroyed parts' percentages sum to >= `threshold`. Default: Power Generator alone (100%) — destroy it to expose the Core. Example multi-part list: { generator: 60, weapon: 30, tower: 10, engine: 40 }.",
+    "threshold": 100,
+    "contributors": { "generator": 100 }
+  },
+
+  "cascade": {
+    "brownoutMult": 0.5,
+    "coreArmorAtFullGenerator": 0.5,
+    "evasionAtFullEngine": 0.15,
+    "weaponDestroyedBaseMult": 0.4,
+    "towerDestroyedAimMult": 0.6,
+    "_lpComment": "Launch Pad governs its owner's TRS quality on a GRADIENT: at full HP it EASES the grid (fewer blockers/traps, smaller grid = bonus scaled by HP); as it's damaged the bonus fades to baseline; DESTROYED it congests past baseline (the cliff). blockerBonus/trapBonus are added to densities; sizeDelta adjusts grid size.",
+    "launchpadFullBonus": { "sizeDelta": -1, "blockerBonus": -0.08, "trapBonus": -0.08 },
+    "launchpadDestroyed": { "sizeDelta": 2, "blockerBonus": 0.12, "trapBonus": 0.1 }
+  },
+
+  "archetypes": {
+    "_comment": "Enemy targeting brains. damageBudget = total HP damage dealt across a defense-resolve, distributed per policy.",
+    "saboteur": {
+      "label": "Saboteur",
+      "damageBudget": 70,
+      "priority": ["generator", "weapon", "core"],
+      "spread": 0.25,
+      "statusChance": 0.4
+    },
+    "brute": {
+      "label": "Brute",
+      "damageBudget": 80,
+      "priority": "highestHp",
+      "spread": 0.0,
+      "statusChance": 0.15
+    }
+  },
+
+  "telegraph": { "gated": true, "mode": "deterministic" },
+
+  "ui": {
+    "archetype": "saboteur",
+    "creditSeconds": 120,
+    "attackTimeModel": "cost",
+    "telegraphMode": "deterministic",
+    "seed": 0
+  }
+}
