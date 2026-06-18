@@ -117,7 +117,7 @@ function renderLog(el, log) {
     if (key !== curKey) { html += `<div class="log-grp">${g.icon} Round ${l.round} · ${g.tag}</div>`; curKey = key; }
     const detail = /^[·•]/.test(l.msg);
     const text = detail ? l.msg.replace(/^[·•]\s*/, '') : l.msg;
-    html += `<div class="log-line ${detail ? 'l2' : 'l1'}">${esc(text)}</div>`;
+    html += `<div class="log-line ${detail ? 'l2' : 'l1'}">• ${esc(text)}</div>`;
   }
   el.innerHTML = html;
   el.scrollTop = el.scrollHeight;

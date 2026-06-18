@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { PHASES } from '../core/state.js';
-import { ATTACK_EFFECT, DEFENSE_VERB } from '../core/components.js';
+import { ATTACK_EFFECT } from '../core/components.js';
 import { combatCondition, firepowerMult, totalFirepower } from '../core/firepower.js';
 import { validAttackTargets } from '../combat/attack.js';
 import { currentBudget } from '../combat/enemyAI.js';
@@ -61,5 +61,5 @@ function defenseHelp(state) {
     const p = state.pendingDefense;
     return `<b>DEFENSE ②</b> Solved <b>${p.verb}</b> (potency ${p.potency.toFixed(1)}). Click one of <b>your</b> parts to protect it. <span class="sep">|</span> ${threat}`;
   }
-  return `<b>DEFENSE ①</b> Click one of <b>your</b> parts to play its TRS (${Object.values(DEFENSE_VERB).join('/')}; stacks). <span class="sep">|</span> ${threat} <span class="sep">|</span> order: Cleanse→Harden→Shield→Repair <span class="sep">|</span> then <b>▶ Resolve</b>.`;
+  return `<b>DEFENSE ①</b> Click one of <b>your</b> components to play TRS. <span class="sep">|</span> ${threat} <span class="sep">|</span> then <b>▶ Resolve</b>.`;
 }

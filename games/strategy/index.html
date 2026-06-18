@@ -40,9 +40,10 @@
       .log { font-size: 11px; color: #9aa0aa; line-height: 1.5; max-height: 42vh; overflow:auto; }
       .log-grp { color: #cdd3df; font-weight: 700; font-size: 11px; margin-top: 8px;
         border-top: 1px solid #262a36; padding-top: 5px; }
-      .log-line { line-height: 1.5; }
+      /* bullet + hanging indent: wrapped lines align under the text, not the bullet */
+      .log-line { line-height: 1.5; padding-left: 12px; text-indent: -12px; }
       .log-line.l1 { color: #b3b9c6; margin-left: 8px; }
-      .log-line.l2 { color: #8a90a0; margin-left: 20px; }
+      .log-line.l2 { color: #8a90a0; margin-left: 22px; }
 
       /* boards (enemy on top, player below — the TRS view slots between them) */
       .board-wrap { padding: 10px 14px; flex: 0 0 auto; }
