@@ -76,7 +76,10 @@ export function resolveDefense(state) {
 
   for (const entry of entries) {
     let target = player.components[entry.component];
-    if (!target || !isAlive(target)) target = isAlive(player.components.core) ? player.components.core : null;
+    if (!target || !isAlive(target)) {
+      // a telegraphed part died before resolve — bounce to the Core only if it's EXPOSED
+      target = (isAlive(player.components.core) && !coreShieldUp(player, state.config)) ? player.components.core : null;
+    }
     if (!target) continue;
     const def = target.defenses;
     let dmg = entry.share * budget;

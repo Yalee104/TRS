@@ -297,7 +297,7 @@ destruction. The cliff is always worse than the slope — that's what makes a ki
 |---|---|---|
 | **Power Generator** | 40% firepower weight (no gradient on the Core shield — it's binary) | **Core shield drops** (its 100% contribution, by default) + **brownout**: all output ×0.5 |
 | **Weapon Storage** | 35% firepower weight; base damage scales | **base firepower collapses** (only weakened TRS add-ons remain) |
-| **Tower (Sensors)** | telegraph clarity blurs (exact→fuzzy); aim scales | **blind** (no telegraph); enemy aim **scatters to random parts** |
+| **Tower (Sensors)** | no change until destroyed (binary in v1) | **your** Tower → defend **blind** (no telegraph); **enemy** Tower → its aim **scatters to random parts** + lands ~40% softer (aimMult) |
 | **Engine** | evasion 15%→0% with HP; initiative scales | evasion → 0 + **lose initiative** (other side resolves first) |
 | **Launch Pad** | **TRS quality scales with HP** — full HP *eases* your grids (fewer blockers/traps, smaller grid); damage fades the bonus to baseline. Also 7% firepower weight | TRS **congests** past baseline: grid +2, extra blockers/traps → routing harder, more fails. Loses its 7% firepower weight |
 | **Reactor Core** | — | **match over** |

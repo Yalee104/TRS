@@ -18,6 +18,7 @@ import { systemState } from '../core/cascade.js';
 import { applyStatus, tickAircraftStatuses, attackSynergyMult } from '../combat/statuses.js';
 import { makePendingAttack, finalizeAttackTarget, validAttackTargets, resolveAttack, comboPotency } from '../combat/attack.js';
 import { makePendingDefense, finalizeDefenseTarget, resolveDefense } from '../combat/defense.js';
+import { planAttack, currentBudget } from '../combat/enemyAI.js';
 import { offensivePalette, defensivePalette, catalogFromConfig } from '../puzzle/palettes.js';
 import { createBridge } from '../puzzle/bridge.js';
 import { evaluate } from '../../grid-path-puzzle/combo/ComboEngine.js';
@@ -77,6 +78,26 @@ test('Launch Pad now carries attack strength: destroying it drops Combat Conditi
   const s = fresh();
   s.player.components.launchpad.hp = 0;
   assert(near(combatCondition(s.player, CONFIG), 1 - CONFIG.firepower.weights.launchpad, 0.001), 'condition loses the launchpad weight');
+});
+
+// --- enemy AI: shielded-core avoidance + tower-gated aim ---------------------
+test('enemy never targets the player Core while its shield is UP; targets it once exposed', () => {
+  const s = fresh();
+  const shielded = planAttack(s);
+  assert(!shielded.entries.some((e) => e.component === 'core'), 'shielded core is not targeted');
+  s.player.components.generator.hp = 0;          // drop the shield
+  // saboteur priority is [generator(dead), weapon, core] → core becomes a valid target
+  const exposed = planAttack(s);
+  assert(exposed.entries.some((e) => e.component === 'core'), 'exposed core can be targeted');
+});
+
+test('destroying the enemy Tower scatters its aim and softens the blow', () => {
+  const s = fresh();
+  const before = currentBudget(s);
+  s.enemy.components.tower.hp = 0;
+  const plan = planAttack(s);
+  assert(plan.scattered === true, 'tower down → scattered aim');
+  assert(currentBudget(s) < before, 'tower down → smaller budget (lost accuracy)');
 });
 
 // --- statuses + synergies ----------------------------------------------------

@@ -20,7 +20,7 @@ const SYSTEM = {
   core: 'The heart of the aircraft. If it reaches 0 HP the battle ends. Protected by an indestructible shield (below) until its shield-linked parts fall.',
   generator: 'Powers every system. Drives the largest share of your firepower (Combat Condition) and holds up the Reactor-Core shield.',
   weapon: 'Your base / automatic firepower. A big slice of Combat Condition.',
-  tower: 'Sensors. While alive YOU see the enemy’s telegraphed strike; it also sharpens the enemy’s aim.',
+  tower: 'Sensors. YOUR Tower lets you SEE the enemy’s telegraphed strike (defend blind without it). An owner’s Tower also governs ITS aim — destroyed, its strikes scatter to random parts and land ~40% softer.',
   engine: 'Initiative (who resolves first) and evasion.',
   launchpad: 'Governs its OWNER’s TRS quality: healthy = easier grids (fewer blockers/traps), damaged = grids drift back to baseline, destroyed = congested. Also carries a share of attack strength.',
 };
@@ -44,7 +44,7 @@ const VERB_DESC = {
 const CASCADE = {
   generator: { damaged: 'Core shield link + 40% firepower weight.', dead: 'Reactor shield contribution lost + brownout: all output ×0.5.' },
   weapon: { damaged: '35% firepower weight; base damage scales with HP.', dead: 'Base firepower collapses (only weakened TRS add-ons remain).' },
-  tower: { damaged: 'Telegraph clarity + aim scale with HP.', dead: 'Blind (no telegraph); enemy aim scatters to random parts.' },
+  tower: { damaged: 'No change until destroyed (binary in v1).', dead: 'YOUR Tower → you defend blind (no telegraph preview). ENEMY Tower → its aim scatters to random parts and lands ~40% softer.' },
   engine: { damaged: 'Evasion + initiative scale with HP.', dead: 'No evasion; lose initiative (other side resolves first).' },
   launchpad: { damaged: 'TRS easing fades toward baseline; small attack-strength dip.', dead: 'Owner’s TRS congests (bigger grid, more blockers); loses its attack-strength share.' },
   core: { damaged: '', dead: 'Match over.' },
