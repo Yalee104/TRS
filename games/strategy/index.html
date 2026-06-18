@@ -18,7 +18,7 @@
       #left   { grid-area: left;  background: #14161d; border-right: 1px solid #262a36; padding: 14px; overflow:auto; }
       #center { grid-area: center; display: flex; flex-direction: column; min-width: 0; overflow: auto; }
       /* TRS view lives BETWEEN the two boards (centre), growing to push the player board down */
-      #puzzle-overlay { display: none; flex: 1 1 auto; min-height: 0;
+      #puzzle-overlay { display: none; flex: 1 1 auto; min-height: 0; overflow: auto;
         align-items: center; justify-content: center; padding: 14px;
         background: #101218; border-top: 1px solid #262a36; border-bottom: 1px solid #262a36; }
       #infobar { grid-area: info; background: #14161d; border-top: 1px solid #262a36;
@@ -81,9 +81,16 @@
       .cd { font-size: 9px; color: #ff8a3d; }
 
       /* puzzle panel (mounted by the bridge) — centred + larger between the boards */
-      .trs-panel { width: 100%; max-width: 560px; }
-      .trs-timer { font-size: 30px; font-weight: 800; text-align: center; margin-bottom: 10px; color: #e6c84a; }
+      .trs-panel { width: 100%; max-width: 560px; max-height: 100%;
+        display: flex; flex-direction: column; min-height: 0; }
+      .trs-timer { font-size: 30px; font-weight: 800; text-align: center; margin-bottom: 10px;
+        color: #e6c84a; flex: 0 0 auto; }
       .trs-timer.urgent { color: #ff5566; }
+      /* host fills the leftover height; the square board is sized by that (bounded) height
+         so it scales DOWN on short windows instead of overflowing onto the player board.
+         max-width caps it on very narrow windows; the overlay scrolls as a last resort. */
+      .trs-host { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
+      #puzzle-overlay .gpp-wrap { height: 100%; width: auto; max-width: 100%; aspect-ratio: 1 / 1; }
 
       /* info bar */
       .en { color: #ff7a8a; font-weight: 700; }
