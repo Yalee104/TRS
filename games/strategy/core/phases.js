@@ -24,15 +24,16 @@ export function startAttackBuild(state) {
   state.pickFocus = false;
   state.usedComponents = {};
   state.creditLeftMs = state.creditMs;
-  state.telegraph = planAttack(state);   // enemy declares its next strike (visible if your Tower lives)
+  // each living enemy declares its next strike (visible if your Tower lives)
+  for (const e of state.enemies) e.telegraph = isAlive(e.components.core) ? planAttack(state, e) : null;
   logEvent(state, `=== Round ${state.round} — ATTACK. Play a weapon's TRS, then apply its status to an enemy part.`);
 }
 
-export function commitAttack(state, focusId) {
-  if (state.phase !== PHASES.ATTACK_BUILD || focusId == null) return null;
+export function commitAttack(state, eid, focusId) {
+  if (state.phase !== PHASES.ATTACK_BUILD || eid == null || focusId == null) return null;
   state.phase = PHASES.ATTACK_RESOLVE;
   state.pickFocus = false;
-  const summary = resolveAttack(state, focusId);   // logs internally
+  const summary = resolveAttack(state, eid, focusId);   // logs internally
   state.lastResolve = { kind: 'attack', ...summary };
   if (checkOutcome(state)) return summary;
   startDefenseBuild(state);
@@ -61,9 +62,11 @@ export function commitDefense(state) {
 }
 
 function endOfRound(state) {
-  const ed = tickAircraftStatuses(state.enemy);
+  for (const e of state.enemies) {
+    const d = tickAircraftStatuses(e);
+    if (d) logEvent(state, `End of round: Burning dealt ${Math.round(d)} to ${e.label}.`);
+  }
   const pd = tickAircraftStatuses(state.player);
-  if (ed) logEvent(state, `End of round: Burning dealt ${Math.round(ed)} to the enemy.`);
   if (pd) logEvent(state, `End of round: Burning dealt ${Math.round(pd)} to you.`);
   if (checkOutcome(state)) return;          // DoT can finish a Core
   for (const id of Object.keys(state.cooldowns)) state.cooldowns[id] = Math.max(0, state.cooldowns[id] - 1);
@@ -71,9 +74,9 @@ function endOfRound(state) {
   startAttackBuild(state);
 }
 
-/** WON if the enemy Core is dead, LOST if yours is. Returns true if the battle ended. */
+/** WON if ALL enemy Cores are dead, LOST if yours is. Returns true if the battle ended. */
 export function checkOutcome(state) {
-  if (!isAlive(state.enemy.components.core)) { state.phase = PHASES.WON; logEvent(state, 'Enemy Reactor Core destroyed — VICTORY.'); return true; }
+  if (state.enemies.every((e) => !isAlive(e.components.core))) { state.phase = PHASES.WON; logEvent(state, 'All enemy Reactor Cores destroyed — VICTORY.'); return true; }
   if (!isAlive(state.player.components.core)) { state.phase = PHASES.LOST; logEvent(state, 'Your Reactor Core destroyed — DEFEAT.'); return true; }
   return false;
 }

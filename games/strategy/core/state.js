@@ -8,7 +8,7 @@
 //  editing the file. No DOM here — main.js owns rendering.
 // =============================================================================
 
-import { COMPONENT_IDS, makeComponent } from './components.js';
+import { COMPONENT_IDS, makeComponent, isAlive } from './components.js';
 import { resolveArchetype } from '../combat/enemyAI.js';
 
 /** Phases of the loop (see DESIGN §2). */
@@ -29,20 +29,46 @@ function makeAircraft(side, config) {
 }
 
 /**
+ * Build the enemy roster (1..maxEnemies aircraft). Each enemy carries its own
+ * archetype, label, and per-enemy telegraph. Duplicate archetypes get numbered
+ * labels (e.g. "Saboteur 1", "Saboteur 2").
+ */
+function buildEnemies(config, roster, rng) {
+  const enemies = roster.map((key, i) => {
+    const ac = makeAircraft('enemy', config);
+    ac.eid = i;
+    ac.archetype = resolveArchetype(key, rng);
+    ac.telegraph = null;
+    return ac;
+  });
+  const counts = {};
+  for (const e of enemies) counts[e.archetype] = (counts[e.archetype] || 0) + 1;
+  const seen = {};
+  for (const e of enemies) {
+    const base = config.archetypes[e.archetype]?.label || e.archetype;
+    if (counts[e.archetype] > 1) { seen[e.archetype] = (seen[e.archetype] || 0) + 1; e.label = `${base} ${seen[e.archetype]}`; }
+    else e.label = base;
+  }
+  return enemies;
+}
+
+/**
  * @param config  the parsed game.json
  * @param ui      optional overrides from the config panel:
- *                { archetype, creditSeconds, attackTimeModel, telegraphMode, seed }
+ *                { enemies:[archetype...], creditSeconds, attackTimeModel, telegraphMode, seed }
  */
 export function createState(config, ui = {}) {
   const u = { ...config.ui, ...ui };
   const creditMs = (u.creditSeconds != null ? u.creditSeconds * 1000 : config.phase.creditMs);
   const rng = makeRng(u.seed || 0);
+  const roster = (Array.isArray(u.enemies) && u.enemies.length)
+    ? u.enemies.slice(0, u.maxEnemies || 4)
+    : [u.archetype || 'saboteur'];   // back-compat: single-archetype callers
 
   return {
     config,
     ui: u,
     rng,
-    archetype: resolveArchetype(u.archetype, rng),
 
     phase: PHASES.ATTACK_BUILD,
     round: 1,
@@ -51,23 +77,25 @@ export function createState(config, ui = {}) {
     attackTimeModel: u.attackTimeModel || config.phase.attackTimeModel,
 
     player: makeAircraft('player', config),
-    enemy: makeAircraft('enemy', config),
+    enemies: buildEnemies(config, roster, rng),   // 1..4 enemy aircraft
 
     // current build session
-    queue: [],                   // attack: {component, effect, potency, target}; defense: {component, verb, potency, target}
+    queue: [],                   // attack: {component, effect, potency, target:{eid,component}}; defense: {component, verb, potency, target}
     pendingAction: null,         // attack: solved-but-not-yet-targeted action awaiting an enemy pick
     pendingDefense: null,        // defense: solved-but-not-yet-targeted action awaiting an own-part pick
-    focus: null,                 // attack: the firepower Focus, chosen at Resolve
+    focus: null,                 // attack: the firepower Focus {eid, component}, chosen at Resolve
     pickFocus: false,            // attack: true while waiting for the player to click the Focus
     usedComponents: {},          // attack: one-use-per-phase guard { weapon:true, ... }
     cooldowns: {},               // per-component fail cooldown (turns remaining)
 
     activePuzzle: null,          // { component, side, mode, instance, overlay }
-    telegraph: null,             // enemy's declared next attack { entries:[{component,dmg,status}], visible }
 
     log: [],
   };
 }
+
+/** Enemies that are still in the fight (Core alive). */
+export const aliveEnemies = (state) => state.enemies.filter((e) => isAlive(e.components.core));
 
 /** Tiny seeded RNG (mulberry32) so a seed makes a run reproducible. */
 export function makeRng(seed) {
@@ -79,9 +107,6 @@ export function makeRng(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
-export const aircraftOf = (state, side) => (side === 'player' ? state.player : state.enemy);
-export const opponentOf = (state, side) => (side === 'player' ? state.enemy : state.player);
 
 export function logEvent(state, msg) {
   state.log.push({ round: state.round, phase: state.phase, msg });

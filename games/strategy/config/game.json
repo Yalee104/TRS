@@ -89,26 +89,54 @@
   },
 
   "archetypes": {
-    "_comment": "Enemy targeting brains. damageBudget = total HP damage dealt across a defense-resolve, distributed per policy.",
+    "_comment": "Enemy targeting brains (non-Boss roster). damageBudget = total HP damage dealt across a defense-resolve, distributed per policy. `status` (or `statusPool`, picked at random) = the debuff the strike may also inflict, gated by statusChance. Up to 4 can be fielded together (config panel roster).",
     "saboteur": {
       "label": "Saboteur",
       "damageBudget": 70,
       "priority": ["generator", "weapon", "core"],
       "spread": 0.25,
-      "statusChance": 0.4
+      "statusChance": 0.4,
+      "status": "drain"
     },
     "brute": {
       "label": "Brute",
       "damageBudget": 80,
       "priority": "highestHp",
       "spread": 0.0,
-      "statusChance": 0.15
+      "statusChance": 0.15,
+      "status": "freeze"
+    },
+    "hunter": {
+      "label": "Hunter",
+      "damageBudget": 65,
+      "priority": ["tower", "engine", "generator", "weapon"],
+      "spread": 0.15,
+      "statusChance": 0.35,
+      "status": "confuse"
+    },
+    "swarm": {
+      "label": "Swarm",
+      "damageBudget": 60,
+      "priority": "highestHp",
+      "spread": 0.6,
+      "statusChance": 0.5,
+      "statusPool": ["burning", "confuse"]
+    },
+    "disruptor": {
+      "label": "Disruptor",
+      "damageBudget": 55,
+      "priority": ["generator", "weapon", "engine"],
+      "spread": 0.3,
+      "statusChance": 0.9,
+      "statusPool": ["freeze", "drain", "confuse"]
     }
   },
 
   "telegraph": { "gated": true, "mode": "deterministic" },
 
   "ui": {
+    "enemies": ["saboteur"],
+    "maxEnemies": 4,
     "archetype": "saboteur",
     "creditSeconds": 15,
     "attackTimeModel": "realtime",

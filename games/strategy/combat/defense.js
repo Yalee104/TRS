@@ -73,61 +73,62 @@ function describeDefenses(def) {
   return parts.join(', ') || 'none';
 }
 
-/** Resolve the enemy's telegraphed attack against the pre-loaded defenses. */
+/** Resolve EVERY living enemy's telegraphed attack against the pre-loaded defenses. */
 export function resolveDefense(state) {
   const { player } = state;
-  const entries = (state.telegraph && state.telegraph.entries) || planAttack(state).entries;
-  const budget = currentBudget(state);
   const evasion = effectiveEvasion(player, state.config); // 0 while your Engine is frozen
   const summary = { hits: [], totalDamage: 0 };
 
-  // Show how the enemy's CURRENT condition (HP + your statuses on its offence) scaled
-  // the budget — e.g. a Confused Weapon Storage drops the blow.
-  const arch = state.config.archetypes[state.archetype];
-  const brownout = systemState(state.enemy, state.config).brownout;
-  const rep = conditionReport(state.enemy, state.config);
-  logEvent(state, `Enemy attacks: budget ${Math.round(budget)} = base ${arch.damageBudget} × condition ${Math.round(rep.condition * 100)}%${brownout < 1 ? ` × brownout ${Math.round(brownout * 100)}%` : ''}${rep.chokes.length ? ` (choked: ${rep.chokes.join(', ')})` : ''}.`);
+  for (const enemy of state.enemies) {
+    if (!isAlive(enemy.components.core)) continue; // defeated enemy doesn't attack
+    const entries = (enemy.telegraph && enemy.telegraph.entries) || planAttack(state, enemy).entries;
+    const budget = currentBudget(state, enemy);
+    const arch = state.config.archetypes[enemy.archetype];
+    const brownout = systemState(enemy, state.config).brownout;
+    const rep = conditionReport(enemy, state.config);
+    logEvent(state, `${enemy.label} attacks: budget ${Math.round(budget)} = base ${arch.damageBudget} × condition ${Math.round(rep.condition * 100)}%${brownout < 1 ? ` × brownout ${Math.round(brownout * 100)}%` : ''}${rep.chokes.length ? ` (choked: ${rep.chokes.join(', ')})` : ''}.`);
 
-  for (const entry of entries) {
-    let target = player.components[entry.component];
-    if (!target || !isAlive(target)) {
-      // a telegraphed part died before resolve — bounce to the Core only if it's EXPOSED
-      target = (isAlive(player.components.core) && !coreShieldUp(player, state.config)) ? player.components.core : null;
-    }
-    if (!target) continue;
-    const def = target.defenses;
-    let dmg = entry.share * budget;
-    const incoming = dmg;
+    for (const entry of entries) {
+      let target = player.components[entry.component];
+      if (!target || !isAlive(target)) {
+        // a telegraphed part died before resolve — bounce to the Core only if it's EXPOSED
+        target = (isAlive(player.components.core) && !coreShieldUp(player, state.config)) ? player.components.core : null;
+      }
+      if (!target) continue;
+      const def = target.defenses;
+      let dmg = entry.share * budget;
+      const incoming = dmg;
 
-    // The Core's shield blocks all HP damage while it is UP (DESIGN §1).
-    if (target.id === 'core' && coreShieldUp(player, state.config)) {
+      // The Core's shield blocks all HP damage while it is UP (DESIGN §1).
+      if (target.id === 'core' && coreShieldUp(player, state.config)) {
+        if (def.cleanse) cleanseComponent(target);
+        logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)} BLOCKED by the Reactor shield (0 dmg).`);
+        summary.hits.push({ component: target.id, damage: 0 });
+        continue;
+      }
+
       if (def.cleanse) cleanseComponent(target);
-      logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)} BLOCKED by the Reactor shield (0 dmg).`);
-      summary.hits.push({ component: target.id, damage: 0 });
-      continue;
+      // build a human reason for the % reduced (which buff/system contributed how much)
+      const redParts = [];
+      if (def.harden) redParts.push(`harden ${Math.round(def.harden * 100)}%`);
+      if (def.overclock) redParts.push(`overclock ${Math.round(def.overclock * 100)}%`);
+      if (evasion) redParts.push(`evade ${Math.round(evasion * 100)}% (Engine)`);
+      const rawReduction = (def.harden || 0) + (def.overclock || 0) + evasion;
+      const reduction = Math.min(0.9, rawReduction);
+      dmg *= 1 - reduction;
+      let absorbed = 0;
+      if (def.shield > 0) { absorbed = Math.min(dmg, def.shield); def.shield -= absorbed; dmg -= absorbed; }
+      target.hp -= dmg;
+
+      if (entry.status) applyStatus(target, entry.status, { turns: 2 });
+      const redText = reduction ? `, −${Math.round(reduction * 100)}% reduced [${redParts.join(' + ')}${rawReduction > 0.9 ? ', capped at 90%' : ''}]` : '';
+      logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)}${redText}${absorbed ? `, ${Math.round(absorbed)} shielded` : ''} → −${Math.round(dmg)} HP${entry.status ? ` (+${entry.status})` : ''}${isAlive(target) ? '' : ' — DESTROYED'}.`);
+      summary.hits.push({ component: target.id, damage: dmg });
+      summary.totalDamage += dmg;
     }
-
-    if (def.cleanse) cleanseComponent(target);
-    // build a human reason for the % reduced (which buff/system contributed how much)
-    const redParts = [];
-    if (def.harden) redParts.push(`harden ${Math.round(def.harden * 100)}%`);
-    if (def.overclock) redParts.push(`overclock ${Math.round(def.overclock * 100)}%`);
-    if (evasion) redParts.push(`evade ${Math.round(evasion * 100)}% (Engine)`);
-    const rawReduction = (def.harden || 0) + (def.overclock || 0) + evasion;
-    const reduction = Math.min(0.9, rawReduction);
-    dmg *= 1 - reduction;
-    let absorbed = 0;
-    if (def.shield > 0) { absorbed = Math.min(dmg, def.shield); def.shield -= absorbed; dmg -= absorbed; }
-    target.hp -= dmg;
-
-    if (entry.status) applyStatus(target, entry.status, { turns: 2 });
-    const redText = reduction ? `, −${Math.round(reduction * 100)}% reduced [${redParts.join(' + ')}${rawReduction > 0.9 ? ', capped at 90%' : ''}]` : '';
-    logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)}${redText}${absorbed ? `, ${Math.round(absorbed)} shielded` : ''} → −${Math.round(dmg)} HP${entry.status ? ` (+${entry.status})` : ''}${isAlive(target) ? '' : ' — DESTROYED'}.`);
-    summary.hits.push({ component: target.id, damage: dmg });
-    summary.totalDamage += dmg;
   }
 
-  // Repair pass: heals every part that pre-loaded a repair (hit or not).
+  // Repair pass: heals every part that pre-loaded a repair (hit or not), once.
   for (const comp of Object.values(player.components)) {
     if (comp.defenses.repair > 0) {
       const before = comp.hp;

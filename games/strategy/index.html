@@ -35,6 +35,14 @@
       #left button { width: 100%; margin-top: 12px; padding: 9px; border: 0; border-radius: 8px;
         background: #3a6df0; color: white; font-weight: 600; cursor: pointer; }
       #left button#cfg-restart { background: #3a3f4d; }
+      #left button:disabled { opacity: .4; cursor: default; }
+      .dim { color: #7f8696; font-weight: 400; }
+      /* enemy roster builder */
+      .roster { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+      .roster-row { display: flex; gap: 6px; align-items: center; }
+      .roster-row select { flex: 1; margin-top: 0; }
+      #left .roster-row .rm { width: auto; margin: 0; padding: 6px 9px; background: #3a3f4d; font-weight: 700; }
+      #left #cfg-add { width: auto; margin-top: 6px; padding: 6px 10px; background: #2a2e3a; font-weight: 600; }
       .status #cfg-readout { margin: 12px 0; line-height: 1.8; }
       .log-title { color: #8a90a0; font-size: 12px; margin-top: 8px; }
       .log { font-size: 11px; color: #9aa0aa; line-height: 1.5; max-height: 42vh; overflow:auto; }
@@ -47,6 +55,14 @@
 
       /* boards (enemy on top, player below — the TRS view slots between them) */
       .board-wrap { padding: 10px 14px; flex: 0 0 auto; }
+      /* up to 4 enemy aircraft sit in a wrapping row, each its own mini-board */
+      .enemy-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+      .enemy-row .board { flex: 1 1 220px; min-width: 200px; background: #121319;
+        border: 1px solid #23262f; border-radius: 10px; padding: 8px; }
+      .enemy-row .board.defeated { opacity: .45; filter: grayscale(.85); }
+      .enemy-row .cards { gap: 5px; }
+      .enemy-row .comp { min-height: 70px; padding: 6px; }
+      .enemy-row .cn { font-size: 11px; margin-bottom: 4px; }
       #controls { padding: 4px 14px 12px; min-height: 44px; flex: 0 0 auto; }
       #controls button { padding: 10px 18px; border: 0; border-radius: 8px; background: #d05bff;
         color: white; font-weight: 700; cursor: pointer; font-size: 15px; }

@@ -43,18 +43,20 @@ const bridge = createBridge({ getState, overlayEl, onChange: () => draw() });
 const renderer = createRenderer(centerEl, { enemy: enemyEl, player: playerEl }, onComponentClick);
 createTooltip(centerEl, getState);
 const infobar = createInfoBar(infoEl);
-const panel = createConfigPanel(leftEl, { onStart, onRestart, defaults: config.ui });
+const panel = createConfigPanel(leftEl, { onStart, onRestart, defaults: config.ui, archetypes: config.archetypes });
 panel.showConfig();
 
-function onComponentClick(side, id) {
+function onComponentClick(side, id, eid) {
   const s = app.state;
   if (!app.started || s.activePuzzle) return;
+  const enemy = (side === 'enemy' && eid != null) ? s.enemies[eid] : null;
+  const enemyLives = enemy && isAlive(enemy.components.core);
 
   if (s.phase === PHASES.ATTACK_BUILD) {
     if (s.pendingAction) {                                   // step ②: apply status to an enemy part
-      if (side === 'enemy' && isAlive(s.enemy.components[id]) && isEffectValidOn(s.pendingAction.effect, id)) finalizeAttackTarget(s, id);
+      if (enemyLives && isAlive(enemy.components[id]) && isEffectValidOn(s.pendingAction.effect, id)) finalizeAttackTarget(s, eid, id);
     } else if (s.pickFocus) {                                // resolve: pick the firepower Focus
-      if (side === 'enemy' && isAlive(s.enemy.components[id])) commitAttack(s, id);
+      if (enemyLives && isAlive(enemy.components[id])) commitAttack(s, eid, id);
     } else if (side === 'player' && ATTACK_EFFECT[id]) {     // step ①: play a weapon's TRS
       bridge.open(id);
     }
@@ -125,7 +127,7 @@ window.__strategy = {
   start: (ui) => onStart(ui || config.ui),
   restart: onRestart,
   redraw: draw,
-  commitAttack: (focusId) => { commitAttack(app.state, focusId); draw(); },
+  commitAttack: (eid, focusId) => { commitAttack(app.state, eid, focusId); draw(); },
   commitDefense: () => { commitDefense(app.state); draw(); },
   solveActivePuzzle() {
     const ap = app.state.activePuzzle;

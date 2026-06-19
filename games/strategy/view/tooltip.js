@@ -57,12 +57,13 @@ const CASCADE = {
   core: { damaged: '', dead: 'Match over.' },
 };
 
-const pName = (state, side, id) => (side === 'player' ? state.player : state.enemy).components[id].name;
+// component display names are identical across aircraft, so read them off the player
+const compName = (state, id) => state.player.components[id].name;
 
-function validTargetsText(state, side, effect) {
+function validTargetsText(state, effect) {
   const v = EFFECT_VALID_TARGETS[effect];
   if (v === '*') return 'any part';
-  return (v || []).map((id) => pName(state, side === 'player' ? 'enemy' : 'player', id)).join(', ');
+  return (v || []).map((id) => compName(state, id)).join(', ');
 }
 
 export function createTooltip(rootEl, getState) {
@@ -85,7 +86,8 @@ export function createTooltip(rootEl, getState) {
   rootEl.addEventListener('mousemove', (e) => {
     const card = e.target.closest('[data-comp]');
     if (!card) { el.style.display = 'none'; return; }
-    el.innerHTML = dossier(getState(), card.dataset.side, card.dataset.id);
+    const eid = card.dataset.eid != null && card.dataset.eid !== '' ? Number(card.dataset.eid) : null;
+    el.innerHTML = dossier(getState(), card.dataset.side, card.dataset.id, eid);
     el.style.display = '';
     place(e);
   });
@@ -94,9 +96,11 @@ export function createTooltip(rootEl, getState) {
   return { hide: () => { el.style.display = 'none'; } };
 }
 
-function dossier(state, side, id) {
-  const c = (side === 'player' ? state.player : state.enemy).components[id];
-  const sideLabel = side === 'player' ? 'YOU' : 'ENEMY';
+function dossier(state, side, id, eid) {
+  const aircraft = side === 'player' ? state.player : state.enemies[eid];
+  if (!aircraft) return '';
+  const c = aircraft.components[id];
+  const sideLabel = side === 'player' ? 'YOU' : aircraft.label;
   const pct = Math.round(hpFrac(c) * 100);
   const dead = c.hp <= 0;
 
@@ -106,9 +110,9 @@ function dossier(state, side, id) {
   rows.push(`<div class="tt-sys">${SYSTEM[id] || ''}</div>`);
 
   if (id === 'core') {
-    const sh = coreShieldStatus(side === 'player' ? state.player : state.enemy, state.config);
+    const sh = coreShieldStatus(aircraft, state.config);
     if (sh.up) {
-      const rem = sh.remaining.map((r) => `${pName(state, side, r.id)} ${r.pct}%`).join(', ');
+      const rem = sh.remaining.map((r) => `${compName(state, r.id)} ${r.pct}%`).join(', ');
       rows.push(`<div class="tt-shield up">🛡️ Shield UP — Core takes 0 damage. Destroy shield-linked parts (${sh.downSum}/${sh.threshold}% down). Still standing: ${rem || 'none'}.</div>`);
     } else {
       rows.push(`<div class="tt-shield down">⚠️ Shield DOWN (${sh.downSum}/${sh.threshold}%) — the Core is exposed.</div>`);
@@ -116,7 +120,7 @@ function dossier(state, side, id) {
   }
 
   const eff = ATTACK_EFFECT[id];
-  if (eff) rows.push(`<div class="tt-off"><b>Offence:</b> ${EFFECT_DESC[eff]}<br><span class="tt-dim">valid on: ${validTargetsText(state, side, eff)}</span></div>`);
+  if (eff) rows.push(`<div class="tt-off"><b>Offence:</b> ${EFFECT_DESC[eff]}<br><span class="tt-dim">valid on: ${validTargetsText(state, eff)}</span></div>`);
   const verb = DEFENSE_VERB[id];
   if (verb) rows.push(`<div class="tt-def"><b>Defence:</b> ${verbDesc(verb, state.config)}</div>`);
 
@@ -135,16 +139,22 @@ function dossier(state, side, id) {
 
   // pending queued statuses on this enemy part this attack phase
   if (side === 'enemy' && state.phase === PHASES.ATTACK_BUILD) {
-    const q = state.queue.filter((a) => a.target === id).map((a) => a.effect);
+    const q = state.queue.filter((a) => a.target && a.target.eid === eid && a.target.component === id).map((a) => a.effect);
     if (q.length) rows.push(`<div class="tt-pending">Queued (applies at Resolve): ${q.join(', ')}</div>`);
   }
 
   const defs = Object.entries(c.defenses || {}).filter(([, v]) => v);
   if (defs.length) rows.push(`<div class="tt-defs">Pre-loaded: ${defs.map(([k, v]) => `${k}${typeof v === 'number' ? ' ' + Math.round(v * (k === 'harden' || k === 'overclock' ? 100 : 1)) + (k === 'harden' || k === 'overclock' ? '%' : '') : ''}`).join(', ')}</div>`);
 
-  if (side === 'player' && state.telegraph && state.telegraph.visible) {
-    const t = state.telegraph.entries.find((x) => x.component === id);
-    if (t) rows.push(`<div class="tt-tel">⚠️ Incoming strike${t.status ? ` (+${t.status})` : ''}.</div>`);
+  if (side === 'player') {
+    const incoming = state.enemies
+      .filter((en) => en.telegraph && en.telegraph.visible)
+      .map((en) => ({ en, t: en.telegraph.entries.find((x) => x.component === id) }))
+      .filter((x) => x.t);
+    if (incoming.length) {
+      const detail = incoming.map((x) => `${x.en.label}${x.t.status ? ` (+${x.t.status})` : ''}`).join(', ');
+      rows.push(`<div class="tt-tel">⚠️ Incoming strike from: ${detail}.</div>`);
+    }
   }
 
   return rows.join('');

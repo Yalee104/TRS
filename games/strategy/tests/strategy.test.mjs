@@ -30,7 +30,7 @@ const fresh = (ui = {}) => { const s = createState(CONFIG, { seed: 7, ...ui }); 
 const combo = (value) => ({ items: [{ value }] });
 const near = (a, b, eps = 0.5) => Math.abs(a - b) <= eps;
 // helpers that mimic the UI: solve a weapon, then apply its status to a target
-const attack = (s, comp, value, target) => { makePendingAttack(s, comp, combo(value)); finalizeAttackTarget(s, target); };
+const attack = (s, comp, value, target, eid = 0) => { makePendingAttack(s, comp, combo(value)); finalizeAttackTarget(s, eid, target); };
 const defend = (s, comp, value, target) => { makePendingDefense(s, comp, combo(value)); finalizeDefenseTarget(s, target); };
 
 // --- firepower / condition ---------------------------------------------------
@@ -83,60 +83,60 @@ test('Launch Pad now carries attack strength: destroying it drops Combat Conditi
 // --- enemy AI: shielded-core avoidance + tower-gated aim ---------------------
 test('enemy never targets the player Core while its shield is UP; targets it once exposed', () => {
   const s = fresh();
-  const shielded = planAttack(s);
+  const shielded = planAttack(s, s.enemies[0]);
   assert(!shielded.entries.some((e) => e.component === 'core'), 'shielded core is not targeted');
   s.player.components.generator.hp = 0;          // drop the shield
   // saboteur priority is [generator(dead), weapon, core] → core becomes a valid target
-  const exposed = planAttack(s);
+  const exposed = planAttack(s, s.enemies[0]);
   assert(exposed.entries.some((e) => e.component === 'core'), 'exposed core can be targeted');
 });
 
 test('destroying the enemy Tower scatters its aim and softens the blow', () => {
   const s = fresh();
-  const before = currentBudget(s);
-  s.enemy.components.tower.hp = 0;
-  const plan = planAttack(s);
+  const before = currentBudget(s, s.enemies[0]);
+  s.enemies[0].components.tower.hp = 0;
+  const plan = planAttack(s, s.enemies[0]);
   assert(plan.scattered === true, 'tower down → scattered aim');
-  assert(currentBudget(s) < before, 'tower down → smaller budget (lost accuracy)');
+  assert(currentBudget(s, s.enemies[0]) < before, 'tower down → smaller budget (lost accuracy)');
 });
 
 test('Freeze suspends the part system: frozen enemy Tower scatters aim; frozen Engine kills evasion', () => {
   const s = fresh();
-  applyStatus(s.enemy.components.tower, 'freeze', { turns: 2 });
-  assert(planAttack(s).scattered === true, 'frozen enemy Tower → scattered aim');
+  applyStatus(s.enemies[0].components.tower, 'freeze', { turns: 2 });
+  assert(planAttack(s, s.enemies[0]).scattered === true, 'frozen enemy Tower → scattered aim');
 
   const a = fresh();
   attack(a, 'tower', 5, 'weapon');                // confuse enemy weapon, focus weapon (engine NOT frozen)
-  const dodged = resolveAttack(a, 'weapon').damage;
+  const dodged = resolveAttack(a, 0, 'weapon').damage;
   const b = fresh();
-  applyStatus(b.enemy.components.engine, 'freeze', { turns: 2 }); // engine frozen → no evasion
+  applyStatus(b.enemies[0].components.engine, 'freeze', { turns: 2 }); // engine frozen → no evasion
   attack(b, 'tower', 5, 'weapon');
-  const full = resolveAttack(b, 'weapon').damage;
+  const full = resolveAttack(b, 0, 'weapon').damage;
   assert(full > dodged, 'frozen enemy Engine → no dodge, focus-fire lands full');
 });
 
 // --- statuses + synergies ----------------------------------------------------
 test('Burning DoT ticks then statuses decay each round', () => {
   const s = fresh();
-  const c = s.enemy.components.weapon;
+  const c = s.enemies[0].components.weapon;
   applyStatus(c, 'burning', { turns: 2, dot: 5 });
-  const dot = tickAircraftStatuses(s.enemy);
+  const dot = tickAircraftStatuses(s.enemies[0]);
   assert(dot === 5 && c.hp === c.maxHp - 5, 'DoT applied');
   assert(c.statuses.burning.turns === 1, 'turn decayed');
 });
 
 test('Shatter + Frozen stack into the synergy multiplier', () => {
   const s = fresh();
-  const c = s.enemy.components.core;
+  const c = s.enemies[0].components.core;
   applyStatus(c, 'shatter', { turns: 1 }); applyStatus(c, 'freeze', { turns: 1 });
   assert(near(attackSynergyMult(c, CONFIG), 1.5 * 1.4, 0.001), 'synergy = 1.5×1.4');
 });
 
 test('Burning bypasses the Reactor shield — its DoT ticks even while the shield is UP', () => {
   const s = fresh();
-  const core = s.enemy.components.core; // enemy generator alive → core shielded
+  const core = s.enemies[0].components.core; // enemy generator alive → core shielded
   applyStatus(core, 'burning', { turns: 2, dot: 7 });
-  const dot = tickAircraftStatuses(s.enemy);
+  const dot = tickAircraftStatuses(s.enemies[0]);
   assert(dot >= 7 && core.hp === core.maxHp - 7, 'burning DoT hit the shielded core');
 });
 
@@ -145,40 +145,40 @@ test('solving holds a pending action; Table B gates valid targets', () => {
   const s = fresh();
   makePendingAttack(s, 'tower', combo(5)); // confuse — valid only on weapon/tower
   assert(s.pendingAction && s.pendingAction.effect === 'confuse', 'pending confuse held');
-  const valid = validAttackTargets(s).sort();
+  const valid = validAttackTargets(s).filter((t) => t.eid === 0).map((t) => t.component).sort();
   assert(valid.join() === ['tower', 'weapon'].join(), `confuse valid on weapon/tower, got ${valid}`);
-  assert(finalizeAttackTarget(s, 'generator') === null, 'cannot apply confuse to generator');
-  finalizeAttackTarget(s, 'weapon');
+  assert(finalizeAttackTarget(s, 0, 'generator') === null, 'cannot apply confuse to generator');
+  finalizeAttackTarget(s, 0, 'weapon');
   assert(s.queue.length === 1 && s.pendingAction === null, 'queued + pending cleared');
 });
 
 test('attack resolve damages the Focus; Drain heals + pierces armor', () => {
   const s = fresh();
   attack(s, 'generator', 5, 'generator'); // drain on enemy generator
-  const before = s.enemy.components.generator.hp;
-  const sum = resolveAttack(s, 'generator');
-  assert(s.enemy.components.generator.hp < before, 'focus took damage');
+  const before = s.enemies[0].components.generator.hp;
+  const sum = resolveAttack(s, 0, 'generator');
+  assert(s.enemies[0].components.generator.hp < before, 'focus took damage');
   assert(sum.healed > 0, 'drain healed the player');
 });
 
 test('Reactor Core shield blocks all damage while its shield-linked parts live', () => {
   const s = fresh();
   attack(s, 'engine', 6, 'core'); // shatter, valid on core
-  const before = s.enemy.components.core.hp;
-  const sum = resolveAttack(s, 'core');
+  const before = s.enemies[0].components.core.hp;
+  const sum = resolveAttack(s, 0, 'core');
   assert(sum.shielded === true && sum.damage === 0, 'shield blocked the focus damage');
-  assert(s.enemy.components.core.hp === before, 'core lost no HP while shielded');
-  assert(s.enemy.components.core.statuses.shatter, 'status still applied to the shielded core');
+  assert(s.enemies[0].components.core.hp === before, 'core lost no HP while shielded');
+  assert(s.enemies[0].components.core.statuses.shatter, 'status still applied to the shielded core');
 });
 
 test('destroying the shield contributor (Generator) drops the Core shield', () => {
   const s = fresh();
-  s.enemy.components.generator.hp = 0;     // generator = 100% of the shield by default
+  s.enemies[0].components.generator.hp = 0;     // generator = 100% of the shield by default
   attack(s, 'engine', 6, 'core');          // shatter exposed core
-  const before = s.enemy.components.core.hp;
-  const sum = resolveAttack(s, 'core');
+  const before = s.enemies[0].components.core.hp;
+  const sum = resolveAttack(s, 0, 'core');
   assert(sum.shielded === false && sum.damage > 0, 'shield down → damage gets through');
-  assert(s.enemy.components.core.hp < before, 'exposed core takes damage');
+  assert(s.enemies[0].components.core.hp < before, 'exposed core takes damage');
   assert(sum.synergy > 1, 'shatter amp still applies');
 });
 
@@ -186,19 +186,19 @@ test('Wildfire: Burning + Confused on a part spreads Burning to a neighbour', ()
   const s = fresh();
   attack(s, 'launchpad', 8, 'weapon'); // burning → enemy weapon
   attack(s, 'tower', 8, 'weapon');     // confuse → enemy weapon
-  const sum = resolveAttack(s, 'weapon');
-  const spread = Object.values(s.enemy.components).some((c) => c.id !== 'weapon' && c.statuses.burning);
+  const sum = resolveAttack(s, 0, 'weapon');
+  const spread = Object.values(s.enemies[0].components).some((c) => c.id !== 'weapon' && c.statuses.burning);
   assert(sum.wildfire != null && spread, 'burning spread to a neighbour');
 });
 
 test('a healthy enemy Engine dodges part of your focus-fire; destroying it lands full damage', () => {
   const a = fresh();
   attack(a, 'weapon', 5, 'weapon');               // freeze enemy weapon, focus weapon
-  const dodged = resolveAttack(a, 'weapon').damage;
+  const dodged = resolveAttack(a, 0, 'weapon').damage;
   const b = fresh();
-  b.enemy.components.engine.hp = 0;               // enemy has no evasion now
+  b.enemies[0].components.engine.hp = 0;               // enemy has no evasion now
   attack(b, 'weapon', 5, 'weapon');
-  const full = resolveAttack(b, 'weapon').damage;
+  const full = resolveAttack(b, 0, 'weapon').damage;
   assert(full > dodged, 'no-Engine enemy takes more focus damage');
 });
 
@@ -226,7 +226,7 @@ test('defenses stack additively on the same part (reusable in defense)', () => {
 test('full round advances Attack→Defense→next round', () => {
   const s = fresh();
   attack(s, 'weapon', 3, 'tower'); // freeze valid on tower
-  commitAttack(s, 'tower');
+  commitAttack(s, 0, 'tower');
   assert(s.phase === PHASES.DEFENSE_BUILD, 'after attack → defense build');
   commitDefense(s);
   assert(s.phase === PHASES.ATTACK_BUILD && s.round === 2, 'after defense → next round');
@@ -234,10 +234,10 @@ test('full round advances Attack→Defense→next round', () => {
 
 test('killing the enemy Core wins the battle (shield must be down first)', () => {
   const s = fresh();
-  s.enemy.components.generator.hp = 0; // drop the Core shield
-  s.enemy.components.core.hp = 1;
+  s.enemies[0].components.generator.hp = 0; // drop the Core shield
+  s.enemies[0].components.core.hp = 1;
   attack(s, 'engine', 6, 'core');      // shatter on the now-exposed core
-  commitAttack(s, 'core');
+  commitAttack(s, 0, 'core');
   assert(s.phase === PHASES.WON, 'enemy core destroyed → WON');
 });
 
@@ -248,6 +248,43 @@ test('losing your Core loses the battle (shield down first)', () => {
   s.player.components.core.hp = 1;
   commitDefense(s);
   assert(s.phase === PHASES.LOST, 'player core destroyed → LOST');
+});
+
+// --- multiple enemies --------------------------------------------------------
+test('roster builds N enemies with deduped labels; random resolves to a real archetype', () => {
+  const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'saboteur', 'brute'] });
+  assert(s.enemies.length === 3, 'three enemies fielded');
+  assert(s.enemies[0].label === 'Saboteur 1' && s.enemies[1].label === 'Saboteur 2', 'duplicate archetypes numbered');
+  assert(s.enemies[2].label === 'Brute', 'unique archetype keeps base label');
+  const r = createState(CONFIG, { seed: 1, enemies: ['random'] });
+  assert(CONFIG.archetypes[r.enemies[0].archetype], 'random → a real archetype');
+});
+
+test('roster is capped at maxEnemies (4)', () => {
+  const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'brute', 'hunter', 'swarm', 'disruptor'] });
+  assert(s.enemies.length === 4, 'capped to 4');
+});
+
+test('victory needs ALL enemy Cores dead; you can focus a chosen enemy by eid', () => {
+  const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'brute'] });
+  startAttackBuild(s);
+  // expose + kill enemy 1's core only
+  s.enemies[1].components.generator.hp = 0;
+  s.enemies[1].components.core.hp = 1;
+  attack(s, 'engine', 6, 'core', 1);   // shatter enemy 1's core
+  commitAttack(s, 1, 'core');
+  assert(s.enemies[1].components.core.hp <= 0 && s.enemies[0].components.core.hp > 0, 'enemy 1 dead, enemy 0 still alive');
+  assert(s.phase !== PHASES.WON, 'not won while enemy 0 lives');
+});
+
+test('every living enemy strikes during one defense resolve', () => {
+  const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'brute'] });
+  startAttackBuild(s);
+  startDefenseBuild(s);
+  const sum = resolveDefense(s);
+  const attackers = new Set(s.log.filter((l) => /attacks: budget/.test(l.msg)).map((l) => l.msg.split(' attacks')[0]));
+  assert(attackers.size === 2, `both enemies logged an attack, saw ${attackers.size}`);
+  assert(sum.totalDamage > 0, 'player took damage from the pair');
 });
 
 // --- bridge (real ComboEngine, fake puzzle) ----------------------------------
@@ -268,7 +305,7 @@ test('bridge: solving makes a pending action via the real ComboEngine, then targ
   assert(s.creditLeftMs === s.creditMs - CONFIG.phase.actionCostMs, 'credit spent on solve');
   assert(s.activePuzzle === null, 'puzzle torn down');
   assert(bridge.open('tower') === false, 'cannot open another puzzle while a target is pending');
-  finalizeAttackTarget(s, 'generator'); // freeze valid on generator
+  finalizeAttackTarget(s, 0, 'generator'); // freeze valid on generator
   assert(s.queue.length === 1, 'action queued after target picked');
   assert(bridge.open('weapon') === false, 'one-use-per-phase blocks reuse of weapon');
 });

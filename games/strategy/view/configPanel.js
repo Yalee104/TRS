@@ -2,25 +2,28 @@
 //  view/configPanel.js — the LEFT RAIL (DESIGN B.6)
 // =============================================================================
 //
-//  Before Start: knobs to set up the battle (archetype, phase length, time model,
-//  telegraph mode, seed) without editing game.json. After Start: a live status
-//  readout (round/phase/credit/log) + Restart. getUi() returns the chosen
-//  overrides to feed createState().
+//  Before Start: knobs to set up the battle — a ROSTER of up to maxEnemies
+//  enemies (any non-Boss archetype, repeatable), phase length, time model,
+//  telegraph mode, seed. After Start: a live status readout (round/phase/credit/
+//  enemies/log) + Restart. getUi() returns the overrides to feed createState().
 // =============================================================================
 
 import { PHASES } from '../core/state.js';
 
-export function createConfigPanel(root, { onStart, onRestart, defaults }) {
+export function createConfigPanel(root, { onStart, onRestart, defaults, archetypes }) {
+  const archList = Object.keys(archetypes || {}).filter((k) => k !== '_comment');
+  const maxEnemies = defaults.maxEnemies || 4;
+  const optionsHtml = (sel) => [
+    ...archList.map((k) => `<option value="${k}"${k === sel ? ' selected' : ''}>${archetypes[k].label}</option>`),
+    `<option value="random"${sel === 'random' ? ' selected' : ''}>Random</option>`,
+  ].join('');
+
   root.innerHTML = `
     <h2>TRS Command</h2>
     <div class="setup">
-      <label>Enemy archetype
-        <select id="cfg-arch">
-          <option value="saboteur">Saboteur (hits your offence)</option>
-          <option value="brute">Brute (focus-fires biggest part)</option>
-          <option value="random">Random</option>
-        </select>
-      </label>
+      <label>Enemies <span class="dim">(up to ${maxEnemies})</span></label>
+      <div id="cfg-roster" class="roster"></div>
+      <button id="cfg-add" class="addbtn">＋ Add enemy</button>
       <label>Phase length: <span id="cfg-credit-val"></span>
         <input id="cfg-credit" type="range" min="10" max="150" step="5" />
       </label>
@@ -49,12 +52,34 @@ export function createConfigPanel(root, { onStart, onRestart, defaults }) {
   const $ = (id) => root.querySelector(id);
   const setupEl = root.querySelector('.setup');
   const statusEl = root.querySelector('.status');
+  const rosterEl = $('#cfg-roster');
 
-  // seed defaults
-  $('#cfg-arch').value = defaults.archetype || 'saboteur';
-  $('#cfg-credit').value = defaults.creditSeconds || 120;
+  // ---- roster builder (add/remove rows, capped at maxEnemies) ----------------
+  const rowSelects = () => [...rosterEl.querySelectorAll('.cfg-enemy')];
+  const rowHtml = (sel) => `<div class="roster-row"><select class="cfg-enemy">${optionsHtml(sel)}</select><button class="rm" title="remove" type="button">✖</button></div>`;
+  function syncButtons() {
+    const n = rowSelects().length;
+    $('#cfg-add').disabled = n >= maxEnemies;
+    rosterEl.querySelectorAll('.rm').forEach((b) => { b.disabled = n <= 1; });
+  }
+  function addRow(sel) {
+    if (rowSelects().length >= maxEnemies) return;
+    rosterEl.insertAdjacentHTML('beforeend', rowHtml(sel || archList[0]));
+    syncButtons();
+  }
+  rosterEl.addEventListener('click', (e) => {
+    if (e.target.classList.contains('rm') && rowSelects().length > 1) { e.target.closest('.roster-row').remove(); syncButtons(); }
+  });
+  $('#cfg-add').addEventListener('click', () => addRow());
+
+  const initial = (Array.isArray(defaults.enemies) && defaults.enemies.length)
+    ? defaults.enemies.slice(0, maxEnemies) : [defaults.archetype || archList[0]];
+  initial.forEach((k) => addRow(k));
+
+  // ---- other defaults --------------------------------------------------------
+  $('#cfg-credit').value = defaults.creditSeconds || 15;
   $('#cfg-credit-val').textContent = `${$('#cfg-credit').value}s`;
-  $('#cfg-time').value = defaults.attackTimeModel || 'cost';
+  $('#cfg-time').value = defaults.attackTimeModel || 'realtime';
   $('#cfg-tel').value = defaults.telegraphMode || 'deterministic';
   $('#cfg-seed').value = defaults.seed || 0;
 
@@ -62,7 +87,7 @@ export function createConfigPanel(root, { onStart, onRestart, defaults }) {
 
   function getUi() {
     return {
-      archetype: $('#cfg-arch').value,
+      enemies: rowSelects().map((r) => r.value),
       creditSeconds: Number($('#cfg-credit').value),
       attackTimeModel: $('#cfg-time').value,
       telegraphMode: $('#cfg-tel').value,
@@ -82,10 +107,13 @@ export function createConfigPanel(root, { onStart, onRestart, defaults }) {
       [PHASES.ATTACK_BUILD]: 'Attack build', [PHASES.DEFENSE_BUILD]: 'Defense build',
       [PHASES.WON]: 'Won', [PHASES.LOST]: 'Lost',
     }[state.phase] || state.phase;
+    const enemyList = state.enemies
+      .map((e) => `${e.label}${e.components.core.hp <= 0 ? ' ☠️' : ''}`)
+      .join(', ');
     $('#cfg-readout').innerHTML = `
       <div><b>Round</b> ${state.round} · ${phaseName}</div>
       <div><b>Credit</b> ${credit}s left</div>
-      <div><b>Enemy</b> ${state.config.archetypes[state.archetype]?.label || state.archetype}</div>
+      <div><b>Enemies</b> ${enemyList}</div>
       <div><b>Queued</b> ${state.queue.length} action(s)</div>
       <div><b>Time model</b> ${state.attackTimeModel}</div>`;
     renderLog($('#cfg-log'), state.log);

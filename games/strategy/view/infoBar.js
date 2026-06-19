@@ -6,8 +6,9 @@ import { PHASES } from '../core/state.js';
 import { combatCondition, firepowerMult, totalFirepower } from '../core/firepower.js';
 import { validAttackTargets } from '../combat/attack.js';
 import { currentBudget } from '../combat/enemyAI.js';
+import { isAlive } from '../core/components.js';
 
-const eName = (state, id) => state.enemy.components[id].name;
+const eName = (state, eid, id) => `${state.enemies[eid].label}·${state.enemies[eid].components[id].name}`;
 const pName = (state, id) => state.player.components[id].name;
 
 export function createInfoBar(root) {
@@ -15,7 +16,7 @@ export function createInfoBar(root) {
 }
 
 function barHtml(state) {
-  if (state.phase === PHASES.CONFIG) return `Set up the battle in the <b>left rail</b> (enemy, phase length, options), then press <b>▶ Start Battle</b>.`;
+  if (state.phase === PHASES.CONFIG) return `Set up the battle in the <b>left rail</b> (enemy roster, phase length, options), then press <b>▶ Start Battle</b>.`;
   if (state.phase === PHASES.ATTACK_BUILD) return attackHelp(state);
   if (state.phase === PHASES.DEFENSE_BUILD) return defenseHelp(state);
   if (state.phase === PHASES.WON) return `<b>🏆 Victory.</b> Press Restart in the left rail for another battle.`;
@@ -32,14 +33,14 @@ function attackPool(state) {
 
 function queuedList(state) {
   if (!state.queue.length) return 'none yet';
-  return state.queue.map((a) => `${a.effect}→${eName(state, a.target)}`).join(', ');
+  return state.queue.map((a) => `${a.effect}→${eName(state, a.target.eid, a.target.component)}`).join(', ');
 }
 
 function attackHelp(state) {
   if (state.pendingAction) {
     const p = state.pendingAction;
-    const valid = validAttackTargets(state).map((id) => eName(state, id)).join(', ') || 'none';
-    return `<b>ATTACK ②</b> Solved <b>${p.effect}</b> (potency ${p.potency.toFixed(1)}). Click a <span class="en">valid enemy part</span> to apply it — valid: ${valid}. <span class="sep">|</span> greyed parts can't take this effect.`;
+    const parts = [...new Set(validAttackTargets(state).map((t) => state.enemies[t.eid].components[t.component].name))].join(', ') || 'none';
+    return `<b>ATTACK ②</b> Solved <b>${p.effect}</b> (potency ${p.potency.toFixed(1)}). Click a <span class="en">valid enemy part</span> on any living enemy to apply it — valid: ${parts}. <span class="sep">|</span> greyed parts can't take this effect.`;
   }
   const pool = attackPool(state);
   if (state.pickFocus) {
@@ -49,13 +50,18 @@ function attackHelp(state) {
 }
 
 function defenseHelp(state) {
-  let threat;
-  if (state.telegraph && state.telegraph.visible) {
-    const budget = currentBudget(state);
-    threat = '⚠️ Incoming: ' + state.telegraph.entries.map((e) => `${pName(state, e.component)} ~${Math.round(e.share * budget)}${e.status ? '+' + e.status : ''}`).join(', ');
-  } else {
-    threat = '⚠️ Tower down — incoming attack hidden';
+  const living = state.enemies.filter((e) => isAlive(e.components.core));
+  const threats = [];
+  for (const e of living) {
+    if (e.telegraph && e.telegraph.visible) {
+      const budget = currentBudget(state, e);
+      const hits = e.telegraph.entries.map((t) => `${pName(state, t.component)} ~${Math.round(t.share * budget)}${t.status ? '+' + t.status : ''}`).join(', ');
+      threats.push(`${e.label}→ ${hits}`);
+    } else {
+      threats.push(`${e.label}→ hidden (Tower down)`);
+    }
   }
+  const threat = '⚠️ Incoming — ' + (threats.join(' <span class="sep">|</span> ') || 'none');
   if (state.pendingDefense) {
     const p = state.pendingDefense;
     return `<b>DEFENSE ②</b> Solved <b>${p.verb}</b> (potency ${p.potency.toFixed(1)}). Click one of <b>your</b> parts to protect it. <span class="sep">|</span> ${threat}`;

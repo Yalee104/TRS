@@ -12,10 +12,19 @@ import { isAlive } from '../core/components.js';
 import { combatCondition, firepowerMult } from '../core/firepower.js';
 import { systemState, coreShieldUp, towerActive, effectiveAim } from '../core/cascade.js';
 
-/** Resolve 'random' to a concrete archetype key. */
+/** The non-Boss roster the player can field. */
+export const ARCHETYPES = ['saboteur', 'brute', 'hunter', 'swarm', 'disruptor'];
+
+/** Resolve 'random' to a concrete archetype key; unknown keys fall back to saboteur. */
 export function resolveArchetype(key, rng) {
-  if (key === 'random') return (rng ? rng() : Math.random()) < 0.5 ? 'saboteur' : 'brute';
-  return key === 'brute' ? 'brute' : 'saboteur';
+  if (key === 'random') return ARCHETYPES[Math.floor((rng ? rng() : Math.random()) * ARCHETYPES.length)];
+  return ARCHETYPES.includes(key) ? key : 'saboteur';
+}
+
+/** The status a strike may inflict for this archetype (single `status` or a random `statusPool`). */
+function pickStatus(arch, rng) {
+  if (arch.statusPool && arch.statusPool.length) return arch.statusPool[Math.floor((rng ? rng() : Math.random()) * arch.statusPool.length)];
+  return arch.status || 'drain';
 }
 
 /** Fisher–Yates shuffle (seeded) — used when the enemy Tower is down and aim scatters. */
@@ -54,11 +63,11 @@ function targetOrder(arch, player, coreShielded) {
   return ids;
 }
 
-/** Build the telegraph the player sees during their attack phase. */
-export function planAttack(state) {
-  const arch = state.config.archetypes[state.archetype];
+/** Build the telegraph ONE enemy declares during the player's attack phase. */
+export function planAttack(state, enemy) {
+  const arch = state.config.archetypes[enemy.archetype];
   const coreShielded = coreShieldUp(state.player, state.config);
-  const enemyTowerOk = towerActive(state.enemy);   // destroyed OR frozen → aim breaks
+  const enemyTowerOk = towerActive(enemy);   // this enemy's Tower destroyed OR frozen → aim breaks
   const spread = arch.spread || 0;
   const entries = [];
 
@@ -79,26 +88,26 @@ export function planAttack(state) {
       } else {
         entries.push({ component: order[0], share: 1 });
       }
-      // status intent on the primary target (rng-gated)
+      // status intent on the primary target (rng-gated, archetype-flavoured)
       if ((state.rng ? state.rng() : Math.random()) < (arch.statusChance || 0)) {
-        entries[0].status = state.archetype === 'saboteur' ? 'drain' : 'freeze';
+        entries[0].status = pickStatus(arch, state.rng);
       }
     }
   }
 
   // You SEE the telegraph only if YOUR Tower is active (alive and not frozen).
   const visible = state.config.telegraph.gated ? towerActive(state.player) : true;
-  return { archetype: state.archetype, entries, visible, scattered: !enemyTowerOk };
+  return { eid: enemy.eid, archetype: enemy.archetype, label: enemy.label, entries, visible, scattered: !enemyTowerOk };
 }
 
 /**
- * Enemy attack budget scaled by its CURRENT condition (called at defense-resolve).
- * A destroyed enemy Tower also costs it accuracy (aimMult), so its blow lands softer.
+ * ONE enemy's attack budget scaled by its CURRENT condition (called at defense-resolve).
+ * A destroyed/frozen enemy Tower also costs it accuracy (aimMult), so its blow lands softer.
  */
-export function currentBudget(state) {
-  const arch = state.config.archetypes[state.archetype];
-  const sys = systemState(state.enemy, state.config);
-  const aim = effectiveAim(state.enemy, state.config); // tower dead OR frozen → softer
-  const scale = firepowerMult(combatCondition(state.enemy, state.config), state.config) * sys.brownout * aim;
+export function currentBudget(state, enemy) {
+  const arch = state.config.archetypes[enemy.archetype];
+  const sys = systemState(enemy, state.config);
+  const aim = effectiveAim(enemy, state.config); // tower dead OR frozen → softer
+  const scale = firepowerMult(combatCondition(enemy, state.config), state.config) * sys.brownout * aim;
   return arch.damageBudget * scale;
 }
