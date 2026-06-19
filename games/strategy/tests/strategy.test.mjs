@@ -123,7 +123,7 @@ test('Burning DoT ticks then statuses decay each round', () => {
   const s = fresh();
   const c = s.enemies[0].components.weapon;
   applyStatus(c, 'burning', { turns: 2, dot: 5 });
-  const dot = tickAircraftStatuses(s.enemies[0]);
+  const { dot } = tickAircraftStatuses(s.enemies[0], CONFIG);
   assert(dot === 5 && c.hp === c.maxHp - 5, 'DoT applied');
   assert(c.statuses.burning.turns === 1, 'turn decayed');
 });
@@ -151,8 +151,18 @@ test('Burning bypasses the Reactor shield — its DoT ticks even while the shiel
   const s = fresh();
   const core = s.enemies[0].components.core; // enemy generator alive → core shielded
   applyStatus(core, 'burning', { turns: 2, dot: 7 });
-  const dot = tickAircraftStatuses(s.enemies[0]);
+  const { dot } = tickAircraftStatuses(s.enemies[0], CONFIG);
   assert(dot >= 7 && core.hp === core.maxHp - 7, 'burning DoT hit the shielded core');
+});
+
+test('Meltdown: a Shattered+Burning part funnels heat into the Core (bypasses the shield)', () => {
+  const s = fresh(); // single enemy, Generator alive → Core shielded
+  const g = s.enemies[0].components.generator;
+  applyStatus(g, 'shatter', { turns: 3 }); applyStatus(g, 'burning', { turns: 3, dot: 6 });
+  const coreBefore = s.enemies[0].components.core.hp;
+  const { meltdown } = tickAircraftStatuses(s.enemies[0], CONFIG);
+  assert(meltdown === 6 * CONFIG.effects.synergy.combos.meltdown.coreFrac, 'funnel = dot × coreFrac');
+  assert(s.enemies[0].components.core.hp === coreBefore - meltdown, 'shielded Core still took the meltdown');
 });
 
 // --- attack flow (pending → target) + resolve --------------------------------

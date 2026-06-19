@@ -40,25 +40,34 @@ export function cleanseComponent(component) {
 }
 
 /**
- * End-of-resolve tick on one aircraft: apply Burning DoT, then decay every
- * status by a turn and drop the expired ones. Returns total DoT dealt.
+ * End-of-round tick on one aircraft: apply Burning DoT (+ Meltdown core-funnel for
+ * Shattered+Burning parts), then decay every status and drop the expired ones.
+ * Returns { dot, meltdown } — DoT dealt to parts, and extra funnelled into the Core.
  */
-export function tickAircraftStatuses(aircraft) {
+export function tickAircraftStatuses(aircraft, config) {
   let dot = 0;
+  let meltdown = 0;
+  const coreFrac = config?.effects?.synergy?.combos?.meltdown?.coreFrac || 0;
+  const core = aircraft.components.core;
   for (const comp of Object.values(aircraft.components)) {
     const burn = comp.statuses.burning;
-    // Burning is the ONE thing that bypasses the Reactor shield (DESIGN §1) — its DoT
-    // ticks on the Core even while shielded, making it the anti-shield tool.
+    // Burning bypasses the Reactor shield (DESIGN §1) — DoT ticks even on a shielded Core.
     if (burn && burn.turns > 0 && burn.dot > 0) {
       comp.hp -= burn.dot;
       dot += burn.dot;
+      // Meltdown — a Shattered + Burning NON-core part funnels heat into the Core (bypasses shield).
+      if (coreFrac > 0 && comp.id !== 'core' && hasStatus(comp, 'shatter') && core && core.hp > 0) {
+        const funnel = burn.dot * coreFrac;
+        core.hp -= funnel;
+        meltdown += funnel;
+      }
     }
     for (const [key, s] of Object.entries(comp.statuses)) {
       s.turns -= 1;
       if (s.turns <= 0) delete comp.statuses[key];
     }
   }
-  return dot;
+  return { dot, meltdown };
 }
 
 /**

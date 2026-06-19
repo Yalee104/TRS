@@ -63,11 +63,13 @@ export function commitDefense(state) {
 
 function endOfRound(state) {
   for (const e of state.enemies) {
-    const d = tickAircraftStatuses(e);
-    if (d) logEvent(state, `End of round: Burning dealt ${Math.round(d)} to ${e.label}.`);
+    const r = tickAircraftStatuses(e, state.config);
+    if (r.dot) logEvent(state, `End of round: Burning dealt ${Math.round(r.dot)} to ${e.label}.`);
+    if (r.meltdown) logEvent(state, `Meltdown: ${Math.round(r.meltdown)} funnelled into ${e.label}'s Reactor Core.`);
   }
-  const pd = tickAircraftStatuses(state.player);
-  if (pd) logEvent(state, `End of round: Burning dealt ${Math.round(pd)} to you.`);
+  const rp = tickAircraftStatuses(state.player, state.config);
+  if (rp.dot) logEvent(state, `End of round: Burning dealt ${Math.round(rp.dot)} to you.`);
+  if (rp.meltdown) logEvent(state, `Meltdown: ${Math.round(rp.meltdown)} funnelled into your Reactor Core.`);
   if (checkOutcome(state)) return;          // DoT can finish a Core
   for (const id of Object.keys(state.cooldowns)) state.cooldowns[id] = Math.max(0, state.cooldowns[id] - 1);
   state.round += 1;
