@@ -27,7 +27,7 @@
   "components": {
     "order": ["core", "generator", "weapon", "tower", "engine", "launchpad"],
     "core":       { "name": "Reactor Core",   "hp": 200, "armor": 0 },
-    "generator":  { "name": "Power Generator","hp": 80,  "armor": 0 },
+    "generator":  { "name": "Power Generator","hp": 100,  "armor": 0 },
     "weapon":     { "name": "Weapon Storage", "hp": 70,  "armor": 0 },
     "tower":      { "name": "Tower",          "hp": 60,  "armor": 0 },
     "engine":     { "name": "Engine",         "hp": 60,  "armor": 0 },
@@ -56,9 +56,19 @@
     "burning": { "dmgPerPotency": 1.0, "dotPerPotency": 1.2, "turns": { "divisor": 3, "min": 1, "max": 4 } },
     "shatter": { "dmgPerPotency": 2.0, "turns": { "divisor": 3, "min": 1, "max": 3 } },
     "synergy": {
+      "_comment": "Single-status focus bonuses (shatterAmp = Shatter alone +50%; frozenBrittle = Freeze alone +40%) PLUS the v2 pairwise combos. A combo fires wherever BOTH its statuses sit on one component (any enemy). Glass replaces the two single bonuses when both are present. Frozen+Burning cancel (no combo). Frozen+Drained is intentionally open (no combo yet).",
       "shatterAmp": 0.5,
       "frozenBrittle": 0.4,
-      "wildfireSpreadFrac": 0.5
+      "combos": {
+        "glass":      { "mult": 2.0 },
+        "stasisLock": { "extendTurns": 2 },
+        "meltdown":   { "coreFrac": 0.5 },
+        "backfire":   { "selfDamage": 20 },
+        "collapse":   { "hpThreshold": 0.2 },
+        "wildfire":   { "spreadFrac": 0.5 },
+        "vaporize":   { "healFrac": 0.5 },
+        "feedback":   { "chainFrac": 0.5 }
+      }
     }
   },
 
@@ -74,7 +84,7 @@
   "coreShield": {
     "_comment": "The Reactor Core is protected by an indestructible shield: while UP, any attack on the Core deals 0 HP damage (statuses can still be applied, they just don't chip the Core). The shield falls only when enough shield-linked parts are destroyed. Each listed part contributes its percentage when DESTROYED; the shield drops once the destroyed parts' percentages sum to >= `threshold`. Default: Power Generator alone (100%) — destroy it to expose the Core. Example multi-part list: { generator: 60, weapon: 30, tower: 10, engine: 40 }.",
     "threshold": 100,
-    "contributors": { "generator": 100 }
+    "contributors": { "generator": 60, "engine": 40, "weapon": 40, "tower": 40, "launchpad": 40 }
   },
 
   "cascade": {

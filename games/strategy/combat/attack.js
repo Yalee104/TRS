@@ -81,8 +81,11 @@ export function resolveAttack(state, eid, focusId) {
     const te = state.enemies[a.target.eid];
     const tgt = te?.components[a.target.component];
     if (!tgt || !isEffectValidOn(a.effect, a.target.component)) continue;
-    if (a.effect === 'burning') applyStatus(tgt, 'burning', { turns: statusTurns(a.potency, ec.turns), dot: a.potency * (ec.dotPerPotency || 0) });
-    else applyStatus(tgt, a.effect, { turns: statusTurns(a.potency, ec.turns) });
+    const opts = a.effect === 'burning'
+      ? { turns: statusTurns(a.potency, ec.turns), potency: a.potency, dot: a.potency * (ec.dotPerPotency || 0) }
+      : { turns: statusTurns(a.potency, ec.turns), potency: a.potency };
+    const r = applyStatus(tgt, a.effect, opts);
+    if (r.canceled) logEvent(state, `${a.effect} + ${r.canceled} cancelled on ${eName(state, a.target.eid, a.target.component)} (steam — Fire ⊗ Freeze).`);
   }
 
   // 2) the whole firepower pool → the single Focus, with synergy. The enemy Core is

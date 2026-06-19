@@ -12,6 +12,7 @@ import { dirname, resolve } from 'node:path';
 import { test, assert } from './harness.mjs';
 
 import { createState, PHASES } from '../core/state.js';
+import { isEffectValidOn } from '../core/components.js';
 import { startAttackBuild, commitAttack, startDefenseBuild, commitDefense } from '../core/phases.js';
 import { combatCondition, firepowerMult, totalFirepower } from '../core/firepower.js';
 import { systemState } from '../core/cascade.js';
@@ -32,6 +33,8 @@ const near = (a, b, eps = 0.5) => Math.abs(a - b) <= eps;
 // helpers that mimic the UI: solve a weapon, then apply its status to a target
 const attack = (s, comp, value, target, eid = 0) => { makePendingAttack(s, comp, combo(value)); finalizeAttackTarget(s, eid, target); };
 const defend = (s, comp, value, target) => { makePendingDefense(s, comp, combo(value)); finalizeDefenseTarget(s, target); };
+// drop enough shield-linked parts (per config) to break an aircraft's Core shield
+const exposeCore = (ac) => { let sum = 0; for (const [id, pct] of Object.entries(CONFIG.coreShield.contributors)) { ac.components[id].hp = 0; sum += pct; if (sum >= CONFIG.coreShield.threshold) break; } };
 
 // --- firepower / condition ---------------------------------------------------
 test('combatCondition is 1.0 at full health; firepowerMult floors at 0.4', () => {
@@ -85,7 +88,7 @@ test('enemy never targets the player Core while its shield is UP; targets it onc
   const s = fresh();
   const shielded = planAttack(s, s.enemies[0]);
   assert(!shielded.entries.some((e) => e.component === 'core'), 'shielded core is not targeted');
-  s.player.components.generator.hp = 0;          // drop the shield
+  exposeCore(s.player);          // drop the Core shield (per config)
   // saboteur priority is [generator(dead), weapon, core] → core becomes a valid target
   const exposed = planAttack(s, s.enemies[0]);
   assert(exposed.entries.some((e) => e.component === 'core'), 'exposed core can be targeted');
@@ -125,11 +128,23 @@ test('Burning DoT ticks then statuses decay each round', () => {
   assert(c.statuses.burning.turns === 1, 'turn decayed');
 });
 
-test('Shatter + Frozen stack into the synergy multiplier', () => {
+test('Glass: Frozen + Shattered on a part = clean ×mult focus damage', () => {
   const s = fresh();
-  const c = s.enemies[0].components.core;
-  applyStatus(c, 'shatter', { turns: 1 }); applyStatus(c, 'freeze', { turns: 1 });
-  assert(near(attackSynergyMult(c, CONFIG), 1.5 * 1.4, 0.001), 'synergy = 1.5×1.4');
+  const c = s.enemies[0].components.generator;
+  applyStatus(c, 'shatter', { turns: 1 });
+  assert(near(attackSynergyMult(c, CONFIG), 1 + CONFIG.effects.synergy.shatterAmp, 0.001), 'shatter alone = +50%');
+  applyStatus(c, 'freeze', { turns: 1 });
+  assert(near(attackSynergyMult(c, CONFIG), CONFIG.effects.synergy.combos.glass.mult, 0.001), 'both = Glass ×mult');
+});
+
+test('Shatter is valid on ANY part now; Fire ⊗ Freeze cancel (both wiped)', () => {
+  const s = fresh();
+  assert(isEffectValidOn('shatter', 'weapon') && isEffectValidOn('shatter', 'tower'), 'shatter valid anywhere');
+  const c = s.enemies[0].components.weapon;
+  applyStatus(c, 'burning', { turns: 3, dot: 5 });
+  const r = applyStatus(c, 'freeze', { turns: 2 });
+  assert(r.canceled === 'burning', 'freeze onto burning reports cancel');
+  assert(!c.statuses.burning && !c.statuses.freeze, 'both wiped (steam)');
 });
 
 test('Burning bypasses the Reactor shield — its DoT ticks even while the shield is UP', () => {
@@ -171,9 +186,9 @@ test('Reactor Core shield blocks all damage while its shield-linked parts live',
   assert(s.enemies[0].components.core.statuses.shatter, 'status still applied to the shielded core');
 });
 
-test('destroying the shield contributor (Generator) drops the Core shield', () => {
+test('destroying enough shield-linked parts drops the Core shield', () => {
   const s = fresh();
-  s.enemies[0].components.generator.hp = 0;     // generator = 100% of the shield by default
+  exposeCore(s.enemies[0]);     // drop the Core shield (per config)
   attack(s, 'engine', 6, 'core');          // shatter exposed core
   const before = s.enemies[0].components.core.hp;
   const sum = resolveAttack(s, 0, 'core');
@@ -234,7 +249,7 @@ test('full round advances Attack→Defense→next round', () => {
 
 test('killing the enemy Core wins the battle (shield must be down first)', () => {
   const s = fresh();
-  s.enemies[0].components.generator.hp = 0; // drop the Core shield
+  exposeCore(s.enemies[0]); // drop the Core shield (per config)
   s.enemies[0].components.core.hp = 1;
   attack(s, 'engine', 6, 'core');      // shatter on the now-exposed core
   commitAttack(s, 0, 'core');
@@ -244,7 +259,7 @@ test('killing the enemy Core wins the battle (shield must be down first)', () =>
 test('losing your Core loses the battle (shield down first)', () => {
   const s = fresh();
   startDefenseBuild(s);
-  s.player.components.generator.hp = 0; // drop your Core shield
+  exposeCore(s.player); // drop your Core shield (per config)
   s.player.components.core.hp = 1;
   commitDefense(s);
   assert(s.phase === PHASES.LOST, 'player core destroyed → LOST');
@@ -279,7 +294,7 @@ test('victory needs ALL enemy Cores dead; you can focus a chosen enemy by eid', 
   const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'brute'] });
   startAttackBuild(s);
   // expose + kill enemy 1's core only
-  s.enemies[1].components.generator.hp = 0;
+  exposeCore(s.enemies[1]);
   s.enemies[1].components.core.hp = 1;
   attack(s, 'engine', 6, 'core', 1);   // shatter enemy 1's core
   commitAttack(s, 1, 'core');

@@ -35,7 +35,7 @@ export const EFFECT_VALID_TARGETS = {
   confuse: ['weapon', 'tower'],                                    // only parts that aim/fire
   drain: '*',                                                      // any part for HP; best on generator/core
   burning: '*',                                                    // everything burns
-  shatter: ['core', 'generator'],                                  // armored parts
+  shatter: '*',                                                    // v2: any part (universal brittle enabler)
 };
 
 /** Build a fresh component from its config entry. */

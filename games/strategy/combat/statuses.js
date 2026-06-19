@@ -12,8 +12,16 @@
 
 import { hasStatus, isAlive } from '../core/components.js';
 
-/** Add or refresh a status (refresh = keep the stronger of turns/dot). */
+// Fire ⊗ Freeze can't co-exist — applying one to a part that has the other wipes both (steam).
+const OPPOSITE = { freeze: 'burning', burning: 'freeze' };
+
+/**
+ * Add or refresh a status (refresh = keep the stronger of turns/dot/potency).
+ * Returns { canceled } if it annulled the opposite status instead of applying.
+ */
 export function applyStatus(component, key, { turns = 1, potency = 0, dot = 0 } = {}) {
+  const opp = OPPOSITE[key];
+  if (opp && component.statuses[opp]) { delete component.statuses[opp]; return { canceled: opp }; }
   const cur = component.statuses[key];
   if (cur) {
     cur.turns = Math.max(cur.turns, turns);
@@ -22,6 +30,7 @@ export function applyStatus(component, key, { turns = 1, potency = 0, dot = 0 } 
   } else {
     component.statuses[key] = { turns, potency, dot };
   }
+  return { applied: key };
 }
 
 /** Remove all (offensive) debuffs from a component — what Cleanse does. */
@@ -51,22 +60,30 @@ export function tickAircraftStatuses(aircraft) {
   return dot;
 }
 
-/** Damage multiplier on the focus from its current Frozen/Shattered statuses. */
+/**
+ * Damage multiplier on the focus from its Frozen/Shattered statuses.
+ * Both present = GLASS (clean ×mult); otherwise the single-status bonuses.
+ */
 export function attackSynergyMult(focus, config) {
   const syn = config.effects.synergy;
+  const combos = syn.combos || {};
+  const fr = hasStatus(focus, 'freeze');
+  const sh = hasStatus(focus, 'shatter');
+  if (fr && sh) return combos.glass?.mult ?? 2.0;     // Glass
   let m = 1;
-  if (hasStatus(focus, 'shatter')) m *= 1 + (syn.shatterAmp || 0);
-  if (hasStatus(focus, 'freeze')) m *= 1 + (syn.frozenBrittle || 0);
+  if (sh) m *= 1 + (syn.shatterAmp || 0);
+  if (fr) m *= 1 + (syn.frozenBrittle || 0);
   return m;
 }
 
-/** Wildfire: a Burning + Confused focus spreads Burning to a random living neighbour. */
+/** Wildfire: a Burning + Confused part spreads Burning to a random living neighbour. */
 export function maybeWildfire(aircraft, focus, config, rng) {
   if (!(hasStatus(focus, 'burning') && hasStatus(focus, 'confuse'))) return null;
   const others = Object.values(aircraft.components).filter((c) => c !== focus && isAlive(c));
   if (!others.length) return null;
   const victim = others[Math.floor((rng ? rng() : Math.random()) * others.length)];
-  const dot = (focus.statuses.burning.dot || 0) * (config.effects.synergy.wildfireSpreadFrac || 0.5);
+  const frac = config.effects.synergy.combos?.wildfire?.spreadFrac ?? 0.5;
+  const dot = (focus.statuses.burning.dot || 0) * frac;
   applyStatus(victim, 'burning', { turns: focus.statuses.burning.turns, dot });
   return victim.id;
 }
