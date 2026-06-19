@@ -16,7 +16,7 @@ import { ATTACK_EFFECT, isEffectValidOn, statusTurns, hasStatus, isAlive } from 
 import { totalFirepower, conditionReport } from '../core/firepower.js';
 import { coreShieldUp, effectiveEvasion } from '../core/cascade.js';
 import { logEvent } from '../core/state.js';
-import { applyStatus, attackSynergyMult, maybeWildfire } from './statuses.js';
+import { applyStatus, attackSynergyMult, resolveCombos } from './statuses.js';
 
 const eAircraft = (state, eid) => state.enemies[eid];
 const eName = (state, eid, id) => `${state.enemies[eid].label} · ${state.enemies[eid].components[id].name}`;
@@ -99,14 +99,6 @@ export function resolveAttack(state, eid, focusId) {
 
   if (healed) { const core = player.components.core; core.hp = Math.min(core.maxHp, core.hp + healed); }
 
-  // 3) Wildfire on any enemy part (any enemy) that ended Burning + Confused.
-  for (const e of state.enemies) {
-    for (const c of Object.values(e.components)) {
-      if (hasStatus(c, 'burning') && hasStatus(c, 'confuse')) { summary.wildfire = { eid: e.eid, id: maybeWildfire(e, c, config, state.rng) }; break; }
-    }
-    if (summary.wildfire) break;
-  }
-
   // firepower breakdown so the player sees how their own condition/statuses scaled it
   const rep = conditionReport(player, config);
   logEvent(state, `Your firepower ${Math.round(rawFire)} = (base + ${Math.round(addon)} add-ons) × condition ${Math.round(rep.condition * 100)}%${rep.chokes.length ? ` (choked: ${rep.chokes.join(', ')})` : ''}.`);
@@ -121,7 +113,9 @@ export function resolveAttack(state, eid, focusId) {
     logEvent(state, `RESOLVE → Focus ${eName(state, eid, focusId)}: ${Math.round(rawFire)} firepower × synergy ${synergy.toFixed(2)}${syn.length ? ` (${syn.join(', ')})` : ''}${evaNote} = ${Math.round(damage)} dmg${isAlive(focus) ? '' : ' — DESTROYED'}.`);
   }
   if (healed) logEvent(state, `Drain healed your Core +${Math.round(healed)}.`);
-  if (summary.wildfire && summary.wildfire.id) logEvent(state, `Wildfire spread Burning to ${eName(state, summary.wildfire.eid, summary.wildfire.id)}.`);
+
+  // 3) v2 pairwise combos resolve wherever both statuses co-exist (across all enemies).
+  resolveCombos(state);
 
   summary.damage = damage; summary.healed = healed; summary.synergy = synergy; summary.shielded = shielded; summary.armor = 0;
   summary.destroyed = !isAlive(focus);

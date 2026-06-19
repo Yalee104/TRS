@@ -16,7 +16,7 @@ import { isEffectValidOn } from '../core/components.js';
 import { startAttackBuild, commitAttack, startDefenseBuild, commitDefense } from '../core/phases.js';
 import { combatCondition, firepowerMult, totalFirepower } from '../core/firepower.js';
 import { systemState } from '../core/cascade.js';
-import { applyStatus, tickAircraftStatuses, attackSynergyMult } from '../combat/statuses.js';
+import { applyStatus, tickAircraftStatuses, attackSynergyMult, resolveCombos } from '../combat/statuses.js';
 import { makePendingAttack, finalizeAttackTarget, validAttackTargets, resolveAttack, comboPotency } from '../combat/attack.js';
 import { makePendingDefense, finalizeDefenseTarget, resolveDefense } from '../combat/defense.js';
 import { planAttack, currentBudget } from '../combat/enemyAI.js';
@@ -201,9 +201,51 @@ test('Wildfire: Burning + Confused on a part spreads Burning to a neighbour', ()
   const s = fresh();
   attack(s, 'launchpad', 8, 'weapon'); // burning → enemy weapon
   attack(s, 'tower', 8, 'weapon');     // confuse → enemy weapon
-  const sum = resolveAttack(s, 0, 'weapon');
+  resolveAttack(s, 0, 'weapon');
   const spread = Object.values(s.enemies[0].components).some((c) => c.id !== 'weapon' && c.statuses.burning);
-  assert(sum.wildfire != null && spread, 'burning spread to a neighbour');
+  assert(spread, 'burning spread to a neighbour');
+});
+
+test('v2 combos resolve where both statuses co-exist (Backfire/Vaporize/Stasis/Collapse)', () => {
+  const C = CONFIG.effects.synergy.combos;
+  // Backfire — Shatter + Confuse → self-damage
+  let s = fresh();
+  let w = s.enemies[0].components.weapon;
+  applyStatus(w, 'shatter', { turns: 2 }); applyStatus(w, 'confuse', { turns: 2 });
+  let before = w.hp; resolveCombos(s);
+  assert(w.hp === before - C.backfire.selfDamage, 'Backfire self-damage');
+
+  // Vaporize — Burning + Drain → detonate remaining burn now + heal, burn cleared
+  s = fresh(); s.player.components.core.hp = 100;
+  let g = s.enemies[0].components.generator;
+  applyStatus(g, 'burning', { turns: 2, dot: 5 }); applyStatus(g, 'drain', { turns: 1, potency: 4 });
+  before = g.hp; resolveCombos(s);
+  assert(g.hp === before - 10 && !g.statuses.burning, 'Vaporize detonates the remaining burn');
+  assert(s.player.components.core.hp === 100 + 10 * C.vaporize.healFrac, 'Vaporize heals your Core');
+
+  // Stasis Lock — Frozen + Confuse → extend freeze
+  s = fresh(); let t = s.enemies[0].components.tower;
+  applyStatus(t, 'freeze', { turns: 2 }); applyStatus(t, 'confuse', { turns: 2 });
+  resolveCombos(s);
+  assert(t.statuses.freeze.turns === 2 + C.stasisLock.extendTurns, 'Stasis extends the freeze');
+
+  // Collapse — Shatter + Drain below the HP threshold → destroyed
+  s = fresh(); let gg = s.enemies[0].components.generator;
+  applyStatus(gg, 'shatter', { turns: 2 }); applyStatus(gg, 'drain', { turns: 1, potency: 3 });
+  gg.hp = gg.maxHp * C.collapse.hpThreshold - 1;
+  resolveCombos(s);
+  assert(gg.hp === 0, 'Collapse executes a low shattered+drained part');
+});
+
+test('Feedback Cascade chains drain to the same part on an adjacent enemy', () => {
+  const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'brute'] });
+  startAttackBuild(s);
+  const w0 = s.enemies[0].components.weapon;
+  applyStatus(w0, 'confuse', { turns: 2 }); applyStatus(w0, 'drain', { turns: 1, potency: 5 });
+  const before = s.enemies[1].components.weapon.hp;
+  resolveCombos(s);
+  const chain = 5 * CONFIG.effects.drain.dmgPerPotency * CONFIG.effects.synergy.combos.feedback.chainFrac;
+  assert(near(s.enemies[1].components.weapon.hp, before - chain, 0.001), 'drain chained to enemy 1');
 });
 
 test('a healthy enemy Engine dodges part of your focus-fire; destroying it lands full damage', () => {

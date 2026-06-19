@@ -11,6 +11,7 @@
 // =============================================================================
 
 import { hasStatus, isAlive } from '../core/components.js';
+import { logEvent } from '../core/state.js';
 
 // Fire ⊗ Freeze can't co-exist — applying one to a part that has the other wipes both (steam).
 const OPPOSITE = { freeze: 'burning', burning: 'freeze' };
@@ -74,6 +75,79 @@ export function attackSynergyMult(focus, config) {
   if (sh) m *= 1 + (syn.shatterAmp || 0);
   if (fr) m *= 1 + (syn.frozenBrittle || 0);
   return m;
+}
+
+/**
+ * v2 pairwise combos that resolve at attack-resolve, wherever BOTH statuses of a pair
+ * sit on the same component, across ALL enemies. (Glass is the one exception — it's a
+ * focus-fire multiplier handled in attackSynergyMult; Meltdown ticks at end-of-round.)
+ * Mutates state and logs each combo. Order matters: damage combos first, Collapse last.
+ */
+export function resolveCombos(state) {
+  const c = state.config.effects.synergy.combos || {};
+  const eff = state.config.effects;
+  for (const enemy of state.enemies) {
+    if (!isAlive(enemy.components.core)) continue;
+    for (const comp of Object.values(enemy.components)) {
+      if (!isAlive(comp)) continue;
+      const has = (k) => hasStatus(comp, k);
+      const at = `${enemy.label}·${comp.name}`;
+
+      // Backfire — Shattered + Confused → self-damage burst (the enemy's own misfire)
+      if (has('shatter') && has('confuse') && c.backfire?.selfDamage > 0) {
+        comp.hp -= c.backfire.selfDamage;
+        logEvent(state, `Backfire: ${at} misfires on its cracked armor → −${Math.round(c.backfire.selfDamage)} HP${isAlive(comp) ? '' : ' — DESTROYED'}.`);
+      }
+      // Vaporize — Burning + Drained → detonate the remaining Burn now + heal a fraction
+      if (has('burning') && has('drain') && c.vaporize) {
+        const b = comp.statuses.burning;
+        const burst = (b.dot || 0) * (b.turns || 0);
+        if (burst > 0) {
+          comp.hp -= burst;
+          const heal = burst * (c.vaporize.healFrac || 0);
+          if (heal > 0) { const core = state.player.components.core; core.hp = Math.min(core.maxHp, core.hp + heal); }
+          delete comp.statuses.burning;
+          logEvent(state, `Vaporize: ${at} boils off — ${Math.round(burst)} burst${heal ? `, heal +${Math.round(heal)}` : ''}${isAlive(comp) ? '' : ' — DESTROYED'}.`);
+        }
+      }
+      // Feedback Cascade — Confused + Drained → chain drain to the same part on an adjacent enemy
+      if (has('confuse') && has('drain') && c.feedback) {
+        const chain = (comp.statuses.drain?.potency || 0) * (eff.drain?.dmgPerPotency || 0) * (c.feedback.chainFrac || 0);
+        const other = nextAliveEnemy(state, enemy.eid);
+        const oc = other && other.components[comp.id];
+        if (chain > 0 && oc && isAlive(oc)) {
+          oc.hp -= chain;
+          logEvent(state, `Feedback Cascade: ${at} misroutes → ${other.label}·${oc.name} −${Math.round(chain)} HP${isAlive(oc) ? '' : ' — DESTROYED'}.`);
+        }
+      }
+      // Stasis Lock — Frozen + Confused → extend the freeze (deep lockdown)
+      if (has('freeze') && has('confuse') && c.stasisLock?.extendTurns > 0) {
+        comp.statuses.freeze.turns += c.stasisLock.extendTurns;
+        logEvent(state, `Stasis Lock: ${at} held — freeze +${c.stasisLock.extendTurns} turn(s).`);
+      }
+      // Wildfire — Burning + Confused → spread Burning to a neighbour
+      if (has('burning') && has('confuse') && c.wildfire) {
+        const victimId = maybeWildfire(enemy, comp, state.config, state.rng);
+        if (victimId) logEvent(state, `Wildfire: Burning spreads to ${enemy.label}·${enemy.components[victimId].name}.`);
+      }
+      // Collapse — Shattered + Drained → execute a part already below the HP threshold (LAST)
+      if (has('shatter') && has('drain') && c.collapse && isAlive(comp)) {
+        if (comp.hp < (c.collapse.hpThreshold || 0) * comp.maxHp) {
+          comp.hp = 0;
+          logEvent(state, `Collapse: ${at} ruptures (below ${Math.round((c.collapse.hpThreshold || 0) * 100)}% HP) — DESTROYED.`);
+        }
+      }
+    }
+  }
+}
+
+/** The next living enemy after `eid` (cyclic), or null — used by Feedback Cascade. */
+function nextAliveEnemy(state, eid) {
+  for (let i = 1; i < state.enemies.length; i++) {
+    const e = state.enemies[(eid + i) % state.enemies.length];
+    if (isAlive(e.components.core)) return e;
+  }
+  return null;
 }
 
 /** Wildfire: a Burning + Confused part spreads Burning to a random living neighbour. */
