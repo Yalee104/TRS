@@ -327,20 +327,29 @@ destruction. The cliff is always worse than the slope — that's what makes a ki
 | **Launch Pad** | **TRS quality scales with HP** — full HP *eases* your grids (fewer blockers/traps, smaller grid); damage fades the bonus to baseline. Also 7% firepower weight | TRS **congests** past baseline: grid +2, extra blockers/traps → routing harder, more fails. Loses its 7% firepower weight |
 | **Reactor Core** | — | **match over** |
 
-**Win:** enemy **Reactor Core** → 0. **Lose:** yours → 0.
+**Win:** **every** enemy **Reactor Core** → 0. **Lose:** yours → 0.
 
-### Enemy archetypes (the targeting brains) 🔧
-The enemy commits its attack at the **start of your attack phase** (visible as a telegraph if your
+### Multiple enemies ✅ (implemented)
+A battle fields a **roster of up to 4 non-Boss enemies** (config-panel "＋ Add enemy"; any archetype,
+repeatable; duplicates get numbered labels). Each enemy is a full aircraft with its own
+HP/condition/cascade/Core-shield, archetype and telegraph. **Attack:** you pick which *enemy + part*
+each status lands on, and the single firepower pool detonates on **one** component of **one** enemy
+per resolve (multi-Focus stays a v2 power-up). **Defense:** **every** living enemy strikes each
+defense-resolve (telegraphs and budgets stack). **Win** needs all enemy Cores down; a defeated
+enemy greys out and stops acting.
+
+### Enemy archetypes (the targeting brains) ✅ (Boss = v2)
+Each enemy commits its attack at the **start of your attack phase** (visible as a telegraph if your
 Tower's alive), and it lands in your defense-resolve.
 
 | Archetype | Targets | Personality | Counter |
 |---|---|---|---|
 | **Brute** | highest-HP part, focus-fire | big, predictable | over-shield it / sacrifice a cheap part |
 | **Saboteur** | your **Generator / Weapon Storage** | chokes firepower + forces cascade | pre-shield & repair offense core |
-| **Hunter** | your **Tower** first, then blind strikes | information warfare | repair Tower for vision |
-| **Swarm** | spreads thin + many small debuffs | wide chip | Fortress / cleanse-all spikes |
+| **Hunter** | your **Tower / Engine** (sensors+mobility) | information warfare | repair Tower for vision |
+| **Swarm** | spreads thin + small debuffs (Burning/Confuse) | wide chip | Fortress / cleanse-all spikes |
 | **Disruptor** | status-heavy (freeze/drain/confuse) | debuff-chokes firepower (§6) | Cleanse-heavy defense |
-| **Boss** | switches policy at Core 66%/33% | multi-phase + telegraphed "ultimate" | adapt; drops a **Trophy** |
+| **Boss** 🔧 v2 | switches policy at Core 66%/33% | multi-phase + telegraphed "ultimate" | adapt; drops a **Trophy** |
 
 **✅ Predictability is a config/difficulty switch** (set at game start, tuned by playtest):
 *deterministic* (archetype always follows policy; perfectly counterable puzzle) ↔ *telegraphed
@@ -421,7 +430,7 @@ additively** in v1. **Spike** and Table E synergies = v2.
 ## B.1 Scope
 - **In:** one battle, 6 components/side (HP only), alternating **Attack/Defense → Build(120 credit)
   → Resolve**; attack v1 (Focus + 5 statuses + 3 synergies); defense v1 (B.0); condition→firepower
-  (§6); cascade hybrid (§7); **two enemy archetypes** (Saboteur + Brute — feel the targeting
+  (§6); cascade hybrid (§7); **a roster of up to 4 non-Boss archetypes** (Saboteur/Brute/Hunter/Swarm/Disruptor — feel the targeting
   contrast); Tower-gated telegraph (basic); win/lose on Core; a **pre-game config panel** (B.6).
 - **Layout:** **left rail = config/controls**, **center = the two aircraft boards**, **right =
   the TRS puzzle panel** (slides in on solve, like the shmup), **bottom = phase-aware info bar**
@@ -461,15 +470,18 @@ combo/configs/  offensive-*.json  defensive-*.json
 ## B.5 `game.json` keys
 `components` (HP), `firepower` {curve, floor, weights, debuffFactor}, `credit`, `cooldowns`
 (incl. `failCooldownMult`), `coreShield` {threshold, contributors:{part:%}}, `cascade`
-(brownout/evasion/TRS-congestion numbers), `archetypes` (Saboteur + Brute),
-`telegraph` {gated, mode: deterministic|variance}, `attackTimeModel: cost|realtime`,
-`ui` (config-panel defaults). The config panel (B.6) edits these live before Start.
+(brownout/evasion/TRS-congestion numbers), `potency` {stackCurve, chainMultiplier},
+`archetypes` (Saboteur/Brute/Hunter/Swarm/Disruptor — each {priority, spread, statusChance,
+status|statusPool, damageBudget}), `telegraph` {gated, mode: deterministic|variance},
+`attackTimeModel: cost|realtime`, `ui` (config-panel defaults incl. `enemies:[...]`, `maxEnemies`).
+The config panel (B.6) edits these live before Start.
 
 ## B.6 Pre-game config panel (left rail)
 Before a battle starts, the left rail exposes the knobs so you can playtest variants without
 editing files; pressing **Start Battle** locks them into the run's config:
-- **Enemy archetype:** Saboteur · Brute · Both · Random.
-- **Phase length:** slider (default **120 s**), applies to both attack & defense credits.
+- **Enemy roster:** "＋ Add enemy" rows (up to **4**), each Saboteur · Brute · Hunter · Swarm ·
+  Disruptor · Random; repeatable (duplicates auto-numbered).
+- **Phase length:** slider (default **15 s**), applies to both attack & defense credits.
 - **Attack time model:** `cost` (fixed per action) ↔ `realtime` (seconds-solving drain).
 - **Telegraph:** on/off + `deterministic` ↔ `variance`.
 - **(optional) component HP preset** + a **seed** field for reproducible TRS grids.
