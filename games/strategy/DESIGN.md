@@ -165,38 +165,71 @@ Kept (not dropped): an effect only does something on appropriate targets, so cho
 *and* your effects is a real matching decision (Confuse on a Generator is wasted).
 | Effect | Valid / meaningful targets | What it does there |
 |---|---|---|
-| **Freeze** | any *functional* part (not Core) | ×0 firepower contribution **and** suspends the part's system for the duration: frozen **Tower** → owner's aim scatters + ~40% softer; frozen **Engine** → no evasion. (Generator shield/brownout + Launch Pad TRS stay tied to destruction.) |
+| **Freeze** | any *functional* part (not Core) | ×0 firepower contribution **and** suspends the part's system for the duration: frozen **Tower** → owner's aim scatters + ~40% softer; frozen **Engine** → no evasion. (Generator shield/brownout + Launch Pad TRS stay tied to destruction.) **Cancels with Burning** — applying one wipes both. |
 | **Confuse** | parts that aim/fire — **Weapon Storage, Tower** | their fire scatters / telegraph mis-aims |
 | **Drain** | best on **Generator & Core** (HP on any) | siphon HP to you (heals your Core); kill the Generator to drop the Core shield |
-| **Burning** | any part | flat DoT; best on high-HP (Core, Generator) |
-| **Shatter** | **Core, Generator** | brittle → the focus takes **+50%** from all your fire (no effect on a *shielded* Core until its shield drops) |
+| **Burning** | any part | flat DoT each round; **bypasses the Core shield**; best on high-HP (Core, Generator). **Cancels with Freeze.** |
+| **Shatter** | **any part** (v2) | brittle → the focus takes **+50%** from all your fire (no effect on a *shielded* Core until its shield drops); universal combo-enabler |
 
-### 3.6 Table C — compounding · v1 ✅
-v1 keeps compounding lean: stack statuses on the Focus; **three synergies** pay off the stack.
-1. **Shatter = amplifier** — while the Focus is **Shattered**, all damage to it **+50%**. The reason
-   to fold **Engine** into your stack: it multiplies the whole assault.
-2. **Frozen = brittle** — a **Frozen** Focus takes **bonus damage** from your fire.
-3. **Wildfire** — a Focus that is both **Burning + Confused** spreads Burning to an **adjacent
-   component** (the one v1 way to hit a 2nd part; needs the Focus to be their Weapon Storage/Tower,
-   where Confuse is valid). Foreshadows the multi-target power-ups.
-
-*(With #1 and #2 both on a Frozen+Shattered Focus you get both bonuses — that's "Glass" for free.)*
-
-#### Parked as v2 depth — the full pairwise matrix + self-stack + specials 🔧
-5 statuses: **Frozen, Shattered, Burning, Confused, Drained**. Interactions resolve during RESOLVE.
+### 3.6 Table C — status compounding · v2 ✅ (implemented, config-driven)
+Statuses pair up. A combo fires **wherever both its statuses sit on the same component**, across
+**all** enemies (not just the Focus) — except **Glass**, which is a focus-fire multiplier. **Shatter
+is valid on any part** (universal enabler). **Fire ⊗ Freeze cancel** (applying one wipes both —
+steam), so that pair has no combo. **Frozen + Drained is intentionally open** (no combo yet — parked
+for later). Every combo's numbers live in `config/game.json → effects.synergy.combos`.
 
 |  | **Shattered** | **Burning** | **Confused** | **Drained** |
 |---|---|---|---|---|
-| **Frozen** | **Glass** ×2 next hit | **Thermal Shock** burst + auto-Shatter | **System Lock** extend freeze | **Cryo-Siphon** drain ×1.5 |
-| **Shattered** | — | **Open Burn** DoT ×2 | **Exposed Misfire** backlash ×2 | **Hemorrhage** drain ×2 |
-| **Burning** | | — | **Wildfire** spreads to neighbour | **Accelerant** DoT up |
-| **Confused** | | | — | **Power Bleed** heal+brownout |
+| **Frozen** | **Glass** | ⊗ cancel | **Stasis Lock** | *(open — TBD)* |
+| **Shattered** | — | **Meltdown** | **Backfire** | **Collapse** |
+| **Burning** | | — | **Wildfire** | **Vaporize** |
+| **Confused** | | | — | **Feedback Cascade** |
 
-**Self-stack:** Freeze²→longer/lock · Shatter²→vuln climbs · Burn²→faster ticks · Confuse²→100%
-misfire then self-hit · Drain²→rate ramps.
-**Specials:** **Detonate** (Engine/Chain) consumes all stacked statuses → burst (each ×1.5),
-then clears · **Multihack** copies one status to all parts · **Beam** (engine special) =
-freeze+confuse+drain on all.
+**Glass** (Frozen + Shattered)
+- *Does:* your focus-fire on the part is **×`glass.mult`** (one clean doubling; replaces the separate Shatter/Freeze bonuses). Focus-only.
+- *Example:* a 30 pool → **60**.
+- *On:* any non-Core part (Freeze can't touch the Core).
+
+**Stasis Lock** (Frozen + Confused)
+- *Does:* extends the freeze by **`stasisLock.extendTurns`** each resolve it's present — deep lockdown (×0 firepower + system suspended longer).
+- *Example:* Freeze (2 turns) + Confuse on their Tower → freeze +2 → stays blind/scattering far longer.
+- *On:* Weapon, Tower.
+
+**Meltdown** (Shattered + Burning)
+- *Does:* each Burning tick on a Shattered **non-Core** part also funnels **`meltdown.coreFrac` × dot** straight into that enemy's Reactor Core — and burning ignores the shield, so it lands while the Core is shielded.
+- *Example:* Shattered+Burning Generator burning 6/rnd → 6 to the Generator **+ 3 to the Core** every round.
+- *On:* any part (best on a side part to chip the Core indirectly).
+
+**Backfire** (Shattered + Confused)
+- *Does:* the cracked, misfiring part takes **`backfire.selfDamage`** self-damage at resolve (free chip you didn't spend firepower on).
+- *Example:* a Shattered+Confused Weapon recoils for **20**.
+- *On:* Weapon, Tower.
+
+**Collapse** (Shattered + Drained)
+- *Does:* if the part is already **below `collapse.hpThreshold` × maxHP**, the drain ruptures it → **destroyed outright** (execute). Runs last.
+- *Example:* a Shattered Generator at 18% HP gets Drained → **collapses**.
+- *On:* any part.
+
+**Wildfire** (Burning + Confused)
+- *Does:* spreads Burning at **`wildfire.spreadFrac`** strength to a random living neighbour on the same enemy.
+- *Example:* Burning 6/rnd + Confused on their Weapon → also lights their Engine for 3/rnd.
+- *On:* Weapon, Tower.
+
+**Vaporize** (Burning + Drained)
+- *Does:* the part's **remaining** Burn DoT detonates **immediately** (one burst), and you heal **`vaporize.healFrac`** of it; the burn is consumed.
+- *Example:* a part burning 6/rnd with 3 rounds left (18 pending) gets Drained → **18 now + ~9 heal**.
+- *On:* any part.
+
+**Feedback Cascade** (Confused + Drained)
+- *Does:* **`feedback.chainFrac`** of the drain damage also strikes the **same part on the next living enemy** (cross-enemy). Needs ≥2 enemies.
+- *Example:* Drain 5 (15 dmg) on a Confused Weapon → 15 there + **~7 to the next enemy's Weapon** + heal.
+- *On:* Weapon, Tower.
+
+> **Single-status bonuses still apply when alone:** Shatter alone **+`shatterAmp`** (50%), Freeze alone
+> **+`frozenBrittle`** (40%) on the focus.
+>
+> **Parked for later (v3):** the open Frozen+Drained pair, status **self-stacking**, and the
+> **specials** (Detonate / Multihack / Beam).
 
 ---
 

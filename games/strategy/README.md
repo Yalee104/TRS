@@ -35,7 +35,7 @@ which lowers your firepower — so repairing offence (not just the Core) keeps y
 ```
 config/game.json   all tuning (HP, firepower curve, cascade, archetypes, telegraph)
 core/   state · components · phases · firepower · cascade
-combat/ statuses (5 statuses + 3 synergies) · attack · defense · enemyAI (5 non-Boss archetypes)
+combat/ statuses (5 statuses + 8 pairwise combos, v2) · attack · defense · enemyAI (5 non-Boss archetypes)
 puzzle/ palettes (per-component combo configs) · bridge (mount TRS, queue on solve)
 view/   render (boards) · configPanel (left rail) · infoBar (bottom)
 tests/  run.mjs · strategy.test.mjs
