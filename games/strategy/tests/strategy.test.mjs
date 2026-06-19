@@ -260,6 +260,16 @@ test('roster builds N enemies with deduped labels; random resolves to a real arc
   assert(CONFIG.archetypes[r.enemies[0].archetype], 'random → a real archetype');
 });
 
+test('archetypes are 100% config-driven: a new config entry is selectable without code changes', () => {
+  const cfg = { ...CONFIG, archetypes: { ...CONFIG.archetypes, ninja: { label: 'Ninja', damageBudget: 50, priority: ['tower'], spread: 0.1, statusChance: 0.5, status: 'confuse' } } };
+  const s = createState(cfg, { seed: 2, enemies: ['ninja'] });
+  assert(s.enemies[0].archetype === 'ninja' && s.enemies[0].label === 'Ninja', 'config-only archetype resolves');
+  // and Random can roll it
+  const seen = new Set();
+  for (let i = 0; i < 40; i++) seen.add(createState(cfg, { seed: i, enemies: ['random'] }).enemies[0].archetype);
+  assert(seen.has('ninja'), 'Random can roll a config-only archetype');
+});
+
 test('roster is capped at maxEnemies (4)', () => {
   const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'brute', 'hunter', 'swarm', 'disruptor'] });
   assert(s.enemies.length === 4, 'capped to 4');

@@ -9,7 +9,7 @@
 // =============================================================================
 
 import { COMPONENT_IDS, makeComponent, isAlive } from './components.js';
-import { resolveArchetype } from '../combat/enemyAI.js';
+import { resolveArchetype, archetypeKeys } from '../combat/enemyAI.js';
 
 /** Phases of the loop (see DESIGN §2). */
 export const PHASES = {
@@ -34,10 +34,11 @@ function makeAircraft(side, config) {
  * labels (e.g. "Saboteur 1", "Saboteur 2").
  */
 function buildEnemies(config, roster, rng) {
+  const keys = archetypeKeys(config);
   const enemies = roster.map((key, i) => {
     const ac = makeAircraft('enemy', config);
     ac.eid = i;
-    ac.archetype = resolveArchetype(key, rng);
+    ac.archetype = resolveArchetype(key, rng, keys);
     ac.telegraph = null;
     return ac;
   });

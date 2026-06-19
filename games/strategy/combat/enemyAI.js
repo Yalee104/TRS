@@ -12,13 +12,20 @@ import { isAlive } from '../core/components.js';
 import { combatCondition, firepowerMult } from '../core/firepower.js';
 import { systemState, coreShieldUp, towerActive, effectiveAim } from '../core/cascade.js';
 
-/** The non-Boss roster the player can field. */
-export const ARCHETYPES = ['saboteur', 'brute', 'hunter', 'swarm', 'disruptor'];
+/** The archetype keys defined in config (skips the `_comment` doc field). The roster
+ *  is 100% config-driven: add an entry under game.json#archetypes and it's selectable. */
+export function archetypeKeys(config) {
+  return Object.keys((config && config.archetypes) || {}).filter((k) => k !== '_comment');
+}
 
-/** Resolve 'random' to a concrete archetype key; unknown keys fall back to saboteur. */
-export function resolveArchetype(key, rng) {
-  if (key === 'random') return ARCHETYPES[Math.floor((rng ? rng() : Math.random()) * ARCHETYPES.length)];
-  return ARCHETYPES.includes(key) ? key : 'saboteur';
+/**
+ * Resolve 'random' (or an unknown key) against the config's archetype keys.
+ * @param keys  the list from archetypeKeys(config); falls back to ['saboteur'] if absent.
+ */
+export function resolveArchetype(key, rng, keys) {
+  const list = (keys && keys.length) ? keys : ['saboteur'];
+  if (key === 'random') return list[Math.floor((rng ? rng() : Math.random()) * list.length)];
+  return list.includes(key) ? key : list[0];
 }
 
 /** The status a strike may inflict for this archetype (single `status` or a random `statusPool`). */
