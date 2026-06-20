@@ -238,11 +238,16 @@ for later). Every combo's numbers live in `config/game.json → effects.synergy.
 > One engine drives **both** offensive combos (§3.6, statuses on enemy parts) and defensive combos
 > (§4 Table E, verbs on your own parts). This section is the source of truth.
 
-### How a combo forms — FCFS chain + adjacency (model A)
+### How a combo forms — FCFS chain, greedy consume (model A)
 Every component holds an **ordered chain** of the statuses/verbs on it, in the order they were
-applied (**first-come-first-served**). A combo forms **only between two *consecutive* entries** in
-the chain (adjacency, "model A"). A longer chain just chains consecutive pairs — `[A, B, C]` → the
-pairs `A+B` and `B+C` (not `A+C`).
+applied (**first-come-first-served**). Resolution scans the chain **left-to-right**: the **first**
+adjacent, non-`break`-separated pair that forms a valid combo **consumes both entries** into a single
+result, and the scan continues **after** them. A combo **result never combos again**. So each entry
+joins **at most one** combo, earlier pairs win, and any leftover entry applies its base effect.
+- `[A, B, C]` → A+B fires → chain becomes `[result, C]` → **C applies its base. Exactly one combo.**
+- `[A, B, C, D]` → A+B and C+D — two non-overlapping combos.
+- `[A, break, B, C]` → A keeps its base; B+C fires.
+- If A+B don't form a valid pair, the scan tries B+C next.
 
 ### Break — opting out of a combo
 Because a combo **replaces** its ingredients' base effects (below), the player sometimes wants the
