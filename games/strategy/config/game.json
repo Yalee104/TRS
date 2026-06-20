@@ -53,7 +53,7 @@
     "freeze":  { "dmgPerPotency": 1.5, "turns": { "divisor": 4, "min": 1, "max": 3 } },
     "confuse": { "dmgPerPotency": 1.0, "turns": { "divisor": 4, "min": 1, "max": 3 } },
     "drain":   { "dmgPerPotency": 3.0, "healPerPotency": 2.0, "turns": { "divisor": 5, "min": 1, "max": 2 } },
-    "burning": { "dmgPerPotency": 1.0, "dotPerPotency": 1.2, "turns": { "divisor": 3, "min": 1, "max": 4 } },
+    "burning": { "dmgPerPotency": 1.0, "dotPerPotency": 1.2, "dotCap": 24, "turns": { "divisor": 3, "min": 1, "max": 4, "stackMax": 6 } },
     "shatter": { "dmgPerPotency": 2.0, "turns": { "divisor": 3, "min": 1, "max": 3 } },
     "synergy": {
       "_comment": "Single-status focus bonuses (shatterAmp = Shatter alone +50%; frozenBrittle = Freeze alone +40%) PLUS the v2 pairwise combos. A combo fires wherever BOTH its statuses sit on one component (any enemy). Glass replaces the two single bonuses when both are present. Frozen+Burning cancel (no combo). Frozen+Drained is intentionally open (no combo yet).",

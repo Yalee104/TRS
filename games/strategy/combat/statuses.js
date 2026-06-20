@@ -18,18 +18,30 @@ export const BASE_OFFENSE = ['freeze', 'confuse', 'drain', 'burning', 'shatter']
 // Fire ⊗ Freeze can't co-exist — applying one to a part that has the other wipes both (steam).
 const OPPOSITE = { freeze: 'burning', burning: 'freeze' };
 
+// Stacking policy (DESIGN §3.7 tuning): only Burning ADDS magnitude+duration (capped); every other
+// status REFRESHES (keeps the stronger). The firepower pool always adds — handled in resolveAttack.
+const STACK_ADD = { burning: true };
+
 /**
- * Add or refresh a status (refresh = keep the stronger of turns/dot/potency).
- * Returns { canceled } if it annulled the opposite status instead of applying.
+ * Add or stack a status. Burning adds DoT (cap `dotCap`) + extends turns (cap `turns.stackMax`);
+ * all others refresh to the stronger turns/dot/potency. Returns { canceled } if it annulled the
+ * opposite status instead of applying. `config` enables Burning's caps (defaults to uncapped add).
  */
-export function applyStatus(component, key, { turns = 1, potency = 0, dot = 0 } = {}) {
+export function applyStatus(component, key, { turns = 1, potency = 0, dot = 0 } = {}, config = null) {
   const opp = OPPOSITE[key];
   if (opp && component.statuses[opp]) { delete component.statuses[opp]; return { canceled: opp }; }
   const cur = component.statuses[key];
   if (cur) {
-    cur.turns = Math.max(cur.turns, turns);
-    cur.potency = Math.max(cur.potency || 0, potency);
-    cur.dot = Math.max(cur.dot || 0, dot);
+    if (STACK_ADD[key]) {
+      const e = config?.effects?.[key] || {};
+      cur.dot = Math.min(e.dotCap ?? Infinity, (cur.dot || 0) + dot);
+      cur.turns = Math.min(e.turns?.stackMax ?? e.turns?.max ?? Infinity, cur.turns + turns);
+      cur.potency = Math.max(cur.potency || 0, potency);
+    } else {
+      cur.turns = Math.max(cur.turns, turns);
+      cur.potency = Math.max(cur.potency || 0, potency);
+      cur.dot = Math.max(cur.dot || 0, dot);
+    }
   } else {
     component.statuses[key] = { turns, potency, dot };
   }
@@ -153,7 +165,7 @@ export function resolveOffenseChains(state, focusEid, focusId) {
       // a non-combo'd drain applies its base heal.
       for (const e of leftovers) {
         if (e.brk || e.active) continue;
-        applyStatus(comp, e.key, { turns: e.turns, potency: e.potency, dot: e.dot });
+        applyStatus(comp, e.key, { turns: e.turns, potency: e.potency, dot: e.dot }, config);
         if (e.key === 'drain') healed += e.potency * (config.effects.drain?.healPerPotency || 0);
       }
     }
@@ -192,7 +204,7 @@ function applyOffenseCombo(state, enemy, comp, c, isFocus) {
       const others = Object.values(enemy.components).filter((x) => x !== comp && isAlive(x));
       if (others.length) {
         const v = others[Math.floor((state.rng ? state.rng() : Math.random()) * others.length)];
-        applyStatus(v, 'burning', { turns: bn?.turns || 1, dot: (bn?.dot || 0) * (K.wildfire?.spreadFrac || 0.5) });
+        applyStatus(v, 'burning', { turns: bn?.turns || 1, dot: (bn?.dot || 0) * (K.wildfire?.spreadFrac || 0.5) }, state.config);
         logEvent(state, `Wildfire: ${at} burns + spreads to ${enemy.label}·${v.name}.`);
       } else {
         logEvent(state, `Wildfire: ${at} burns.`);

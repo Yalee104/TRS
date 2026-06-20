@@ -166,7 +166,7 @@ export function resolveDefense(state) {
         if (absorbed > 0) note += `, ${Math.round(absorbed)} shielded`;
       }
 
-      if (entry.status && !p.immune) applyStatus(target, entry.status, { turns: 2 });
+      if (entry.status && !p.immune) applyStatus(target, entry.status, { turns: 2 }, config);
       else if (entry.status && p.immune) note += `, ${entry.status} warded`;
       logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)}${note} → −${Math.round(dmg)} HP${entry.status && !p.immune ? ` (+${entry.status})` : ''}${isAlive(target) ? '' : ' — DESTROYED'}.`);
       summary.hits.push({ component: target.id, damage: dmg });

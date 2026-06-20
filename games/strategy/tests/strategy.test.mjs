@@ -162,6 +162,23 @@ test('Burning DoT ticks then statuses decay each round', () => {
   assert(c.statuses.burning.turns === 1, 'turn decayed');
 });
 
+test('stacking policy: Burning adds DoT + extends duration (capped); others refresh (MAX)', () => {
+  const s = fresh();
+  const c = s.enemies[0].components.weapon;
+  applyStatus(c, 'burning', { turns: 3, dot: 5 }, CONFIG);
+  applyStatus(c, 'burning', { turns: 3, dot: 5 }, CONFIG);
+  assert(c.statuses.burning.dot === 10, 'Burning DoT adds (5+5)');
+  assert(c.statuses.burning.turns === 6, 'Burning turns extend (3+3, cap 6)');
+  applyStatus(c, 'burning', { turns: 10, dot: 30 }, CONFIG);
+  assert(c.statuses.burning.dot === CONFIG.effects.burning.dotCap, 'DoT capped at dotCap');
+  assert(c.statuses.burning.turns === CONFIG.effects.burning.turns.stackMax, 'turns capped at stackMax');
+  // Freeze just refreshes — keeps the stronger, never extends
+  const t = s.enemies[0].components.tower;
+  applyStatus(t, 'freeze', { turns: 2 }, CONFIG);
+  applyStatus(t, 'freeze', { turns: 1 }, CONFIG);
+  assert(t.statuses.freeze.turns === 2, 'Freeze refreshes (MAX), no extend');
+});
+
 test('Glass: Frozen + Shattered on the Focus → ×mult, consumes both (replaces singles)', () => {
   // single-status synergy still works through attackSynergyMult
   const s = fresh();
