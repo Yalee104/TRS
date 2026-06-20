@@ -101,8 +101,12 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     if (!state.activePuzzle) return;
     const elapsed = state.activePuzzle.instance?.state?.elapsedMs ?? 0;
 
-    if (success && result) {
-      const skillSeq = result.path.map((c) => c.typeKey).filter((k) => cfg.skills[k]);
+    const payloadKey = isAttack ? ATTACK_EFFECT[componentId] : DEFENSE_VERB[componentId];
+    const minChain = (isAttack ? state.config.effects?.[payloadKey]?.minChain : state.config.defense?.[payloadKey]?.minChain) ?? 1;
+    const skillSeq = (success && result) ? result.path.map((c) => c.typeKey).filter((k) => cfg.skills[k]) : [];
+    const chain = skillSeq.filter((k) => k === payloadKey).length;   // payload icons actually chained
+
+    if (success && result && chain >= minChain) {
       const combo = evaluateFn(skillSeq, cfg);
       // solving makes a PENDING action; the host picks its target next (status spread / own part).
       if (isAttack) makePendingAttack(state, componentId, combo);
@@ -111,10 +115,12 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
       const cost = state.attackTimeModel === 'realtime' ? elapsed : state.config.phase.actionCostMs;
       spendCredit(state, cost);
     } else {
-      // fail/timeout: spend the smaller fail cost AND cool the component down.
+      // fail/timeout OR under-chained (didn't reach Min Chain): spend the fail cost + cool down.
       spendCredit(state, state.config.phase.failCostMs);
       state.cooldowns[componentId] = (state.cooldowns[componentId] || 0) + (state.config.cooldowns.failCooldownMult || 2);
-      logEvent(state, `Failed ${state.player.components[componentId].name} TRS — cooled down, credit spent.`);
+      const name = state.player.components[componentId].name;
+      if (success && result) logEvent(state, `${name}: only ${chain}/${minChain} ${payloadKey} icons chained — solve failed, cooled down.`);
+      else logEvent(state, `Failed ${name} TRS — cooled down, credit spent.`);
     }
     teardown(state);
   }

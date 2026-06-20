@@ -543,6 +543,22 @@ test('bridge: a failed puzzle spends fail cost and cools the component down', ()
   assert(s.activePuzzle === null, 'puzzle torn down on fail');
 });
 
+test('Min Chain: an under-chained solve fails (Cleanse needs 3 icons)', () => {
+  assert(CONFIG.defense.cleanse.minChain === 3, 'Cleanse minChain is 3 (non-scaled)');
+  const under = fresh(); startDefenseBuild(under);
+  const b1 = createBridge({ getState: () => under, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+  b1.open('tower'); // Cleanse
+  under.activePuzzle.instance.fireComplete([{ typeKey: 'cleanse' }, { typeKey: 'cleanse' }]); // only 2
+  assert(!under.pendingDefense, 'under-chained → no pending defense');
+  assert(under.cooldowns.tower > 0, 'under-chained solve cools down like a fail');
+
+  const ok = fresh(); startDefenseBuild(ok);
+  const b2 = createBridge({ getState: () => ok, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+  b2.open('tower');
+  ok.activePuzzle.instance.fireComplete([{ typeKey: 'cleanse' }, { typeKey: 'cleanse' }, { typeKey: 'cleanse' }]); // 3
+  assert(ok.pendingDefense && ok.pendingDefense.verb === 'cleanse', 'meeting Min Chain succeeds');
+});
+
 // --- real generator + ComboEngine (the half FakePuzzle skips) ----------------
 test('potency stackCurve is config-driven: a 3-stack route reads from config.potency.stackCurve', () => {
   const three = evaluate(['freeze', 'freeze', 'freeze'], offensivePalette('weapon', {}, CONFIG.potency)).items[0].value;
