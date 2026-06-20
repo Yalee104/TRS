@@ -20,6 +20,7 @@ import { applyStatus, tickAircraftStatuses, attackSynergyMult, resolveCombos } f
 import { makePendingAttack, finalizeAttackTarget, validAttackTargets, resolveAttack, comboPotency } from '../combat/attack.js';
 import { makePendingDefense, finalizeDefenseTarget, resolveDefense } from '../combat/defense.js';
 import { planAttack, currentBudget } from '../combat/enemyAI.js';
+import { resolveChain, OFFENSE_COMBOS, pairKey } from '../combat/combos.js';
 import { offensivePalette, defensivePalette, catalogFromConfig } from '../puzzle/palettes.js';
 import { createBridge } from '../puzzle/bridge.js';
 import { evaluate } from '../../grid-path-puzzle/combo/ComboEngine.js';
@@ -35,6 +36,39 @@ const attack = (s, comp, value, target, eid = 0) => { makePendingAttack(s, comp,
 const defend = (s, comp, value, target) => { makePendingDefense(s, comp, combo(value)); finalizeDefenseTarget(s, target); };
 // drop enough shield-linked parts (per config) to break an aircraft's Core shield
 const exposeCore = (ac) => { let sum = 0; for (const [id, pct] of Object.entries(CONFIG.coreShield.contributors)) { ac.components[id].hp = 0; sum += pct; if (sum >= CONFIG.coreShield.threshold) break; } };
+
+// --- combo engine (pure chain resolution) ------------------------------------
+const F = (key) => ({ key, fresh: true });
+const A = (key) => ({ key, fresh: false });
+const BRK = { brk: true };
+const names = (r) => r.combos.map((c) => c.def.name);
+const lefts = (r) => r.leftovers.map((e) => e.key);
+
+test('combo engine: greedy left-to-right, consume-and-advance ([A,B,C] → A+B only)', () => {
+  const r = resolveChain([F('freeze'), F('shatter'), F('confuse')], OFFENSE_COMBOS);
+  assert(names(r).join() === 'Glass', `only Glass forms, got ${names(r)}`);
+  assert(lefts(r).join() === 'confuse', `confuse left over, got ${lefts(r)}`);
+});
+
+test('combo engine: a break cuts adjacency (opt out)', () => {
+  const r = resolveChain([F('freeze'), BRK, F('shatter')], OFFENSE_COMBOS);
+  assert(r.combos.length === 0, 'no combo across the break');
+  assert(lefts(r).sort().join() === 'freeze,shatter', 'both kept as bases');
+});
+
+test('combo engine: a combo needs ≥1 fresh entry (C2 — no carried+carried)', () => {
+  assert(resolveChain([A('freeze'), A('shatter')], OFFENSE_COMBOS).combos.length === 0, 'two carried → no combo');
+  assert(resolveChain([A('freeze'), F('shatter')], OFFENSE_COMBOS).combos.length === 1, 'one fresh → combo');
+});
+
+test('combo engine: consume-advance picks the earlier pair ([burn,confuse,drain] → Wildfire, drain left)', () => {
+  const r = resolveChain([F('burning'), F('confuse'), F('drain')], OFFENSE_COMBOS);
+  assert(names(r).join() === 'Wildfire' && lefts(r).join() === 'drain', `got ${names(r)} / ${lefts(r)}`);
+});
+
+test('combo engine: pairKey is order-independent', () => {
+  assert(pairKey('shatter', 'freeze') === pairKey('freeze', 'shatter'), 'order-independent');
+});
 
 // --- firepower / condition ---------------------------------------------------
 test('combatCondition is 1.0 at full health; firepowerMult floors at 0.4', () => {
