@@ -137,14 +137,22 @@ function dossier(state, side, id, eid) {
   const statuses = Object.entries(c.statuses).filter(([, s]) => s.turns > 0);
   if (statuses.length) rows.push(`<div class="tt-st">Statuses: ${statuses.map(([k, s]) => `${k} (${s.turns}t)`).join(', ')}</div>`);
 
-  // pending queued statuses on this enemy part this attack phase
-  if (side === 'enemy' && state.phase === PHASES.ATTACK_BUILD) {
-    const q = state.queue.filter((a) => a.target && a.target.eid === eid && a.target.component === id).map((a) => a.effect);
-    if (q.length) rows.push(`<div class="tt-pending">Queued (applies at Resolve): ${q.join(', ')}</div>`);
+  // this-phase queued chain (statuses on an enemy part / verbs on your part), in order with breaks
+  const build = (side === 'enemy' && state.phase === PHASES.ATTACK_BUILD) || (side === 'player' && state.phase === PHASES.DEFENSE_BUILD);
+  if (build) {
+    const q = state.queue
+      .filter((x) => (side === 'enemy' ? (x.target && x.target.eid === eid && x.target.component === id) : (x.target === id)))
+      .map((x) => (x.brk ? '⊘' : (x.effect || x.verb)));
+    if (q.length) rows.push(`<div class="tt-pending">Queued chain: ${q.join(' → ')} <span class="tt-dim">(combos form on adjacent pairs; ⊘ = break)</span></div>`);
   }
 
-  const defs = Object.entries(c.defenses || {}).filter(([, v]) => v);
-  if (defs.length) rows.push(`<div class="tt-defs">Pre-loaded: ${defs.map(([k, v]) => `${k}${typeof v === 'number' ? ' ' + Math.round(v * (k === 'harden' || k === 'overclock' ? 100 : 1)) + (k === 'harden' || k === 'overclock' ? '%' : '') : ''}`).join(', ')}</div>`);
+  // carried defensive states (Sustain shield / Field Repair HoT)
+  if (side === 'player') {
+    const carry = [];
+    if (c.carry && c.carry.shield > 0) carry.push(`shield ${Math.round(c.carry.shield)}`);
+    if (c.carryHeal > 0) carry.push(`field-repair ${Math.round(c.carryHeal)}/next`);
+    if (carry.length) rows.push(`<div class="tt-defs">Carried: ${carry.join(', ')}</div>`);
+  }
 
   if (side === 'player') {
     const incoming = state.enemies

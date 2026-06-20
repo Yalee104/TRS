@@ -93,6 +93,12 @@
       .badges { margin-top: 5px; min-height: 18px; display: flex; flex-wrap: wrap; gap: 3px; }
       .st, .df, .tel { font-size: 11px; }
       .st.pending { opacity: .5; filter: grayscale(.6); border: 1px dashed #5b8def88; border-radius: 4px; padding: 0 2px; }
+      /* this-phase queued chain (statuses/verbs in order) + break markers/button */
+      .queued { margin-top: 3px; min-height: 16px; display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+      .queued .brk { font-size: 11px; color: #ff8a3d; }
+      .breakbtn { font-size: 11px; cursor: pointer; color: #ff8a3d; border: 1px solid #ff8a3d66;
+        border-radius: 4px; padding: 0 4px; margin-left: 2px; user-select: none; }
+      .breakbtn:hover { background: #ff8a3d22; }
       .role { font-size: 10px; color: #7f8696; margin-top: 4px; font-style: italic; }
       .cd { font-size: 9px; color: #ff8a3d; }
 

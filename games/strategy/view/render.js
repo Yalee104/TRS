@@ -15,23 +15,35 @@ import { PHASES } from '../core/state.js';
 import { coreShieldUp } from '../core/cascade.js';
 
 const STATUS_ICON = { freeze: '❄️', confuse: '🌀', drain: '🩸', burning: '🔥', shatter: '💥' };
+const COMBO_ICON = { meltdown: '🌋', stasisLock: '🔒', wildfire: '♨️' };
 const DEF_ICON = { shield: '🛡️', repair: '🔧', cleanse: '🧹', harden: '🪨', overclock: '⚡' };
+const parseEid = (ds) => (ds.eid != null && ds.eid !== '' ? Number(ds.eid) : null);
 
 /**
  * @param clickRoot  element to attach the delegated click listener to (covers all boards)
  * @param els        { enemy, player } the wrap elements the boards render into
+ * @param onComponentClick (side, id, eid)
+ * @param onBreak    (side, id, eid) — insert a chain break on that component
  */
-export function createRenderer(clickRoot, els, onComponentClick) {
+export function createRenderer(clickRoot, els, onComponentClick, onBreak = () => {}) {
   clickRoot.addEventListener('click', (e) => {
+    const brk = e.target.closest('.breakbtn');
+    if (brk) { onBreak(brk.dataset.side, brk.dataset.id, parseEid(brk.dataset)); return; }
     const card = e.target.closest('[data-comp]');
     if (!card || card.classList.contains('noclick')) return;
-    const eid = card.dataset.eid != null && card.dataset.eid !== '' ? Number(card.dataset.eid) : null;
-    onComponentClick(card.dataset.side, card.dataset.id, eid);
+    onComponentClick(card.dataset.side, card.dataset.id, parseEid(card.dataset));
   });
   return (state) => {
     els.enemy.innerHTML = enemyHtml(state);
     els.player.innerHTML = playerHtml(state);
   };
+}
+
+/** This phase's queued entries (statuses/verbs + breaks) for one component, in order. */
+function queuedFor(state, side, id, eid) {
+  return state.queue.filter((x) => (side === 'enemy'
+    ? (x.target && x.target.eid === eid && x.target.component === id)
+    : (x.target === id)));
 }
 
 function enemyHtml(state) {
@@ -99,24 +111,32 @@ function cardHtml(state, side, id, eid) {
   // attack: a weapon that already launched its TRS this phase is spent — grey it out
   if (!dead && side === 'player' && state.phase === PHASES.ATTACK_BUILD && state.usedComponents?.[id]) classes.push('used', 'noclick');
 
+  // ACTIVE statuses (base + ongoing combo-statuses), with turns
   const statuses = Object.entries(c.statuses)
     .filter(([, s]) => s.turns > 0)
-    .map(([k, s]) => `<span class="st" title="${k} (${s.turns} turn${s.turns > 1 ? 's' : ''})">${STATUS_ICON[k] || '•'}${s.turns}</span>`)
+    .map(([k, s]) => `<span class="st" title="${k} (${s.turns} turn${s.turns > 1 ? 's' : ''})">${STATUS_ICON[k] || COMBO_ICON[k] || '•'}${s.turns}</span>`)
     .join('');
 
-  const defenses = Object.entries(c.defenses || {})
-    .filter(([, v]) => v)
-    .map(([k, v]) => `<span class="df" title="queued ${k}">${DEF_ICON[k] || '+'}${defAmount(k, v)}</span>`)
-    .join('');
+  // carried defensive states (Sustain shield / Field Repair HoT)
+  let carried = '';
+  if (side === 'player') {
+    if (c.carry && c.carry.shield > 0) carried += `<span class="df" title="Sustain shield (carried to next defense)">🛡️${Math.round(c.carry.shield)}</span>`;
+    if (c.carryHeal > 0) carried += `<span class="df" title="Field Repair (heals next defense)">🔧${Math.round(c.carryHeal)}</span>`;
+  }
 
-  // Pending offensive statuses queued onto THIS enemy part this phase — greyed, land at Resolve.
-  let pending = '';
-  if (side === 'enemy' && state.phase === PHASES.ATTACK_BUILD) {
-    const counts = {};
-    for (const a of state.queue) if (a.target && a.target.eid === eid && a.target.component === id) counts[a.effect] = (counts[a.effect] || 0) + 1;
-    pending = Object.entries(counts)
-      .map(([k, n]) => `<span class="st pending" title="${k} — applies at Resolve">${STATUS_ICON[k] || '•'}${n > 1 ? `×${n}` : ''}</span>`)
-      .join('');
+  // QUEUED chain this phase (statuses on enemy / verbs on you), in order, with break markers
+  let queued = '';
+  let breakBtn = '';
+  const buildSide = (side === 'enemy' && state.phase === PHASES.ATTACK_BUILD)
+    || (side === 'player' && state.phase === PHASES.DEFENSE_BUILD);
+  if (buildSide && !dead) {
+    const q = queuedFor(state, side, id, eid);
+    queued = q.map((x) => (x.brk
+      ? '<span class="brk" title="break — a combo can\'t form across this">⊘</span>'
+      : `<span class="st pending" title="queued ${x.effect || x.verb} — resolves this phase">${(side === 'enemy' ? STATUS_ICON[x.effect] : DEF_ICON[x.verb]) || '•'}</span>`)).join('');
+    if (q.length && !q[q.length - 1].brk) {
+      breakBtn = `<span class="breakbtn" data-side="${side}" data-id="${id}"${side === 'enemy' ? ` data-eid="${eid}"` : ''} title="insert a break so the next pair won't combo">⊘</span>`;
+    }
   }
 
   const cd = (side === 'player' && state.cooldowns?.[id] > 0)
@@ -141,20 +161,16 @@ function cardHtml(state, side, id, eid) {
   }
 
   const role = roleHint(side, id, state);
+  const queuedRow = (queued || breakBtn) ? `<div class="queued">${queued}${breakBtn}</div>` : '';
   return `
     <div class="${classes.join(' ')}" data-comp data-side="${side}" data-id="${id}"${side === 'enemy' ? ` data-eid="${eid}"` : ''}>
       <div class="cn">${c.name}</div>
       <div class="hpbar"><div class="hpfill" style="width:${pct}%"></div></div>
       <div class="hpnum">${Math.max(0, Math.round(c.hp))}/${c.maxHp}</div>
-      <div class="badges">${statuses}${pending}${defenses}${cd}${tel}</div>
+      <div class="badges">${statuses}${carried}${cd}${tel}</div>
+      ${queuedRow}
       ${role ? `<div class="role">${role}</div>` : ''}
     </div>`;
-}
-
-function defAmount(verb, v) {
-  if (verb === 'shield' || verb === 'repair') return ` ${Math.round(v)}`;
-  if (verb === 'harden' || verb === 'overclock') return ` ${Math.round(v * 100)}%`;
-  return '';
 }
 
 function roleHint(side, id, state) {

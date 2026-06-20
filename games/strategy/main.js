@@ -40,7 +40,7 @@ const infoEl = document.getElementById('infobar');
 const controlsEl = document.getElementById('controls');
 
 const bridge = createBridge({ getState, overlayEl, onChange: () => draw() });
-const renderer = createRenderer(centerEl, { enemy: enemyEl, player: playerEl }, onComponentClick);
+const renderer = createRenderer(centerEl, { enemy: enemyEl, player: playerEl }, onComponentClick, onBreak);
 createTooltip(centerEl, getState);
 const infobar = createInfoBar(infoEl);
 const panel = createConfigPanel(leftEl, { onStart, onRestart, defaults: config.ui, archetypes: config.archetypes });
@@ -67,6 +67,18 @@ function onComponentClick(side, id, eid) {
       bridge.open(id);
     }
   }
+  draw();
+}
+
+// Insert a chain break on a component (can't be first / can't double — enforced here).
+function onBreak(side, id, eid) {
+  const s = app.state;
+  if (!app.started || s.activePuzzle) return;
+  const mine = s.queue.filter((x) => (side === 'enemy'
+    ? (x.target && x.target.eid === Number(eid) && x.target.component === id)
+    : (x.target === id)));
+  if (!mine.length || mine[mine.length - 1].brk) return; // not first, not two in a row
+  s.queue.push({ brk: true, target: side === 'enemy' ? { eid: Number(eid), component: id } : id });
   draw();
 }
 
