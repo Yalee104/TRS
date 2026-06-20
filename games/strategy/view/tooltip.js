@@ -17,33 +17,33 @@ import { coreShieldStatus } from '../core/cascade.js';
 import { PHASES } from '../core/state.js';
 
 const SYSTEM = {
-  core: 'The heart of the aircraft. If it reaches 0 HP the battle ends. Protected by an indestructible shield (below) until its shield-linked parts fall.',
-  generator: 'Powers every system. Drives the largest share of your firepower (Combat Condition) and holds up the Reactor-Core shield.',
-  weapon: 'Your base / automatic firepower. A big slice of Combat Condition.',
-  tower: 'Sensors — two roles. VISION: YOUR Tower lets you SEE the enemy’s telegraphed strike before you defend; lose it and you defend blind. AIM: the owner’s Tower governs its targeting — destroy the ENEMY’s Tower and its strikes SCATTER to random parts and deal only ×0.6 damage (aimMult).',
-  engine: 'Evasion — dodges part of every hit (×0.15 at full HP, scaling down with HP). YOUR Engine reduces ALL incoming damage in defense; the ENEMY’s Engine dodges part of your focus-fire in attack. Destroyed → 0% (hits land in full). Initiative/resolve-order is parked for v2 — no effect in v1.',
-  launchpad: 'Governs its OWNER’s TRS quality: healthy = easier grids (fewer blockers/traps), damaged = grids drift back to baseline, destroyed = congested. Also carries a share of attack strength.',
+  core: 'The heart of the aircraft. If it reaches 0 HP the battle ends. Protected by an indestructible shield (below) until enough shield-linked parts are destroyed.',
+  generator: 'Powers every system. Drives the largest share of your firepower (Combat Condition) and is the biggest shield-linked part.',
+  weapon: 'Your base / automatic firepower — a big slice of Combat Condition.',
+  tower: 'Sensors — two roles. VISION: YOUR Tower lets you SEE the enemy’s telegraphed strike before you defend; lose it and you defend blind. AIM: the owner’s Tower governs its targeting — destroy the ENEMY’s Tower (or Freeze it) and its strikes SCATTER to random parts and deal only ×0.6 damage.',
+  engine: 'Evasion — dodges part of every hit (×0.15 at full HP, scaling with HP). YOUR Engine reduces ALL incoming damage in defense; the ENEMY’s Engine dodges part of your focus-fire in attack. Destroyed/Frozen → 0% (hits land in full). (Initiative/resolve-order is parked.)',
+  launchpad: 'Governs its OWNER’s TRS quality: healthy = easier grids (fewer blockers/traps), damaged = grids drift to baseline, destroyed = congested. Also carries a small share of attack strength.',
 };
 
 const EFFECT_DESC = {
-  freeze: 'Freeze — suspends the part for its duration: ×0 firepower contribution AND its system goes offline — a frozen Tower scatters its owner’s aim (+softer), a frozen Engine gives no evasion. Synergy: a Frozen focus is brittle (+40% dmg).',
-  confuse: 'Confuse — the part misfires / mis-aims.',
-  drain: 'Drain — siphons HP and heals your Core.',
-  burning: 'Burning — damage-over-time each round. Burning + Confused → Wildfire spreads to a neighbour.',
-  shatter: 'Shatter — synergy: while Shattered the focus takes +50% from all your fire.',
+  freeze: 'Freeze — suspends the part for its duration: ×0 firepower contribution AND its system goes offline (frozen Tower → aim scatters; frozen Engine → no evasion). Alone: a Frozen focus is brittle (+40% dmg). ⚠ Cancels with Burning.',
+  confuse: 'Confuse — scrambles the part’s fire: −50% of its firepower contribution to the enemy’s next attack. (Meaningful on Weapon / Tower.)',
+  drain: 'Drain — siphons the part: damage feeds your firepower pool AND heals your Core; also chokes the part’s output (×0.6).',
+  burning: 'Burning — damage-over-time each round that BYPASSES the Core shield (the anti-shield tool). ⚠ Cancels with Freeze.',
+  shatter: 'Shatter — alone, the part takes +50% from all your fire; valid on ANY part, so it’s the universal combo enabler (Glass, Meltdown, Backfire, Collapse).',
 };
 
-// Defence verb description, pulling the actual per-potency numbers from config.
+// Defence verb description (v2), pulling the actual numbers from config.
 function verbDesc(verb, config) {
   const d = config.defense || {};
   switch (verb) {
     case 'shield': return `Shield — absorbs incoming damage; +${d.shield?.absorbPerPotency} per potency, stacks additively.`;
-    case 'repair': return `Repair — restores HP to the target part; +${d.repair?.hpPerPotency} per potency.`;
-    case 'cleanse': return 'Cleanse — removes statuses ALREADY on the target (from earlier rounds). It runs before the incoming strike, so it can’t stop a status that strike applies this turn (incoming statuses land after your defenses — shown greyed).';
+    case 'repair': return `Repair — restores HP to the target part; +${d.repair?.hpPerPotency} per potency (applied after the strike).`;
+    case 'cleanse': return 'Cleanse — strips the OLDEST 1 status off the target (FCFS). It runs before the strike, so it can’t stop an incoming status (those land after your defenses). Reboot (Cleanse+Overclock) strips ALL.';
     case 'harden':
-      return `Harden — flat damage reduction on the target: +${Math.round((d.harden?.reductionPerPotency || 0) * 100)}% per potency, capped at ${Math.round((d.harden?.maxReduction || 0) * 100)}% from Harden alone. It then combines with Overclock + Engine evasion, up to a 90% total cap when the hit resolves. e.g. potency 5 → 20% less damage to that part.`;
+      return `Harden — % off the FIRST incoming hit only: +${Math.round((d.harden?.reductionPerPotency || 0) * 100)}% per potency, capped at ${Math.round((d.harden?.maxReduction || 0) * 100)}%; combines with Engine evasion (90% total cap). Bastion (Shield+Harden) caps ALL hits instead.`;
     case 'overclock':
-      return `Overclock — v1: a flat damage-reduction buff on the target (+${Math.round((d.overclock?.boostPerPotency || 0) * 100)}% per potency), stacks with Harden up to the 90% total cap. Per-system boost (Tower vision / Engine evasion) is parked for v2.`;
+      return `Overclock — banks +${((d.overclock?.creditBonusMs || 0) / 1000).toFixed(1)}s of build-credit for your NEXT attack phase (stacks; grants nothing if it forms a combo).`;
     default: return '';
   }
 }
@@ -117,6 +117,12 @@ function dossier(state, side, id, eid) {
     } else {
       rows.push(`<div class="tt-shield down">⚠️ Shield DOWN (${sh.downSum}/${sh.threshold}%) — the Core is exposed.</div>`);
     }
+  }
+
+  // shield-linked parts: destroying them counts toward dropping the Core shield
+  const contrib = state.config.coreShield?.contributors?.[id];
+  if (contrib && id !== 'core') {
+    rows.push(`<div class="tt-shield">🔗 Shield-linked: destroying it adds ${contrib}% toward dropping the Core shield (needs ${state.config.coreShield.threshold}%).</div>`);
   }
 
   const eff = ATTACK_EFFECT[id];
