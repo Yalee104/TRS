@@ -171,6 +171,23 @@ Kept (not dropped): an effect only does something on appropriate targets, so cho
 | **Burning** | any part | flat DoT each round; **bypasses the Core shield**; best on high-HP (Core, Generator). **Cancels with Freeze.** |
 | **Shatter** | **any part** (v2) | brittle → the focus takes **+50%** from all your fire (no effect on a *shielded* Core until its shield drops); universal combo-enabler |
 
+#### Offensive status reference (full) — ✅ v2, all config-driven (`effects.<status>`)
+Each solved status feeds **two channels**: ① the shared **firepower pool** (`dmgPerPotency × potency`,
+detonated on the single Focus, always counts even if the status is consumed by a combo) and ② a
+**lingering** debuff on the part. **Min Chain** = minimum payload icons that must be chained for the
+solve to succeed (`minChain`). **Stacks** = re-applying the same status to the same part.
+
+| Status (source) | Valid on | Min Chain | Stacks? | Full effect ( [scaled] grows with potency · [flat] fixed ) |
+|---|---|---|---|---|
+| **Freeze** ❄️ (Weapon) | any non-Core | **1** | **Refresh** (MAX), pool adds | ① pool +1.5×p [scaled] · ② part contributes **×0** firepower [flat]; frozen Tower→aim scatters (−40%), Engine→no evasion [flat]; **on Focus +40%** [flat]; duration round(p/4), 1–3 [scaled]. **Cancels with Burning.** |
+| **Confuse** 🌀 (Tower) | Weapon, Tower | **1** | Refresh (MAX), pool adds | ① pool +1.0×p [scaled] · ② part ×0.5 (−50%) firepower [flat]; duration round(p/4), 1–3 [scaled] |
+| **Drain** 🩸 (Generator) | any part | **1** | **Heal per apply**, choke MAX, pool adds | ① pool +3.0×p [scaled] · ② heal +2.0×p to your Core, once [scaled]; part ×0.6 (−40%) firepower [flat]; duration round(p/5), 1–2 [scaled] |
+| **Burning** 🔥 (Launch Pad) | any part | **1** | **STACKS** — DoT adds (cap 24), duration extends (cap 6); pool adds | ① pool +1.0×p [scaled] · ② DoT 1.2×p/round, **bypasses Core shield** [scaled]; part ×0.85 (−15%) firepower [flat]; duration round(p/3), 1–4 [scaled]. **Cancels with Freeze.** |
+| **Shatter** 💥 (Engine) | **any part** | **1** | Refresh (MAX), pool adds | ① pool +2.0×p [scaled] · ② **on Focus +50%** [flat]; no firepower choke (×1.0); duration round(p/3), 1–3 [scaled]; enables Glass/Meltdown/Backfire/Collapse |
+
+*Stacking policy:* only **Burning** truly stacks (DoT & duration accumulate, capped); the rest
+**refresh** (keep the stronger) — but the **pool always adds**, so re-applying any status still helps.
+
 ### 3.6 Table C — status compounding · v2 ✅ (implemented, config-driven)
 Statuses pair up. A combo fires **wherever both its statuses sit on the same component**, across
 **all** enemies (not just the Focus) — except **Glass**, which is a focus-fire multiplier. **Shatter
@@ -287,8 +304,12 @@ combos read the whole chain, and `break`s you place this phase opt out.
   (refresh). One Sustain ≠ a permanently shielded part. *(C3)*
 - **Re-comboing a carryover is the intended depth** — carried **Shielded** + a new **Harden** =
   **Bastion** next round. *(C4)*
-- **Self-stack is parked** — a carried Shield + a new Shield just **add pools**, no combo. *(C5 —
-  ⚠️ revisit in the potency-rebalance pass: which statuses stack, how, and how potency feeds pools.)*
+- **Self-stack *combos* stay parked** — same-status pairs (Shield², Freeze²) don't form a new combo;
+  re-applying instead follows the **stacking policy** (§3.5 / §4 reference tables): only **Burning**
+  accumulates (DoT + duration, capped); other statuses **refresh** (MAX) but the **firepower pool
+  always adds**; defensive verbs are **additive**. **Min Chain** gates each solve (1 scaled / 3
+  non-scaled). *(C5 stacking policy resolved 2026-06-20; the per-potency **numbers** are still a
+  deferred playtest pass.)*
 - Tuning knobs: **persistence lifespan** and **Bastion cap %** stay in config in case a part gets
   too hard to kill. *(C7)*
 
@@ -329,6 +350,19 @@ A part at 0 → destroyed → cascade. Survive → next attack phase; Core 0 →
 | **Launch Pad** | **Overclock** — **+2–3s build-credit next attack phase** (stacks) | supercharge tempo |
 
 Loadout pressure mirrors attack: lose your Generator → no Repair; lose your Tower → no Cleanse.
+
+#### Defensive verb reference (full) — ✅ v2, all config-driven (`defense.<verb>`)
+Verbs are **queued** on your own parts then resolved through the chain (combos/breaks, §3.7). **Min
+Chain** = minimum payload icons to chain for a successful solve (1 for potency-scaled; **3** for the
+non-scaled Cleanse/Overclock). All defensive verbs **stack additively** (the policy is unchanged).
+
+| Verb (source) | Potency-scaled? | Min Chain | Stacks? | Full effect |
+|---|---|---|---|---|
+| **Shield** 🛡️ (Weapon) | **Yes** — p×8 absorb | **1** | Additive | absorbs a flat chunk before HP; consumed at resolve **unless** a persistence combo (Sustain / Bastion / Reactive Plating) carries it to the **next defense resolve** |
+| **Repair** 🔧 (Generator) | Yes — p×6 HP | **1** | Additive | heals HP in the post-strike repair pass (whether hit or not) |
+| **Cleanse** 🧹 (Tower) | **No** | **3** | n/a | strips the **oldest 1** offensive status (FCFS) before strikes land; full strip only via **Reboot** |
+| **Harden** 🪨 (Engine) | Yes — p×4%, cap 60% | **1** | Additive (to cap) | % off **only the first** incoming hit on that part (with evasion, total reduction capped 90%) |
+| **Overclock** ⚡ (Launch Pad) | **No — flat +2.5s** | **3** | Additive / use | banks **+2.5s build-credit** for your **next attack phase**; no mitigation; grants nothing when consumed by a combo |
 
 ### Table E — defensive synergy matrix · v2 ✅ (implemented; engine = §3.7)
 States: **Shielded, Repaired, Cleansed, Hardened, Overclocked**. A combo fires at **defense resolve
