@@ -233,7 +233,7 @@ for later). Every combo's numbers live in `config/game.json → effects.synergy.
 
 ---
 
-## 3.7 Status queue, combos & breaks — the v2 engine ✅ (spec; governs §3.6 + §4 Table E)
+## 3.7 Status queue, combos & breaks — the v2 engine ✅ (implemented; governs §3.6 + §4 Table E)
 
 > One engine drives **both** offensive combos (§3.6, statuses on enemy parts) and defensive combos
 > (§4 Table E, verbs on your own parts). This section is the source of truth.
@@ -330,7 +330,7 @@ A part at 0 → destroyed → cascade. Survive → next attack phase; Core 0 →
 
 Loadout pressure mirrors attack: lose your Generator → no Repair; lose your Tower → no Cleanse.
 
-### Table E — defensive synergy matrix · v2 ✅ (engine = §3.7)
+### Table E — defensive synergy matrix · v2 ✅ (implemented; engine = §3.7)
 States: **Shielded, Repaired, Cleansed, Hardened, Overclocked**. A combo fires at **defense resolve
 on a part that has both verbs** in its chain (adjacency + breaks per §3.7); a combo **replaces** both
 base effects (so an Overclock in a combo grants **no** credit). Empty cells = no combo (the two just

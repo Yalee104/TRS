@@ -35,7 +35,7 @@ which lowers your firepower — so repairing offence (not just the Core) keeps y
 ```
 config/game.json   all tuning (HP, firepower curve, cascade, archetypes, telegraph)
 core/   state · components · phases · firepower · cascade
-combat/ statuses (5 statuses + 8 pairwise combos, v2) · attack · defense · enemyAI (5 non-Boss archetypes)
+combat/ statuses · combos (v2 chain engine: 8 offensive + 7 defensive, breaks) · attack · defense · enemyAI (5 archetypes)
 puzzle/ palettes (per-component combo configs) · bridge (mount TRS, queue on solve)
 view/   render (boards) · configPanel (left rail) · infoBar (bottom)
 tests/  run.mjs · strategy.test.mjs
@@ -43,8 +43,9 @@ tests/  run.mjs · strategy.test.mjs
 The `grid-path-puzzle/module` + `combo/ComboEngine` are **imported, never modified** — all
 strategy logic (statuses, firepower, cascade, AI) is host-side, mirroring `games/shmup/`.
 
-## v1 scope
+## scope
 In: one battle vs **up to 4 enemies**, the full build→resolve loop, single-Focus attacks, the five
-non-Boss archetypes, condition↔firepower, cascade, win/lose on Cores. Deferred (see DESIGN §10 / v2):
-roguelike map, trophies, multi-target focus, the full status matrix, Detonate/Multihack/Beam, Spike,
-Boss. Debug: `window.__strategy`.
+non-Boss archetypes, condition↔firepower, cascade, the **v2 combo engine** (offensive + defensive
+chains with breaks; §3.6/§3.7/§4 Table E), win/lose on Cores. Deferred (DESIGN §10 / v3): roguelike
+map, trophies, multi-target focus, status self-stacking, the open Frozen+Drained pair,
+Detonate/Multihack/Beam, Boss, potency rebalance. Debug: `window.__strategy`.
