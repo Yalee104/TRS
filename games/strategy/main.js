@@ -25,6 +25,7 @@ import { createRenderer } from './view/render.js';
 import { createConfigPanel } from './view/configPanel.js';
 import { createInfoBar } from './view/infoBar.js';
 import { createTooltip } from './view/tooltip.js';
+import { createComboPanel } from './view/comboInfo.js';
 import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, isEffectValidOn } from './core/components.js';
 
 const app = { state: createState(config), started: false };
@@ -42,6 +43,7 @@ const controlsEl = document.getElementById('controls');
 const bridge = createBridge({ getState, overlayEl, onChange: () => draw() });
 const renderer = createRenderer(centerEl, { enemy: enemyEl, player: playerEl }, onComponentClick, onBreak);
 createTooltip(centerEl, getState);
+const comboPanel = createComboPanel(document.getElementById('combo-panel'), getState);
 const infobar = createInfoBar(infoEl);
 const panel = createConfigPanel(leftEl, { onStart, onRestart, defaults: config.ui, archetypes: config.archetypes });
 panel.showConfig();
@@ -128,6 +130,7 @@ function draw() {
   renderer(app.state);
   if (app.started) panel.update(app.state);
   infobar(app.state);
+  comboPanel(app.state);
   renderControls();
 }
 
