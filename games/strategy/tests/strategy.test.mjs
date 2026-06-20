@@ -326,12 +326,96 @@ test('defense: shield absorbs, repair heals, through the mitigation order', () =
   assert(s.player.components.weapon.hp > 40, 'weapon repaired');
 });
 
-test('defenses stack additively on the same part (reusable in defense)', () => {
-  const s = fresh();
-  startDefenseBuild(s);
-  defend(s, 'weapon', 4, 'core');
-  defend(s, 'weapon', 4, 'core'); // weapon reused — defense has no one-use cap
-  assert(s.player.components.core.defenses.shield === 2 * 4 * CONFIG.defense.shield.absorbPerPotency, 'shield stacked');
+test('defenses stack additively on the same part (bigger pool absorbs more)', () => {
+  const oneShield = (n) => {
+    const s = createState(CONFIG, { seed: 7, enemies: ['saboteur'] });
+    startDefenseBuild(s);
+    s.enemies[0].telegraph = { entries: [{ component: 'weapon', share: 1 }], visible: true }; // all on weapon
+    for (let i = 0; i < n; i++) defend(s, 'weapon', 4, 'weapon'); // n shields, reusable
+    resolveDefense(s);
+    return s.player.components.weapon.hp;
+  };
+  assert(oneShield(2) > oneShield(1), 'two shields absorb more than one (additive pool)');
+});
+
+// --- defensive combos (Table E v2) -------------------------------------------
+const defScene = () => { const s = createState(CONFIG, { seed: 7, enemies: ['saboteur'] }); startDefenseBuild(s); return s; };
+const tele = (s, entries) => { s.enemies[0].telegraph = { entries, visible: true }; };
+const enemyTotalHp = (s) => Object.values(s.enemies[0].components).reduce((t, c) => t + c.hp, 0);
+
+test('Overclock banks build-credit (alone); a combo grants none', () => {
+  const s = defScene();
+  defend(s, 'launchpad', 5, 'weapon');       // lone Overclock
+  tele(s, [{ component: 'weapon', share: 1 }]);
+  resolveDefense(s);
+  assert(s.creditBonusMs === CONFIG.defense.overclock.creditBonusMs, 'lone overclock banked credit');
+
+  const s2 = defScene();
+  defend(s2, 'weapon', 6, 'weapon'); defend(s2, 'launchpad', 6, 'weapon'); // Reactive Plating
+  tele(s2, [{ component: 'weapon', share: 1 }]);
+  resolveDefense(s2);
+  assert(s2.creditBonusMs === 0, 'overclock consumed by a combo grants no credit');
+});
+
+test('Bastion caps total loss to a part this resolve', () => {
+  const s = defScene();
+  s.player.components.weapon.hp = 70;
+  defend(s, 'weapon', 1, 'weapon');   // small shield
+  defend(s, 'engine', 6, 'weapon');   // harden → Bastion
+  tele(s, [{ component: 'weapon', share: 1 }]);
+  resolveDefense(s);
+  const loss = 70 - s.player.components.weapon.hp;
+  assert(loss <= CONFIG.defense.combos.bastion.capFrac * 70 + 0.5, `loss ${loss} capped at ${CONFIG.defense.combos.bastion.capFrac * 70}`);
+});
+
+test('Reactive Plating reflects absorbed damage back at the attacker', () => {
+  const s = defScene();
+  defend(s, 'weapon', 6, 'weapon'); defend(s, 'launchpad', 6, 'weapon'); // Reactive Plating
+  tele(s, [{ component: 'weapon', share: 1 }]);
+  const before = enemyTotalHp(s);
+  resolveDefense(s);
+  assert(enemyTotalHp(s) < before, 'the attacker took reflected damage');
+});
+
+test('Sustain shield persists to the next defense resolve', () => {
+  const s = defScene();
+  defend(s, 'weapon', 6, 'weapon'); defend(s, 'generator', 6, 'weapon'); // Sustain on weapon
+  tele(s, [{ component: 'engine', share: 1 }]);  // strike elsewhere so the weapon shield survives
+  resolveDefense(s);
+  assert(s.player.components.weapon.carry && s.player.components.weapon.carry.shield > 0, 'shield carried over');
+});
+
+test('Cleanse strips only the oldest (lone); Reboot strips all', () => {
+  const lone = defScene();
+  applyStatus(lone.player.components.weapon, 'freeze', { turns: 2 });
+  applyStatus(lone.player.components.weapon, 'drain', { turns: 2 });
+  defend(lone, 'tower', 5, 'weapon');  // lone Cleanse
+  tele(lone, [{ component: 'core', share: 1 }]);
+  resolveDefense(lone);
+  assert(!lone.player.components.weapon.statuses.freeze && lone.player.components.weapon.statuses.drain, 'lone cleanse removed only the oldest');
+
+  const reboot = defScene();
+  applyStatus(reboot.player.components.weapon, 'freeze', { turns: 2 });
+  applyStatus(reboot.player.components.weapon, 'drain', { turns: 2 });
+  defend(reboot, 'tower', 5, 'weapon'); defend(reboot, 'launchpad', 5, 'weapon'); // Reboot
+  tele(reboot, [{ component: 'core', share: 1 }]);
+  resolveDefense(reboot);
+  assert(!reboot.player.components.weapon.statuses.freeze && !reboot.player.components.weapon.statuses.drain, 'Reboot removed all');
+});
+
+test('Deflect dodges the first incoming hit; Purified Barrier wards a status', () => {
+  const d = defScene();
+  d.player.components.weapon.hp = 70;
+  defend(d, 'tower', 5, 'weapon'); defend(d, 'engine', 5, 'weapon'); // Deflect
+  tele(d, [{ component: 'weapon', share: 1 }]);
+  resolveDefense(d);
+  assert(d.player.components.weapon.hp === 70, 'Deflect dodged the only hit');
+
+  const pb = defScene();
+  defend(pb, 'weapon', 6, 'weapon'); defend(pb, 'tower', 6, 'weapon'); // Purified Barrier
+  tele(pb, [{ component: 'weapon', share: 1, status: 'freeze' }]);
+  resolveDefense(pb);
+  assert(!pb.player.components.weapon.statuses.freeze, 'Purified Barrier warded the incoming status');
 });
 
 // --- phases / win-lose -------------------------------------------------------

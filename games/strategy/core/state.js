@@ -75,6 +75,7 @@ export function createState(config, ui = {}) {
     round: 1,
     creditMs,                    // per-phase build budget (resolved from ui)
     creditLeftMs: creditMs,
+    creditBonusMs: 0,            // banked by Overclock; spent on the next attack build
     attackTimeModel: u.attackTimeModel || config.phase.attackTimeModel,
 
     player: makeAircraft('player', config),

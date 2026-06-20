@@ -73,12 +73,13 @@
   },
 
   "defense": {
-    "_comment": "v1 defensive verbs; potency from the solved combo's `value`.",
+    "_comment": "v2 defensive verbs (potency from the solved combo's `value`). Harden = % off the FIRST incoming hit; lone Cleanse strips the OLDEST 1 status; Overclock banks build-credit for the next attack phase. `combos` tunes the Table E synergies.",
     "shield":    { "absorbPerPotency": 8 },
     "repair":    { "hpPerPotency": 6 },
-    "cleanse":   { "removesAll": true },
+    "cleanse":   { "removesAll": false },
     "harden":    { "reductionPerPotency": 0.04, "maxReduction": 0.6 },
-    "overclock": { "boostPerPotency": 0.1, "durationPhases": 1 }
+    "overclock": { "creditBonusMs": 2500 },
+    "combos":    { "bastion": { "capFrac": 0.25 }, "reactivePlating": { "reflectFrac": 0.5 } }
   },
 
   "coreShield": {

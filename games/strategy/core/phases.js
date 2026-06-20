@@ -23,7 +23,8 @@ export function startAttackBuild(state) {
   state.focus = null;
   state.pickFocus = false;
   state.usedComponents = {};
-  state.creditLeftMs = state.creditMs;
+  state.creditLeftMs = state.creditMs + (state.creditBonusMs || 0); // Overclock banked credit
+  if (state.creditBonusMs) { logEvent(state, `Overclock: +${(state.creditBonusMs / 1000).toFixed(1)}s build-credit this phase.`); state.creditBonusMs = 0; }
   // each living enemy declares its next strike (visible if your Tower lives)
   for (const e of state.enemies) e.telegraph = isAlive(e.components.core) ? planAttack(state, e) : null;
   logEvent(state, `=== Round ${state.round} — ATTACK. Play a weapon's TRS, then apply its status to an enemy part.`);

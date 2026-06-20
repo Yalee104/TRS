@@ -1,26 +1,28 @@
 // =============================================================================
-//  combat/defense.js — build (TRS first, then pick own part) + defense resolve
+//  combat/defense.js — build (defer to chain) + defense resolve (Table E v2)
 // =============================================================================
 //
-//  Flow (DESIGN §4, revised to mirror attack):
-//    • Play a component's TRS → on success pick which of YOUR parts receives the
-//      defensive verb (dead parts greyed). Reusable; verbs STACK additively.
-//    • Resolve: the enemy's telegraphed attack lands through the pre-loaded
-//      defenses, in order: Cleanse → Harden/Evade → Shield → Repair → HP.
-//  HP changes ONLY at resolve.
+//  Flow (DESIGN §4 / §3.7): play a part's TRS → pick which of YOUR parts gets the
+//  verb → it's QUEUED (not applied yet). At resolve, each part's defensive chain
+//  (carried states + this-phase verbs + breaks) is greedy-resolved into a profile
+//  (shield/reduction/cap/reflect/immunity/dodge/repair/cleanse), then the enemies'
+//  telegraphed strikes land through it. Overclock banks build-credit for next
+//  attack. Sustain/Bastion/Reactive-Plating shields and Field Repair carry to the
+//  next defense resolve.
 // =============================================================================
 
 import { DEFENSE_VERB, isAlive } from '../core/components.js';
 import { systemState, coreShieldUp, effectiveEvasion } from '../core/cascade.js';
 import { conditionReport } from '../core/firepower.js';
 import { logEvent } from '../core/state.js';
-import { applyStatus, cleanseComponent } from './statuses.js';
+import { applyStatus, cleanseComponent, cleanseOldest } from './statuses.js';
 import { comboPotency } from './attack.js';
 import { planAttack, currentBudget } from './enemyAI.js';
+import { resolveChain, DEFENSE_COMBOS } from './combos.js';
 
 const NAME = (state, id) => state.player.components[id].name;
 
-/** A component's TRS was solved — hold a pending defensive action awaiting a target. */
+/** A part's TRS was solved — hold a pending defensive action awaiting a target. */
 export function makePendingDefense(state, componentId, combo) {
   const verb = DEFENSE_VERB[componentId];
   if (!verb) return null;
@@ -29,113 +31,160 @@ export function makePendingDefense(state, componentId, combo) {
   return state.pendingDefense;
 }
 
-/** Pre-load the pending defense onto a chosen own component (stacks additively). */
+/** Queue the pending defense onto a chosen own component (resolved at defense-resolve). */
 export function finalizeDefenseTarget(state, targetId) {
   const p = state.pendingDefense;
   const target = state.player.components[targetId];
   if (!p || !target || !isAlive(target)) return null;
-  const d = state.config.defense;
-  const def = target.defenses;
-  let added; // a human breakdown of how much this solve contributed
-  if (p.verb === 'shield') {
-    const amt = p.potency * d.shield.absorbPerPotency;
-    def.shield = (def.shield || 0) + amt;
-    added = `+${Math.round(amt)} absorb (potency ${p.potency.toFixed(1)} × ${d.shield.absorbPerPotency})`;
-  } else if (p.verb === 'repair') {
-    const amt = p.potency * d.repair.hpPerPotency;
-    def.repair = (def.repair || 0) + amt;
-    added = `+${Math.round(amt)} HP (potency ${p.potency.toFixed(1)} × ${d.repair.hpPerPotency})`;
-  } else if (p.verb === 'cleanse') {
-    def.cleanse = true;
-    added = '(removes already-active statuses at resolve)';
-  } else if (p.verb === 'harden') {
-    def.harden = Math.min(d.harden.maxReduction, (def.harden || 0) + p.potency * d.harden.reductionPerPotency);
-    added = `+${Math.round(p.potency * d.harden.reductionPerPotency * 100)}% reduction (cap ${Math.round(d.harden.maxReduction * 100)}%)`;
-  } else if (p.verb === 'overclock') {
-    def.overclock = (def.overclock || 0) + p.potency * d.overclock.boostPerPotency;
-    added = `+${Math.round(p.potency * d.overclock.boostPerPotency * 100)}% reduction`;
-  }
-
   p.target = targetId;
   state.queue.push(p);
   state.pendingDefense = null;
-  logEvent(state, `Queued ${p.verb} ${added} → ${NAME(state, targetId)} (now ${describeDefenses(def)}).`);
+  logEvent(state, `Queued ${p.verb} (potency ${p.potency.toFixed(1)}) → ${NAME(state, targetId)}.`);
   return p;
 }
 
-function describeDefenses(def) {
-  const parts = [];
-  if (def.shield) parts.push(`shield ${Math.round(def.shield)}`);
-  if (def.repair) parts.push(`repair ${Math.round(def.repair)}`);
-  if (def.harden) parts.push(`harden ${Math.round(def.harden * 100)}%`);
-  if (def.overclock) parts.push(`overclock ${Math.round(def.overclock * 100)}%`);
-  if (def.cleanse) parts.push('cleanse');
-  return parts.join(', ') || 'none';
+/** Magnitude of a queued defensive verb (shield absorb / repair HP / harden %). */
+function defMag(verb, potency, D) {
+  if (verb === 'shield') return potency * D.shield.absorbPerPotency;
+  if (verb === 'repair') return potency * D.repair.hpPerPotency;
+  if (verb === 'harden') return Math.min(D.harden.maxReduction, potency * D.harden.reductionPerPotency);
+  return 0;
+}
+
+/** Resolve one part's defensive chain into a profile (and run its cleanse). */
+function buildDefenseProfile(state, comp, queued) {
+  const D = state.config.defense;
+  const K = D.combos || {};
+  const profile = { shield: 0, repair: 0, hardenFrac: 0, capFrac: 0, reflectFrac: 0, immune: false, dodge: false, hotNext: 0, persistShield: false, cleanseMode: null, firstHit: false, lossSoFar: 0, names: [] };
+
+  const active = [];
+  if (comp.carry && comp.carry.shield > 0) active.push({ key: 'shield', fresh: false, mag: comp.carry.shield, carried: true });
+  const queuedEntries = queued.map((a) => (a.brk ? { brk: true } : { key: a.verb, fresh: true, potency: a.potency, mag: defMag(a.verb, a.potency, D) }));
+  const chain = [...active, ...queuedEntries];
+  comp.carry = null; // consumed into this resolve (re-set below if a combo persists)
+  if (!chain.length) return profile;
+
+  const { combos, leftovers } = resolveChain(chain, DEFENSE_COMBOS);
+
+  for (const c of combos) {
+    const get = (k) => (c.a.key === k ? c.a : (c.b.key === k ? c.b : null));
+    profile.names.push(c.def.name);
+    switch (c.def.name) {
+      case 'Sustain': profile.shield += get('shield').mag; profile.repair += get('repair').mag; profile.persistShield = true; break;
+      case 'Purified Barrier': profile.shield += get('shield').mag; profile.immune = true; break;
+      case 'Bastion': profile.shield += get('shield').mag; profile.capFrac = K.bastion?.capFrac || 0; profile.persistShield = true; break;
+      case 'Reactive Plating': profile.shield += get('shield').mag; profile.reflectFrac = K.reactivePlating?.reflectFrac || 0; profile.persistShield = true; break;
+      case 'Field Repair': profile.repair += get('repair').mag; profile.hotNext += get('repair').mag; break;
+      case 'Deflect': profile.dodge = true; break;        // no cleanse (replaces Cleanse base)
+      case 'Reboot': profile.cleanseMode = 'all'; break;  // no credit (replaces Overclock base)
+      default: break;
+    }
+  }
+  for (const e of leftovers) {
+    if (e.brk) continue;
+    if (e.key === 'shield') profile.shield += e.mag;
+    else if (e.key === 'repair') profile.repair += e.mag;
+    else if (e.key === 'harden') profile.hardenFrac = Math.min(D.harden.maxReduction, profile.hardenFrac + e.mag);
+    else if (e.key === 'overclock') state.creditBonusMs = (state.creditBonusMs || 0) + (D.overclock.creditBonusMs || 0);
+    else if (e.key === 'cleanse') profile.cleanseMode = profile.cleanseMode || 'oldest';
+  }
+
+  if (profile.names.length) logEvent(state, `${comp.name}: ${profile.names.join(' + ')} formed.`);
+
+  // cleanse happens before the strikes land
+  if (profile.cleanseMode === 'all') cleanseComponent(comp);
+  else if (profile.cleanseMode === 'oldest') cleanseOldest(comp);
+
+  return profile;
+}
+
+/** Reflect target on the attacking enemy: lowest-HP part, but Core first if its shield is down. */
+function reflectTarget(enemy, config) {
+  const core = enemy.components.core;
+  if (core && core.hp > 0 && !coreShieldUp(enemy, config)) return core;
+  let best = null;
+  for (const c of Object.values(enemy.components)) if (c.hp > 0 && (!best || c.hp < best.hp)) best = c;
+  return best;
 }
 
 /** Resolve EVERY living enemy's telegraphed attack against the pre-loaded defenses. */
 export function resolveDefense(state) {
-  const { player } = state;
-  const evasion = effectiveEvasion(player, state.config); // 0 while your Engine is frozen
+  const { player, config } = state;
+  const evasion = effectiveEvasion(player, config);
   const summary = { hits: [], totalDamage: 0 };
 
+  // 1) resolve each part's defensive chain into a profile (runs cleanse, banks Overclock credit)
+  const queuedBy = {};
+  for (const x of state.queue) { (queuedBy[x.target] ||= []).push(x); }
+  const profiles = {};
+  for (const comp of Object.values(player.components)) profiles[comp.id] = buildDefenseProfile(state, comp, queuedBy[comp.id] || []);
+
+  // 2) enemy strikes land through the profiles
   for (const enemy of state.enemies) {
-    if (!isAlive(enemy.components.core)) continue; // defeated enemy doesn't attack
+    if (!isAlive(enemy.components.core)) continue;
     const entries = (enemy.telegraph && enemy.telegraph.entries) || planAttack(state, enemy).entries;
     const budget = currentBudget(state, enemy);
-    const arch = state.config.archetypes[enemy.archetype];
-    const brownout = systemState(enemy, state.config).brownout;
-    const rep = conditionReport(enemy, state.config);
-    logEvent(state, `${enemy.label} attacks: budget ${Math.round(budget)} = base ${arch.damageBudget} × condition ${Math.round(rep.condition * 100)}%${brownout < 1 ? ` × brownout ${Math.round(brownout * 100)}%` : ''}${rep.chokes.length ? ` (choked: ${rep.chokes.join(', ')})` : ''}.`);
+    const brownout = systemState(enemy, config).brownout;
+    const rep = conditionReport(enemy, config);
+    logEvent(state, `${enemy.label} attacks: budget ${Math.round(budget)} = base ${config.archetypes[enemy.archetype].damageBudget} × condition ${Math.round(rep.condition * 100)}%${brownout < 1 ? ` × brownout ${Math.round(brownout * 100)}%` : ''}${rep.chokes.length ? ` (choked: ${rep.chokes.join(', ')})` : ''}.`);
 
     for (const entry of entries) {
       let target = player.components[entry.component];
-      if (!target || !isAlive(target)) {
-        // a telegraphed part died before resolve — bounce to the Core only if it's EXPOSED
-        target = (isAlive(player.components.core) && !coreShieldUp(player, state.config)) ? player.components.core : null;
-      }
+      if (!target || !isAlive(target)) target = (isAlive(player.components.core) && !coreShieldUp(player, config)) ? player.components.core : null;
       if (!target) continue;
-      const def = target.defenses;
-      let dmg = entry.share * budget;
-      const incoming = dmg;
+      const p = profiles[target.id];
+      const incoming = entry.share * budget;
+      let dmg = incoming;
 
-      // The Core's shield blocks all HP damage while it is UP (DESIGN §1).
-      if (target.id === 'core' && coreShieldUp(player, state.config)) {
-        if (def.cleanse) cleanseComponent(target);
-        logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)} BLOCKED by the Reactor shield (0 dmg).`);
+      // Core shield blocks all HP damage while UP (DESIGN §1)
+      if (target.id === 'core' && coreShieldUp(player, config)) {
+        logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)} BLOCKED by the Reactor shield.`);
         summary.hits.push({ component: target.id, damage: 0 });
         continue;
       }
 
-      if (def.cleanse) cleanseComponent(target);
-      // build a human reason for the % reduced (which buff/system contributed how much)
-      const redParts = [];
-      if (def.harden) redParts.push(`harden ${Math.round(def.harden * 100)}%`);
-      if (def.overclock) redParts.push(`overclock ${Math.round(def.overclock * 100)}%`);
-      if (evasion) redParts.push(`evade ${Math.round(evasion * 100)}% (Engine)`);
-      const rawReduction = (def.harden || 0) + (def.overclock || 0) + evasion;
-      const reduction = Math.min(0.9, rawReduction);
-      dmg *= 1 - reduction;
-      let absorbed = 0;
-      if (def.shield > 0) { absorbed = Math.min(dmg, def.shield); def.shield -= absorbed; dmg -= absorbed; }
-      target.hp -= dmg;
+      let note = '';
+      if (p.dodge && !p.firstHit) {                      // Deflect: dodge the first hit entirely
+        p.firstHit = true; dmg = 0; note = ', Deflect (dodged)';
+      } else {
+        const firstHit = !p.firstHit; p.firstHit = true;
+        const reduction = evasion + (firstHit ? p.hardenFrac : 0);
+        dmg *= 1 - Math.min(0.9, reduction);
+        let absorbed = 0;
+        if (p.shield > 0) { absorbed = Math.min(dmg, p.shield); p.shield -= absorbed; dmg -= absorbed; }
+        if (p.capFrac > 0) {                              // Bastion: cap total loss this resolve
+          const allowed = Math.max(0, p.capFrac * target.maxHp - p.lossSoFar);
+          if (dmg > allowed) { dmg = allowed; note += ', Bastion cap'; }
+        }
+        p.lossSoFar += dmg;
+        if (p.reflectFrac > 0 && absorbed > 0) {          // Reactive Plating: reflect the absorbed
+          const rt = reflectTarget(enemy, config);
+          if (rt) { const refl = absorbed * p.reflectFrac; rt.hp -= refl; note += `, reflect ${Math.round(refl)}→${enemy.label}·${rt.name}`; }
+        }
+        target.hp -= dmg;
+        if (reduction > 0) note = `, −${Math.round(Math.min(0.9, reduction) * 100)}% reduced` + note;
+        if (absorbed > 0) note += `, ${Math.round(absorbed)} shielded`;
+      }
 
-      if (entry.status) applyStatus(target, entry.status, { turns: 2 });
-      const redText = reduction ? `, −${Math.round(reduction * 100)}% reduced [${redParts.join(' + ')}${rawReduction > 0.9 ? ', capped at 90%' : ''}]` : '';
-      logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)}${redText}${absorbed ? `, ${Math.round(absorbed)} shielded` : ''} → −${Math.round(dmg)} HP${entry.status ? ` (+${entry.status})` : ''}${isAlive(target) ? '' : ' — DESTROYED'}.`);
+      if (entry.status && !p.immune) applyStatus(target, entry.status, { turns: 2 });
+      else if (entry.status && p.immune) note += `, ${entry.status} warded`;
+      logEvent(state, `· ${target.name}: incoming ${Math.round(incoming)}${note} → −${Math.round(dmg)} HP${entry.status && !p.immune ? ` (+${entry.status})` : ''}${isAlive(target) ? '' : ' — DESTROYED'}.`);
       summary.hits.push({ component: target.id, damage: dmg });
       summary.totalDamage += dmg;
     }
   }
 
-  // Repair pass: heals every part that pre-loaded a repair (hit or not), once.
+  // 3) repair pass (base + carried Field-Repair HoT) and carryover for next defense resolve
   for (const comp of Object.values(player.components)) {
-    if (comp.defenses.repair > 0) {
-      const before = comp.hp;
-      comp.hp = Math.min(comp.maxHp, comp.hp + comp.defenses.repair);
+    const p = profiles[comp.id];
+    const heal = (p.repair || 0) + (comp.carryHeal || 0);
+    if (heal > 0 && isAlive(comp)) {
+      const before = comp.hp; comp.hp = Math.min(comp.maxHp, comp.hp + heal);
       if (comp.hp !== before) logEvent(state, `· repaired ${comp.name} +${Math.round(comp.hp - before)} HP.`);
     }
-    comp.defenses = {}; // defenses consumed
+    comp.carryHeal = p.hotNext || 0;                       // Field Repair → next defense resolve
+    comp.carry = (p.persistShield && p.shield > 0 && isAlive(comp)) ? { shield: p.shield } : null;
+    comp.defenses = {};
   }
   return summary;
 }
