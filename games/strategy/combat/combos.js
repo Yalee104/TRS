@@ -24,7 +24,7 @@ export const pairKey = (a, b) => [a, b].sort().join('+');
  * (Frozen+Burning has no entry — they cancel at apply time. Frozen+Drained is open.)
  */
 export const OFFENSE_COMBOS = {
-  'freeze+shatter':  { name: 'Glass',           kind: 'burst' },
+  'freeze+shatter':  { name: 'Glass',           kind: 'burst', focusOnly: true },
   'confuse+freeze':  { name: 'Stasis Lock',     kind: 'ongoing', status: 'stasisLock' },
   'burning+shatter': { name: 'Meltdown',        kind: 'ongoing', status: 'meltdown' },
   'confuse+shatter': { name: 'Backfire',        kind: 'burst' },
@@ -57,9 +57,10 @@ export function lookupCombo(table, a, b) {
  * Greedy chain resolution.
  * @param entries ordered list of { key, fresh } status entries and { brk:true } breaks
  * @param table   OFFENSE_COMBOS or DEFENSE_COMBOS
+ * @param allow   optional predicate(def) — e.g. skip focus-only combos off the focus
  * @returns { combos: [{ a, b, def }], leftovers: [entry] }
  */
-export function resolveChain(entries, table) {
+export function resolveChain(entries, table, allow = () => true) {
   const combos = [];
   const leftovers = [];
   let i = 0;
@@ -69,7 +70,7 @@ export function resolveChain(entries, table) {
     const n = entries[i + 1];
     if (n && !n.brk) {
       const def = lookupCombo(table, e.key, n.key);
-      if (def && (e.fresh || n.fresh)) {        // ≥1 entry applied this phase (C2)
+      if (def && allow(def) && (e.fresh || n.fresh)) {  // ≥1 entry applied this phase (C2)
         combos.push({ a: e, b: n, def });
         i += 2;                                  // consume both; results never re-combo
         continue;

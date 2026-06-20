@@ -1,17 +1,19 @@
 // =============================================================================
-//  combat/statuses.js — the 5 offensive statuses + the 3 v1 attack synergies
+//  combat/statuses.js — offensive statuses + the v2 chain combo resolver
 // =============================================================================
 //
-//  Statuses are stored on a component as { key: {turns, potency, dot} } and last
-//  whole TURNS (resolves). DESIGN §3.6 v1 synergies:
-//    • Shatter = +50% damage to the focus     (shatterAmp)
-//    • Frozen  = brittle, bonus damage         (frozenBrittle)
-//    • Wildfire = Burning + Confused → spreads Burning to a neighbour
-//  The full pairwise matrix is parked as v2.
+//  Base statuses on a component: { key: {turns, potency, dot} }. v2 ongoing combos
+//  collapse two base statuses into a single COMBO-STATUS (stasisLock / meltdown /
+//  wildfire) that persists and ticks; burst combos fire once and consume. The
+//  greedy chain algorithm lives in combos.js; this file applies the effects.
 // =============================================================================
 
-import { hasStatus, isAlive } from '../core/components.js';
+import { hasStatus, isAlive, statusTurns } from '../core/components.js';
 import { logEvent } from '../core/state.js';
+import { OFFENSE_COMBOS, resolveChain } from './combos.js';
+
+/** The five base offensive statuses (combo-statuses are separate and don't re-combo). */
+export const BASE_OFFENSE = ['freeze', 'confuse', 'drain', 'burning', 'shatter'];
 
 // Fire ⊗ Freeze can't co-exist — applying one to a part that has the other wipes both (steam).
 const OPPOSITE = { freeze: 'burning', burning: 'freeze' };
@@ -34,120 +36,58 @@ export function applyStatus(component, key, { turns = 1, potency = 0, dot = 0 } 
   return { applied: key };
 }
 
-/** Remove all (offensive) debuffs from a component — what Cleanse does. */
+/** Remove all (offensive) debuffs from a component — what Reboot / full Cleanse does. */
 export function cleanseComponent(component) {
-  for (const key of ['freeze', 'confuse', 'burning', 'shatter', 'drain']) delete component.statuses[key];
+  for (const key of [...BASE_OFFENSE, 'stasisLock', 'meltdown', 'wildfire']) delete component.statuses[key];
+}
+
+/** Remove only the OLDEST base status (FCFS) — what a lone Cleanse does in v2. */
+export function cleanseOldest(component) {
+  for (const key of Object.keys(component.statuses)) {
+    if (BASE_OFFENSE.includes(key)) { delete component.statuses[key]; return key; }
+  }
+  return null;
 }
 
 /**
- * End-of-round tick on one aircraft: apply Burning DoT (+ Meltdown core-funnel for
- * Shattered+Burning parts), then decay every status and drop the expired ones.
- * Returns { dot, meltdown } — DoT dealt to parts, and extra funnelled into the Core.
+ * End-of-round tick on one aircraft. Applies DoT from Burning, plus the ongoing
+ * combo-statuses Meltdown (DoT + core-funnel, bypasses shield) and Wildfire (DoT).
+ * Returns { dot, meltdown }.
  */
 export function tickAircraftStatuses(aircraft, config) {
   let dot = 0;
   let meltdown = 0;
-  const coreFrac = config?.effects?.synergy?.combos?.meltdown?.coreFrac || 0;
+  const K = config?.effects?.synergy?.combos || {};
   const core = aircraft.components.core;
   for (const comp of Object.values(aircraft.components)) {
     const burn = comp.statuses.burning;
-    // Burning bypasses the Reactor shield (DESIGN §1) — DoT ticks even on a shielded Core.
-    if (burn && burn.turns > 0 && burn.dot > 0) {
-      comp.hp -= burn.dot;
-      dot += burn.dot;
-      // Meltdown — a Shattered + Burning NON-core part funnels heat into the Core (bypasses shield).
-      if (coreFrac > 0 && comp.id !== 'core' && hasStatus(comp, 'shatter') && core && core.hp > 0) {
-        const funnel = burn.dot * coreFrac;
-        core.hp -= funnel;
-        meltdown += funnel;
-      }
+    if (burn && burn.turns > 0 && burn.dot > 0) { comp.hp -= burn.dot; dot += burn.dot; }
+
+    const wf = comp.statuses.wildfire;            // Wildfire: ticks DoT (spread happened at formation)
+    if (wf && wf.turns > 0 && wf.dot > 0) { comp.hp -= wf.dot; dot += wf.dot; }
+
+    const md = comp.statuses.meltdown;            // Meltdown: DoT to part + funnel into the Core
+    if (md && md.turns > 0 && md.dot > 0) {
+      comp.hp -= md.dot; dot += md.dot;
+      if (comp.id !== 'core' && core && core.hp > 0) { const f = md.dot * (K.meltdown?.coreFrac || 0); core.hp -= f; meltdown += f; }
     }
-    for (const [key, s] of Object.entries(comp.statuses)) {
-      s.turns -= 1;
-      if (s.turns <= 0) delete comp.statuses[key];
-    }
+
+    for (const [key, s] of Object.entries(comp.statuses)) { s.turns -= 1; if (s.turns <= 0) delete comp.statuses[key]; }
   }
   return { dot, meltdown };
 }
 
 /**
- * Damage multiplier on the focus from its Frozen/Shattered statuses.
- * Both present = GLASS (clean ×mult); otherwise the single-status bonuses.
+ * Focus-fire multiplier from LEFTOVER single statuses on the focus (Shatter alone
+ * +shatterAmp, Freeze alone +frozenBrittle). Glass (both) is handled in the chain
+ * resolver, which returns its own multiplier.
  */
 export function attackSynergyMult(focus, config) {
   const syn = config.effects.synergy;
-  const combos = syn.combos || {};
-  const fr = hasStatus(focus, 'freeze');
-  const sh = hasStatus(focus, 'shatter');
-  if (fr && sh) return combos.glass?.mult ?? 2.0;     // Glass
   let m = 1;
-  if (sh) m *= 1 + (syn.shatterAmp || 0);
-  if (fr) m *= 1 + (syn.frozenBrittle || 0);
+  if (hasStatus(focus, 'shatter')) m *= 1 + (syn.shatterAmp || 0);
+  if (hasStatus(focus, 'freeze')) m *= 1 + (syn.frozenBrittle || 0);
   return m;
-}
-
-/**
- * v2 pairwise combos that resolve at attack-resolve, wherever BOTH statuses of a pair
- * sit on the same component, across ALL enemies. (Glass is the one exception — it's a
- * focus-fire multiplier handled in attackSynergyMult; Meltdown ticks at end-of-round.)
- * Mutates state and logs each combo. Order matters: damage combos first, Collapse last.
- */
-export function resolveCombos(state) {
-  const c = state.config.effects.synergy.combos || {};
-  const eff = state.config.effects;
-  for (const enemy of state.enemies) {
-    if (!isAlive(enemy.components.core)) continue;
-    for (const comp of Object.values(enemy.components)) {
-      if (!isAlive(comp)) continue;
-      const has = (k) => hasStatus(comp, k);
-      const at = `${enemy.label}·${comp.name}`;
-
-      // Backfire — Shattered + Confused → self-damage burst (the enemy's own misfire)
-      if (has('shatter') && has('confuse') && c.backfire?.selfDamage > 0) {
-        comp.hp -= c.backfire.selfDamage;
-        logEvent(state, `Backfire: ${at} misfires on its cracked armor → −${Math.round(c.backfire.selfDamage)} HP${isAlive(comp) ? '' : ' — DESTROYED'}.`);
-      }
-      // Vaporize — Burning + Drained → detonate the remaining Burn now + heal a fraction
-      if (has('burning') && has('drain') && c.vaporize) {
-        const b = comp.statuses.burning;
-        const burst = (b.dot || 0) * (b.turns || 0);
-        if (burst > 0) {
-          comp.hp -= burst;
-          const heal = burst * (c.vaporize.healFrac || 0);
-          if (heal > 0) { const core = state.player.components.core; core.hp = Math.min(core.maxHp, core.hp + heal); }
-          delete comp.statuses.burning;
-          logEvent(state, `Vaporize: ${at} boils off — ${Math.round(burst)} burst${heal ? `, heal +${Math.round(heal)}` : ''}${isAlive(comp) ? '' : ' — DESTROYED'}.`);
-        }
-      }
-      // Feedback Cascade — Confused + Drained → chain drain to the same part on an adjacent enemy
-      if (has('confuse') && has('drain') && c.feedback) {
-        const chain = (comp.statuses.drain?.potency || 0) * (eff.drain?.dmgPerPotency || 0) * (c.feedback.chainFrac || 0);
-        const other = nextAliveEnemy(state, enemy.eid);
-        const oc = other && other.components[comp.id];
-        if (chain > 0 && oc && isAlive(oc)) {
-          oc.hp -= chain;
-          logEvent(state, `Feedback Cascade: ${at} misroutes → ${other.label}·${oc.name} −${Math.round(chain)} HP${isAlive(oc) ? '' : ' — DESTROYED'}.`);
-        }
-      }
-      // Stasis Lock — Frozen + Confused → extend the freeze (deep lockdown)
-      if (has('freeze') && has('confuse') && c.stasisLock?.extendTurns > 0) {
-        comp.statuses.freeze.turns += c.stasisLock.extendTurns;
-        logEvent(state, `Stasis Lock: ${at} held — freeze +${c.stasisLock.extendTurns} turn(s).`);
-      }
-      // Wildfire — Burning + Confused → spread Burning to a neighbour
-      if (has('burning') && has('confuse') && c.wildfire) {
-        const victimId = maybeWildfire(enemy, comp, state.config, state.rng);
-        if (victimId) logEvent(state, `Wildfire: Burning spreads to ${enemy.label}·${enemy.components[victimId].name}.`);
-      }
-      // Collapse — Shattered + Drained → execute a part already below the HP threshold (LAST)
-      if (has('shatter') && has('drain') && c.collapse && isAlive(comp)) {
-        if (comp.hp < (c.collapse.hpThreshold || 0) * comp.maxHp) {
-          comp.hp = 0;
-          logEvent(state, `Collapse: ${at} ruptures (below ${Math.round((c.collapse.hpThreshold || 0) * 100)}% HP) — DESTROYED.`);
-        }
-      }
-    }
-  }
 }
 
 /** The next living enemy after `eid` (cyclic), or null — used by Feedback Cascade. */
@@ -159,14 +99,128 @@ function nextAliveEnemy(state, eid) {
   return null;
 }
 
-/** Wildfire: a Burning + Confused part spreads Burning to a random living neighbour. */
-export function maybeWildfire(aircraft, focus, config, rng) {
-  if (!(hasStatus(focus, 'burning') && hasStatus(focus, 'confuse'))) return null;
-  const others = Object.values(aircraft.components).filter((c) => c !== focus && isAlive(c));
-  if (!others.length) return null;
-  const victim = others[Math.floor((rng ? rng() : Math.random()) * others.length)];
-  const frac = config.effects.synergy.combos?.wildfire?.spreadFrac ?? 0.5;
-  const dot = (focus.statuses.burning.dot || 0) * frac;
-  applyStatus(victim, 'burning', { turns: focus.statuses.burning.turns, dot });
-  return victim.id;
+/** Build a chain entry from a queued attack action. */
+function queuedEntry(a, config) {
+  const ec = config.effects[a.effect] || {};
+  return {
+    key: a.effect, fresh: true, potency: a.potency,
+    turns: statusTurns(a.potency, ec.turns),
+    dot: a.effect === 'burning' ? a.potency * (ec.dotPerPotency || 0) : 0,
+  };
+}
+
+/**
+ * Resolve every enemy component's status chain (active base statuses + this phase's
+ * queued statuses/breaks) per DESIGN §3.7: greedy combos, replace-base, ongoing →
+ * combo-status, burst → consume. Returns { healed, focusMult } for the Focus.
+ */
+export function resolveOffenseChains(state, focusEid, focusId) {
+  const { config } = state;
+  let healed = 0;
+  let focusMult = null;
+
+  const byTarget = new Map();                     // queued entries (statuses + breaks) per target
+  for (const x of state.queue) {
+    const k = `${x.target.eid}:${x.target.component}`;
+    if (!byTarget.has(k)) byTarget.set(k, []);
+    byTarget.get(k).push(x);
+  }
+
+  for (const enemy of state.enemies) {
+    for (const comp of Object.values(enemy.components)) {
+      const isFocus = enemy.eid === focusEid && comp.id === focusId;
+      const active = [];
+      for (const key of BASE_OFFENSE) {
+        const s = comp.statuses[key];
+        if (s && s.turns > 0) active.push({ key, fresh: false, active: true, potency: s.potency || 0, turns: s.turns, dot: s.dot || 0 });
+      }
+      const queued = (byTarget.get(`${enemy.eid}:${comp.id}`) || []).map((x) => (x.brk ? { brk: true } : queuedEntry(x, config)));
+      const chain = [...active, ...queued];
+      if (!chain.length) continue;
+
+      const { combos, leftovers } = resolveChain(chain, OFFENSE_COMBOS, (def) => isFocus || !def.focusOnly);
+
+      // consume active ingredients that combo'd
+      for (const c of combos) { if (c.a.active) delete comp.statuses[c.a.key]; if (c.b.active) delete comp.statuses[c.b.key]; }
+
+      for (const c of combos) {
+        const r = applyOffenseCombo(state, enemy, comp, c, isFocus);
+        healed += r.healed || 0;
+        if (r.focusMult != null) focusMult = r.focusMult;
+      }
+
+      // leftover QUEUED statuses become active (active leftovers are already on the part);
+      // a non-combo'd drain applies its base heal.
+      for (const e of leftovers) {
+        if (e.brk || e.active) continue;
+        applyStatus(comp, e.key, { turns: e.turns, potency: e.potency, dot: e.dot });
+        if (e.key === 'drain') healed += e.potency * (config.effects.drain?.healPerPotency || 0);
+      }
+    }
+  }
+  return { healed, focusMult };
+}
+
+/** Apply one offensive combo's effect; mutates state, returns { healed, focusMult }. */
+function applyOffenseCombo(state, enemy, comp, c, isFocus) {
+  const eff = state.config.effects;
+  const K = eff.synergy.combos || {};
+  const at = `${enemy.label}·${comp.name}`;
+  const out = { healed: 0, focusMult: null };
+  const get = (key) => (c.a.key === key ? c.a : (c.b.key === key ? c.b : null));
+
+  switch (c.def.name) {
+    case 'Glass':
+      out.focusMult = K.glass?.mult ?? 2;
+      logEvent(state, `Glass: ${at} — focus ×${out.focusMult}.`);
+      break;
+    case 'Stasis Lock': {
+      const fz = get('freeze');
+      comp.statuses.stasisLock = { turns: (fz?.turns || 1) + (K.stasisLock?.extendTurns || 0) };
+      logEvent(state, `Stasis Lock: ${at} disabled ${comp.statuses.stasisLock.turns} turn(s).`);
+      break;
+    }
+    case 'Meltdown': {
+      const bn = get('burning');
+      comp.statuses.meltdown = { turns: bn?.turns || 1, dot: bn?.dot || 0 };
+      logEvent(state, `Meltdown: ${at} — burns + funnels into the Core.`);
+      break;
+    }
+    case 'Wildfire': {
+      const bn = get('burning');
+      comp.statuses.wildfire = { turns: bn?.turns || 1, dot: bn?.dot || 0 };
+      const others = Object.values(enemy.components).filter((x) => x !== comp && isAlive(x));
+      if (others.length) {
+        const v = others[Math.floor((state.rng ? state.rng() : Math.random()) * others.length)];
+        applyStatus(v, 'burning', { turns: bn?.turns || 1, dot: (bn?.dot || 0) * (K.wildfire?.spreadFrac || 0.5) });
+        logEvent(state, `Wildfire: ${at} burns + spreads to ${enemy.label}·${v.name}.`);
+      } else {
+        logEvent(state, `Wildfire: ${at} burns.`);
+      }
+      break;
+    }
+    case 'Backfire': {
+      const dmg = K.backfire?.selfDamage || 0; comp.hp -= dmg;
+      logEvent(state, `Backfire: ${at} misfires on its cracked armor → −${Math.round(dmg)} HP${isAlive(comp) ? '' : ' — DESTROYED'}.`);
+      break;
+    }
+    case 'Collapse':
+      if (comp.hp < (K.collapse?.hpThreshold || 0) * comp.maxHp) { comp.hp = 0; logEvent(state, `Collapse: ${at} ruptures — DESTROYED.`); }
+      break;
+    case 'Vaporize': {
+      const bn = get('burning'); const burst = (bn?.dot || 0) * (bn?.turns || 0);
+      comp.hp -= burst; out.healed = burst * (K.vaporize?.healFrac || 0);
+      logEvent(state, `Vaporize: ${at} − ${Math.round(burst)} burst${out.healed ? `, heal +${Math.round(out.healed)}` : ''}${isAlive(comp) ? '' : ' — DESTROYED'}.`);
+      break;
+    }
+    case 'Feedback Cascade': {
+      const dr = get('drain'); const chain = (dr?.potency || 0) * (eff.drain?.dmgPerPotency || 0) * (K.feedback?.chainFrac || 0);
+      const other = nextAliveEnemy(state, enemy.eid); const oc = other && other.components[comp.id];
+      if (chain > 0 && oc && isAlive(oc)) { oc.hp -= chain; logEvent(state, `Feedback Cascade: ${at} → ${other.label}·${oc.name} −${Math.round(chain)} HP${isAlive(oc) ? '' : ' — DESTROYED'}.`); }
+      break;
+    }
+    default:
+      break;
+  }
+  return out;
 }

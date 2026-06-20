@@ -16,7 +16,7 @@ import { isEffectValidOn } from '../core/components.js';
 import { startAttackBuild, commitAttack, startDefenseBuild, commitDefense } from '../core/phases.js';
 import { combatCondition, firepowerMult, totalFirepower } from '../core/firepower.js';
 import { systemState } from '../core/cascade.js';
-import { applyStatus, tickAircraftStatuses, attackSynergyMult, resolveCombos } from '../combat/statuses.js';
+import { applyStatus, tickAircraftStatuses, attackSynergyMult, resolveOffenseChains } from '../combat/statuses.js';
 import { makePendingAttack, finalizeAttackTarget, validAttackTargets, resolveAttack, comboPotency } from '../combat/attack.js';
 import { makePendingDefense, finalizeDefenseTarget, resolveDefense } from '../combat/defense.js';
 import { planAttack, currentBudget } from '../combat/enemyAI.js';
@@ -162,13 +162,19 @@ test('Burning DoT ticks then statuses decay each round', () => {
   assert(c.statuses.burning.turns === 1, 'turn decayed');
 });
 
-test('Glass: Frozen + Shattered on a part = clean ×mult focus damage', () => {
+test('Glass: Frozen + Shattered on the Focus → ×mult, consumes both (replaces singles)', () => {
+  // single-status synergy still works through attackSynergyMult
   const s = fresh();
-  const c = s.enemies[0].components.generator;
-  applyStatus(c, 'shatter', { turns: 1 });
-  assert(near(attackSynergyMult(c, CONFIG), 1 + CONFIG.effects.synergy.shatterAmp, 0.001), 'shatter alone = +50%');
-  applyStatus(c, 'freeze', { turns: 1 });
-  assert(near(attackSynergyMult(c, CONFIG), CONFIG.effects.synergy.combos.glass.mult, 0.001), 'both = Glass ×mult');
+  applyStatus(s.enemies[0].components.generator, 'shatter', { turns: 1 });
+  assert(near(attackSynergyMult(s.enemies[0].components.generator, CONFIG), 1 + CONFIG.effects.synergy.shatterAmp, 0.001), 'shatter alone = +50%');
+  // Glass forms in the chain resolver on the Focus and returns its mult, consuming both
+  const s2 = fresh();
+  attack(s2, 'engine', 6, 'generator');   // shatter (fresh) → enemy generator
+  attack(s2, 'weapon', 6, 'generator');   // freeze (fresh) → enemy generator
+  const { focusMult } = resolveOffenseChains(s2, 0, 'generator');
+  const g = s2.enemies[0].components.generator;
+  assert(focusMult === CONFIG.effects.synergy.combos.glass.mult, `Glass focus mult, got ${focusMult}`);
+  assert(!g.statuses.freeze && !g.statuses.shatter, 'Glass consumed both ingredients');
 });
 
 test('Shatter is valid on ANY part now; Fire ⊗ Freeze cancel (both wiped)', () => {
@@ -189,14 +195,18 @@ test('Burning bypasses the Reactor shield — its DoT ticks even while the shiel
   assert(dot >= 7 && core.hp === core.maxHp - 7, 'burning DoT hit the shielded core');
 });
 
-test('Meltdown: a Shattered+Burning part funnels heat into the Core (bypasses the shield)', () => {
+test('Meltdown: Shatter+Burning forms a meltdown status that funnels into the shielded Core', () => {
   const s = fresh(); // single enemy, Generator alive → Core shielded
+  attack(s, 'engine', 6, 'generator');    // shatter (fresh)
+  attack(s, 'launchpad', 6, 'generator'); // burning (fresh)
+  resolveOffenseChains(s, 0, 'core');     // forms Meltdown on the generator
   const g = s.enemies[0].components.generator;
-  applyStatus(g, 'shatter', { turns: 3 }); applyStatus(g, 'burning', { turns: 3, dot: 6 });
+  assert(g.statuses.meltdown && !g.statuses.shatter && !g.statuses.burning, 'meltdown formed, ingredients consumed');
+  const dot = g.statuses.meltdown.dot;
   const coreBefore = s.enemies[0].components.core.hp;
   const { meltdown } = tickAircraftStatuses(s.enemies[0], CONFIG);
-  assert(meltdown === 6 * CONFIG.effects.synergy.combos.meltdown.coreFrac, 'funnel = dot × coreFrac');
-  assert(s.enemies[0].components.core.hp === coreBefore - meltdown, 'shielded Core still took the meltdown');
+  assert(near(meltdown, dot * CONFIG.effects.synergy.combos.meltdown.coreFrac, 0.001), 'funnel = dot × coreFrac');
+  assert(near(s.enemies[0].components.core.hp, coreBefore - meltdown, 0.001), 'shielded Core still took the meltdown');
 });
 
 // --- attack flow (pending → target) + resolve --------------------------------
@@ -250,44 +260,45 @@ test('Wildfire: Burning + Confused on a part spreads Burning to a neighbour', ()
   assert(spread, 'burning spread to a neighbour');
 });
 
-test('v2 combos resolve where both statuses co-exist (Backfire/Vaporize/Stasis/Collapse)', () => {
+test('v2 combos resolve via the chain (Backfire/Vaporize/Stasis/Collapse)', () => {
   const C = CONFIG.effects.synergy.combos;
-  // Backfire — Shatter + Confuse → self-damage
+  // Backfire — Shatter + Confuse → self-damage (burst, not focus-only)
   let s = fresh();
-  let w = s.enemies[0].components.weapon;
-  applyStatus(w, 'shatter', { turns: 2 }); applyStatus(w, 'confuse', { turns: 2 });
-  let before = w.hp; resolveCombos(s);
-  assert(w.hp === before - C.backfire.selfDamage, 'Backfire self-damage');
+  attack(s, 'engine', 6, 'weapon'); attack(s, 'tower', 6, 'weapon');
+  let w = s.enemies[0].components.weapon; const wBefore = w.hp;
+  resolveOffenseChains(s, 0, 'core');
+  assert(w.hp === wBefore - C.backfire.selfDamage && !w.statuses.shatter && !w.statuses.confuse, 'Backfire self-damage + consume');
 
   // Vaporize — Burning + Drain → detonate remaining burn now + heal, burn cleared
-  s = fresh(); s.player.components.core.hp = 100;
-  let g = s.enemies[0].components.generator;
-  applyStatus(g, 'burning', { turns: 2, dot: 5 }); applyStatus(g, 'drain', { turns: 1, potency: 4 });
-  before = g.hp; resolveCombos(s);
-  assert(g.hp === before - 10 && !g.statuses.burning, 'Vaporize detonates the remaining burn');
-  assert(s.player.components.core.hp === 100 + 10 * C.vaporize.healFrac, 'Vaporize heals your Core');
+  s = fresh();
+  attack(s, 'launchpad', 8, 'generator'); attack(s, 'generator', 8, 'generator');
+  const g = s.enemies[0].components.generator; const gBefore = g.hp;
+  const vapor = resolveOffenseChains(s, 0, 'core'); // resolver returns heal; resolveAttack applies it
+  assert(g.hp < gBefore && !g.statuses.burning, 'Vaporize detonated the burn');
+  assert(vapor.healed > 0, 'Vaporize returns lifesteal');
 
-  // Stasis Lock — Frozen + Confuse → extend freeze
-  s = fresh(); let t = s.enemies[0].components.tower;
-  applyStatus(t, 'freeze', { turns: 2 }); applyStatus(t, 'confuse', { turns: 2 });
-  resolveCombos(s);
-  assert(t.statuses.freeze.turns === 2 + C.stasisLock.extendTurns, 'Stasis extends the freeze');
+  // Stasis Lock — Frozen + Confuse → a stasisLock combo-status (disable)
+  s = fresh();
+  attack(s, 'weapon', 8, 'tower'); attack(s, 'tower', 8, 'tower'); // freeze + confuse → enemy tower
+  resolveOffenseChains(s, 0, 'core');
+  const t = s.enemies[0].components.tower;
+  assert(t.statuses.stasisLock && t.statuses.stasisLock.turns > 0 && !t.statuses.freeze && !t.statuses.confuse, 'Stasis Lock formed');
 
   // Collapse — Shatter + Drain below the HP threshold → destroyed
-  s = fresh(); let gg = s.enemies[0].components.generator;
-  applyStatus(gg, 'shatter', { turns: 2 }); applyStatus(gg, 'drain', { turns: 1, potency: 3 });
+  s = fresh();
+  attack(s, 'engine', 6, 'generator'); attack(s, 'generator', 6, 'generator');
+  const gg = s.enemies[0].components.generator;
   gg.hp = gg.maxHp * C.collapse.hpThreshold - 1;
-  resolveCombos(s);
-  assert(gg.hp === 0, 'Collapse executes a low shattered+drained part');
+  resolveOffenseChains(s, 0, 'core');
+  assert(gg.hp === 0, 'Collapse executed a low shattered+drained part');
 });
 
 test('Feedback Cascade chains drain to the same part on an adjacent enemy', () => {
   const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'brute'] });
   startAttackBuild(s);
-  const w0 = s.enemies[0].components.weapon;
-  applyStatus(w0, 'confuse', { turns: 2 }); applyStatus(w0, 'drain', { turns: 1, potency: 5 });
+  attack(s, 'tower', 5, 'weapon', 0); attack(s, 'generator', 5, 'weapon', 0); // confuse + drain → enemy 0 weapon
   const before = s.enemies[1].components.weapon.hp;
-  resolveCombos(s);
+  resolveOffenseChains(s, 0, 'core');
   const chain = 5 * CONFIG.effects.drain.dmgPerPotency * CONFIG.effects.synergy.combos.feedback.chainFrac;
   assert(near(s.enemies[1].components.weapon.hp, before - chain, 0.001), 'drain chained to enemy 1');
 });

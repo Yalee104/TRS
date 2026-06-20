@@ -22,6 +22,9 @@ function debuffFactorOf(component, config) {
     const s = component.statuses[key];
     if (s && s.turns > 0 && table[key] != null) factor = Math.min(factor, table[key]);
   }
+  // Stasis Lock (Frozen+Confused combo) disables the part like Freeze → ×0.
+  const lock = component.statuses.stasisLock;
+  if (lock && lock.turns > 0) factor = 0;
   return factor;
 }
 

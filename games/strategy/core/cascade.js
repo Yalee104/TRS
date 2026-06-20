@@ -86,10 +86,12 @@ export function coreShieldUp(aircraft, config) {
 //     its duration, on top of the firepower choke. Tower → aim; Engine → evasion.
 //     Generator (shield/brownout) and Launch Pad (TRS) stay tied to destruction.
 
-/** Is the Tower providing its system right now? (alive AND not frozen) */
+/** A part is "disabled" if Frozen OR Stasis-Locked (the Frozen+Confused combo). */
+const isDisabled = (c) => hasStatus(c, 'freeze') || hasStatus(c, 'stasisLock');
+
+/** Is the Tower providing its system right now? (alive AND not frozen/locked) */
 export function towerActive(aircraft) {
-  const t = aircraft.components.tower;
-  return isAlive(t) && !hasStatus(t, 'freeze');
+  return isAlive(aircraft.components.tower) && !isDisabled(aircraft.components.tower);
 }
 
 /** Aim multiplier: full if the Tower is active, else the destroyed/jammed penalty. */
@@ -97,8 +99,8 @@ export function effectiveAim(aircraft, config) {
   return towerActive(aircraft) ? 1 : config.cascade.towerDestroyedAimMult;
 }
 
-/** Evasion this aircraft actually has — zero while its Engine is frozen. */
+/** Evasion this aircraft actually has — zero while its Engine is frozen/locked. */
 export function effectiveEvasion(aircraft, config) {
-  if (hasStatus(aircraft.components.engine, 'freeze')) return 0;
+  if (isDisabled(aircraft.components.engine)) return 0;
   return systemState(aircraft, config).evasion;
 }

@@ -12,13 +12,12 @@
 //  HP changes ONLY at resolve. Status ticking happens once per round (phases).
 // =============================================================================
 
-import { ATTACK_EFFECT, isEffectValidOn, statusTurns, hasStatus, isAlive } from '../core/components.js';
+import { ATTACK_EFFECT, isEffectValidOn, isAlive } from '../core/components.js';
 import { totalFirepower, conditionReport } from '../core/firepower.js';
 import { coreShieldUp, effectiveEvasion } from '../core/cascade.js';
 import { logEvent } from '../core/state.js';
-import { applyStatus, attackSynergyMult, resolveCombos } from './statuses.js';
+import { attackSynergyMult, resolveOffenseChains } from './statuses.js';
 
-const eAircraft = (state, eid) => state.enemies[eid];
 const eName = (state, eid, id) => `${state.enemies[eid].label} · ${state.enemies[eid].components[id].name}`;
 
 /** Sum the routing-quality `value` across a combo result's items (= potency). */
@@ -62,62 +61,44 @@ export function finalizeAttackTarget(state, eid, targetId) {
   return p;
 }
 
-/** Resolve the attack: place statuses (across enemies), then detonate the pool on the Focus. */
+/** Resolve the attack: chain-resolve statuses/combos on every enemy, then detonate the pool on the Focus. */
 export function resolveAttack(state, eid, focusId) {
   const { config, player } = state;
-  const enemy = eAircraft(state, eid);
+  const enemy = state.enemies[eid];
   state.focus = { eid, component: focusId };
   const focus = enemy?.components[focusId];
-  const summary = { eid, focus: focusId, damage: 0, healed: 0, wildfire: null };
+  const summary = { eid, focus: focusId, damage: 0, healed: 0 };
   if (!focus) return summary;
 
-  // 1) place each queued status on its (eid, component) target; accumulate firepower + drain heal.
-  let addon = 0;
-  let healed = 0;
-  for (const a of state.queue) {
-    const ec = config.effects[a.effect] || {};
-    addon += a.potency * (ec.dmgPerPotency || 1);
-    if (a.effect === 'drain') healed += a.potency * (ec.healPerPotency || 0);
-    const te = state.enemies[a.target.eid];
-    const tgt = te?.components[a.target.component];
-    if (!tgt || !isEffectValidOn(a.effect, a.target.component)) continue;
-    const opts = a.effect === 'burning'
-      ? { turns: statusTurns(a.potency, ec.turns), potency: a.potency, dot: a.potency * (ec.dotPerPotency || 0) }
-      : { turns: statusTurns(a.potency, ec.turns), potency: a.potency };
-    const r = applyStatus(tgt, a.effect, opts);
-    if (r.canceled) logEvent(state, `${a.effect} + ${r.canceled} cancelled on ${eName(state, a.target.eid, a.target.component)} (steam — Fire ⊗ Freeze).`);
-  }
+  // 1) resolve every enemy's status chain (greedy combos, replace-base, consume/ongoing).
+  const { healed, focusMult } = resolveOffenseChains(state, eid, focusId);
 
-  // 2) the whole firepower pool → the single Focus, with synergy. The enemy Core is
-  //    invulnerable while its shield is UP (DESIGN §1): statuses land, but it loses no HP.
+  // 2) firepower pool = base + Σ all queued action potency (combos don't change the pool).
+  let addon = 0;
+  for (const a of state.queue) if (!a.brk) addon += a.potency * (config.effects[a.effect]?.dmgPerPotency || 1);
   const rawFire = totalFirepower(player, addon, config);
-  const synergy = attackSynergyMult(focus, config);
+
+  // 3) detonate on the Focus. Glass (if it formed on the Focus) sets the multiplier; otherwise the
+  //    leftover singles do. The enemy Core is invulnerable while its shield is UP (DESIGN §1).
+  const mult = focusMult != null ? focusMult : attackSynergyMult(focus, config);
   const shielded = focusId === 'core' && coreShieldUp(enemy, config);
-  const enemyEvasion = effectiveEvasion(enemy, config); // healthy, un-frozen enemy Engine dodges some fire
-  const damage = shielded ? 0 : rawFire * synergy * (1 - enemyEvasion);
+  const enemyEvasion = effectiveEvasion(enemy, config);
+  const damage = shielded ? 0 : rawFire * mult * (1 - enemyEvasion);
   focus.hp -= damage;
 
   if (healed) { const core = player.components.core; core.hp = Math.min(core.maxHp, core.hp + healed); }
 
-  // firepower breakdown so the player sees how their own condition/statuses scaled it
   const rep = conditionReport(player, config);
   logEvent(state, `Your firepower ${Math.round(rawFire)} = (base + ${Math.round(addon)} add-ons) × condition ${Math.round(rep.condition * 100)}%${rep.chokes.length ? ` (choked: ${rep.chokes.join(', ')})` : ''}.`);
-
   if (shielded) {
-    logEvent(state, `RESOLVE → Focus ${eName(state, eid, focusId)}: ${Math.round(rawFire * synergy)} firepower BLOCKED by the Reactor shield (0 dmg). Destroy its shield-linked parts to expose the Core.`);
+    logEvent(state, `RESOLVE → Focus ${eName(state, eid, focusId)}: ${Math.round(rawFire * mult)} firepower BLOCKED by the Reactor shield (0 dmg). Destroy its shield-linked parts to expose the Core.`);
   } else {
-    const syn = [];
-    if (hasStatus(focus, 'shatter')) syn.push('Shatter +50%');
-    if (hasStatus(focus, 'freeze')) syn.push('Frozen-brittle +40%');
-    const evaNote = enemyEvasion > 0 ? ` × evade ${Math.round((1 - enemyEvasion) * 100)}% (enemy Engine)` : '';
-    logEvent(state, `RESOLVE → Focus ${eName(state, eid, focusId)}: ${Math.round(rawFire)} firepower × synergy ${synergy.toFixed(2)}${syn.length ? ` (${syn.join(', ')})` : ''}${evaNote} = ${Math.round(damage)} dmg${isAlive(focus) ? '' : ' — DESTROYED'}.`);
+    const evaNote = enemyEvasion > 0 ? ` × evade ${Math.round((1 - enemyEvasion) * 100)}%` : '';
+    logEvent(state, `RESOLVE → Focus ${eName(state, eid, focusId)}: ${Math.round(rawFire)} × ${mult.toFixed(2)}${evaNote} = ${Math.round(damage)} dmg${isAlive(focus) ? '' : ' — DESTROYED'}.`);
   }
-  if (healed) logEvent(state, `Drain healed your Core +${Math.round(healed)}.`);
+  if (healed) logEvent(state, `Lifesteal healed your Core +${Math.round(healed)}.`);
 
-  // 3) v2 pairwise combos resolve wherever both statuses co-exist (across all enemies).
-  resolveCombos(state);
-
-  summary.damage = damage; summary.healed = healed; summary.synergy = synergy; summary.shielded = shielded; summary.armor = 0;
+  summary.damage = damage; summary.healed = healed; summary.synergy = mult; summary.shielded = shielded; summary.armor = 0;
   summary.destroyed = !isAlive(focus);
   return summary;
 }
