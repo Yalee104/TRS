@@ -233,6 +233,67 @@ for later). Every combo's numbers live in `config/game.json → effects.synergy.
 
 ---
 
+## 3.7 Status queue, combos & breaks — the v2 engine ✅ (spec; governs §3.6 + §4 Table E)
+
+> One engine drives **both** offensive combos (§3.6, statuses on enemy parts) and defensive combos
+> (§4 Table E, verbs on your own parts). This section is the source of truth.
+
+### How a combo forms — FCFS chain + adjacency (model A)
+Every component holds an **ordered chain** of the statuses/verbs on it, in the order they were
+applied (**first-come-first-served**). A combo forms **only between two *consecutive* entries** in
+the chain (adjacency, "model A"). A longer chain just chains consecutive pairs — `[A, B, C]` → the
+pairs `A+B` and `B+C` (not `A+C`).
+
+### Break — opting out of a combo
+Because a combo **replaces** its ingredients' base effects (below), the player sometimes wants the
+two base effects *instead* of the combo. A **`break`** is a dummy chain entry (a per-component
+button, lower-right of the card) that **cuts adjacency**: `[A, break, B]` → A and B no longer
+combo, both keep their base effects. Rules: a break **can't be first** and **can't follow another
+break** (it must sit between two real entries).
+
+### A combo REPLACES its two base effects (strict)
+When two entries combo, **their individual base effects do not apply** — only the combo's effect
+does. Each combo is therefore **self-contained** (it re-specifies any damage/DoT/etc. it needs).
+- *Glass (Freeze+Shatter):* you get **×2 focus damage** but **lose** Freeze's firepower-choke /
+  system-suspend **and** Shatter's +50% — pure burst, no lockdown.
+- *Meltdown (Shatter+Burning):* you get the **core-funnel DoT** but **lose** Shatter's +50% amp.
+- Want the bases instead? Put a `break` between them.
+
+A status/verb consumed by a combo also **grants no side-benefit** — e.g. **Overclock in a combo
+grants no build-credit**.
+
+### Active + queued
+The chain is **active (prior-round) entries at the front + this phase's queued additions appended**;
+combos read the whole chain, and `break`s you place this phase opt out.
+- **Attack:** statuses persist by their turn count, so active+queued mixing enables multi-round
+  setups.
+- **Defense:** plain verbs are one-shot (consumed at their resolve). The **only** carryovers are the
+  two persistence combos — **Sustain** (a shield) and **Field Repair** (a heal) — which become
+  **active defensive states** and resolve again at the **next DEFENSE resolve** (never the attack
+  phase, where you're not hit).
+
+### Resolution & guard rails
+- **Evaluate each resolve from the current chain.** Combos that **consume** their inputs (Glass,
+  Vaporize, Collapse, Deflect, Reboot, Backfire) fire once and clear; **ongoing** combos (Meltdown,
+  Wildfire, Bastion, Reactive Plating, Sustain, Field Repair) re-apply while present. *(C6)*
+- **A combo needs ≥1 *new* this-phase entry** — two *carried* entries never silently re-combo every
+  round. *(C2, loop-guard)*
+- **Carryovers last to the next defense resolve, then expire unless their combo is re-formed**
+  (refresh). One Sustain ≠ a permanently shielded part. *(C3)*
+- **Re-comboing a carryover is the intended depth** — carried **Shielded** + a new **Harden** =
+  **Bastion** next round. *(C4)*
+- **Self-stack is parked** — a carried Shield + a new Shield just **add pools**, no combo. *(C5 —
+  ⚠️ revisit in the potency-rebalance pass: which statuses stack, how, and how potency feeds pools.)*
+- Tuning knobs: **persistence lifespan** and **Bastion cap %** stay in config in case a part gets
+  too hard to kill. *(C7)*
+
+### UI
+Cards **separate two rows**: **Active** statuses (already on the part) and the **Queued** chain for
+this phase (with `break` markers and an "＋ break" button). Combos are surfaced in the event log as
+they fire.
+
+---
+
 ## 4. Defense phase — detail ✅
 Symmetric **build-then-resolve** (replaces the earlier real-time barrage). **Two picks, both on
 your side** — this fills the gap that defense also needs an "apply to which part" step.
@@ -248,47 +309,65 @@ your side** — this fills the gap that defense also needs an "apply to which pa
 repairs/shields across several wounded parts. Capped only by the 120s credit. ✅
 
 **Resolve:** the enemy attacks (archetype targeting + telegraphed strikes); your **pre-loaded**
-defenses absorb/mitigate; **you lose HP only here**. Per-component order:
-`1) Cleanse → 2) Harden/Evade → 3) Shield (+ Spike trap check) → 4) Repair regen → overflow → HP`.
+defenses absorb/mitigate; **you lose HP only here**. Per-component order (v2):
+`Cleanse(oldest 1) → combos (Deflect dodge / Bastion cap / Purified-Barrier status-immunity) →
+Harden(first hit) → Evasion → Shield absorb (+ Reactive-Plating reflect) → HP → Repair pass`.
 A part at 0 → destroyed → cascade. Survive → next attack phase; Core 0 → lose.
 
 ### Table D — defensive palette per component 🔧 *(refine later)*
-| Component (defense use) | Defensive effect | Fits because |
+| Component (defense use) | Defensive effect (v2) | Fits because |
 |---|---|---|
-| **Weapon Storage** | **Shield** (+ **Spike** at high tier) | sturdy bulwark |
-| **Power Generator** | **Repair** (restore HP) | power = healing |
-| **Tower (Sensors)** | **Cleanse** + **Evade** | scrub jamming, spot hits |
-| **Engine** | **Harden** (damage reduction) | mobility = mitigation |
-| **Launch Pad** | **Overclock** (system boost) | supercharge a system |
+| **Weapon Storage** | **Shield** — absorb a flat chunk | sturdy bulwark |
+| **Power Generator** | **Repair** — restore HP | power = healing |
+| **Tower (Sensors)** | **Cleanse** — strip the **oldest 1** status (FCFS) | scrub jamming |
+| **Engine** | **Harden** — % off the **first** incoming hit | mobility = mitigation |
+| **Launch Pad** | **Overclock** — **+2–3s build-credit next attack phase** (stacks) | supercharge tempo |
 
 Loadout pressure mirrors attack: lose your Generator → no Repair; lose your Tower → no Cleanse.
 
-### Table E — defensive compounding matrix 🔧 *(refine later)*
-5 states: **Shielded, Repaired, Cleansed, Hardened, Overclocked**.
+### Table E — defensive synergy matrix · v2 ✅ (engine = §3.7)
+States: **Shielded, Repaired, Cleansed, Hardened, Overclocked**. A combo fires at **defense resolve
+on a part that has both verbs** in its chain (adjacency + breaks per §3.7); a combo **replaces** both
+base effects (so an Overclock in a combo grants **no** credit). Empty cells = no combo (the two just
+apply independently). Numbers live in `config → defense.combos`.
 
 |  | **Repaired** | **Cleansed** | **Hardened** | **Overclocked** |
 |---|---|---|---|---|
-| **Shielded** | **Sustain** (heal refreshes shield) | **Purified Barrier** (shield blocks statuses) | **Bastion** (reduction → shield lasts) | **Reactive Plating** (shield → Spike) |
-| **Repaired** | — | **Recovery** (strip DoT then heal) | **Field Repair** (heals faster) | **Power Surge** (heal boosted) |
-| **Cleansed** | | — | **Evasive Scrub** (dodge + immunity) | **System Reboot** (clear all + brief invuln) |
-| **Hardened** | | | — | **Combat Mode** (reduction + system boost) |
+| **Shielded** | **Sustain** | **Purified Barrier** | **Bastion** | **Reactive Plating** |
+| **Repaired** | — | — | **Field Repair** | — |
+| **Cleansed** | | — | **Deflect** | **Reboot** |
+| **Hardened** | | | — | — |
 
-**Self-stack:** Shield²→bigger pool · Repair²→more HP · Cleanse²→longer ward · Harden²→more
-reduction (capped) · Overclock²→stronger/longer. **Special:** **Fortress** (shield+cleanse+
-overclock + both amps) = whole-aircraft layered defense, the panic button.
+**Sustain** (Shield + Repair) — *durability.*
+- *Does:* creates a **shield that persists to the next defense resolve** (carries through the attack phase); re-forming it refreshes it. Leftover absorbs again next time you're hit.
+- *Example:* shield 40, takes 25 → 15 carries to next defense resolve instead of vanishing. *On:* any part.
 
-### Spike — conditional thorns ✅ concept / 🔧
-A high-tier shield combo **places Spike on a chosen component**. During resolve, **if the enemy
-hits that component, a portion of the damage reflects back** to the attacking enemy part. It's
-*conditional*, so it pairs directly with the Tower telegraph — place spikes where you predict the
-blow. Maps to the engine's `reflect` effect, reframed as a placed status; keeps "enemy loses HP
-only from the player's deliberate setups" honest.
+**Purified Barrier** (Shield + Cleanse) — *status wall.*
+- *Does:* while the shield holds, the part is **immune to incoming statuses** this resolve (debuffs bounce off).
+- *Example:* a Disruptor's freeze hits your barrier'd Weapon → no freeze applied. *On:* any part.
 
-### Overclock = pure defensive system boost ✅
-Supercharges the *target* component's own system: Tower → sharper/longer telegraph vision,
-Engine → more evasion/initiative, Generator → reinforced (extra damage reduction), Launch Pad →
-bigger next TRS. No offense-prep bridge. *(v1: Overclock resolves as flat damage reduction on the
-target, like Harden.)*
+**Bastion** (Shield + Harden) — *anti-burst cap.*
+- *Does:* **caps** total damage to the part this resolve at **`bastion.capFrac` × maxHP**, however many enemies pile on. (vs lone Harden which only blunts the *first* hit.)
+- *Example:* 3 enemies focus your Generator for 90 → capped to ~25. *On:* any part.
+
+**Reactive Plating** (Shield + Overclock) — *thorns wall.*
+- *Does:* damage the **shield absorbs is reflected** (`reactivePlating.reflectFrac`) back at the attacking enemy — to its **lowest-HP part, Core first if its shield is down**.
+- *Example:* shield eats 40 → ~12 reflected to the attacker's lowest-HP part. *On:* any part.
+
+**Field Repair** (Repair + Harden) — *heal-over-time.*
+- *Does:* the repair **also repeats at the next defense resolve** (HoT under cover).
+- *Example:* repair 18 now **and** 18 next defense resolve. *On:* any part.
+
+**Deflect** (Cleanse + Harden) — *dodge.*
+- *Does:* the part **fully dodges the 1st incoming hit** (the first entry in the strike queue) — 0 damage. **No** cleanse (the combo replaces Cleanse's base).
+- *Example:* the first enemy strike on it whiffs entirely. *On:* any part.
+
+**Reboot** (Cleanse + Overclock) — *full purge.*
+- *Does:* **clears ALL** statuses on the part (vs lone Cleanse = oldest 1). **No** invulnerability.
+- *Example:* a part hit by freeze+drain+confuse → all stripped. *On:* any part.
+
+> **Cut** (redundant): Recovery, Power Surge, Combat Mode. **Parked (v3):** Spike (now lives as
+> Reactive Plating), Status Ward, self-stack, the **Fortress** special.
 
 ---
 
@@ -455,10 +534,11 @@ pick component (= defense type) → solve → apply to one of **your** parts →
 | **Power Generator** | **Repair** — restore HP |
 | **Tower** | **Cleanse** — strip statuses |
 | **Engine** | **Harden** — flat damage reduction |
-| **Launch Pad** | **Overclock** — system boost (Tower vision / Engine evasion / etc.) |
+| **Launch Pad** | **Overclock** — (v2) +build-credit next attack phase |
 
-**Resolve order per part:** `Cleanse → Harden → Shield → Repair → overflow → HP`. Defenses **stack
-additively** in v1. **Spike** and Table E synergies = v2.
+**Resolve order per part:** see §4 (v2). Defenses **stack additively**. The **Table E v2** synergy
+matrix + the **status-queue/break engine** are specified in **§3.7** and **§4 Table E** (this is the
+v2 pass; built on branch `TRS-Strategy-Design-V2`).
 
 ## B.1 Scope
 - **In:** one battle, 6 components/side (HP only), alternating **Attack/Defense → Build(120 credit)
