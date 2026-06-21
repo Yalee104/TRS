@@ -166,6 +166,42 @@ export class Renderer {
     this.startEl?.classList.toggle('gpp-start-flash', !!on);
   }
 
+  // ---- live cell mutation (drain removes / shatter moves a node) ----------
+  /** Repaint ONE cell to a new node type (background + glyph). */
+  updateCell(x, y, typeKey) {
+    const el = this.cellEls[y]?.[x];
+    if (!el) return;
+    const def = this.nodeTypes[typeKey] || {};
+    el.style.background = def.color || '#333';
+    el.classList.toggle('gpp-blocker', def.passable === false);
+    el.querySelector('.gpp-icon, .gpp-label')?.remove();
+    const glyph = def.icon || def.label;
+    if (glyph) {
+      const span = document.createElement('span');
+      span.className = def.icon ? 'gpp-icon' : 'gpp-label';
+      if (def.icon && glyphCount(glyph) > 1) span.classList.add('gpp-icon-multi');
+      if (def.anim) span.classList.add(`gpp-anim-${def.anim}`);
+      span.textContent = glyph;
+      el.appendChild(span);
+    }
+  }
+
+  /** A shrinking ring on a payload that's about to drain (duration = its timer). */
+  startDecay(x, y, ms) {
+    const el = this.cellEls[y]?.[x];
+    if (!el) return;
+    let ring = el.querySelector('.gpp-decay');
+    if (!ring) { ring = document.createElement('div'); ring.className = 'gpp-decay'; el.appendChild(ring); }
+    ring.style.animationDuration = `${ms}ms`;
+    ring.classList.remove('gpp-decay-run');
+    void ring.offsetWidth; // restart the countdown animation
+    ring.classList.add('gpp-decay-run');
+  }
+
+  clearDecay(x, y) {
+    this.cellEls[y]?.[x]?.querySelector('.gpp-decay')?.remove();
+  }
+
   /** Repaint the whole board for a (new) level. */
   setLevel(level) {
     this.level = level;

@@ -74,6 +74,13 @@ function goOpts() {
   return { countdownMs: on ? Number($('goms').value) : 0, flashStart: $('flash').checked, countdownText: $('gotext').value || 'GO' };
 }
 
+// Runtime status modifiers from the Statuses panel (payload type = component skill).
+function readModifiers(skill) {
+  const m = {};
+  if ($('drainon').checked) m.decay = { type: skill, baseMs: Number($('drainbase').value) * 1000, stepMs: Number($('drainstep').value) * 1000 };
+  return Object.keys(m).length ? m : null;
+}
+
 // The engine's input: the skill-node keys the path crossed, in order.
 const skillSeqFromPath = (pathDesc) => pathDesc.map((c) => c.typeKey).filter((k) => palette.skills[k]);
 
@@ -89,13 +96,14 @@ function buildGame() {
     ? { type: skill, min: minChainValue(), icon: metaOf(skill).icon, label: metaOf(skill).name }
     : null; // null/omitted = gate off (reaching goal solves)
   const timeLimitMs = $('touon').checked ? clamp(Number($('tousec').value) || 10, 2, 30) * 1000 : null;
+  const modifiers = readModifiers(skill);
   game = new GridPathPuzzle({
     mount: $('board'),
     nodeTypes: catalogFromConfig(palette),
     generate: { size, seed: Number($('seed').value), routePlan: palette.generation },
     trapEntryMode: 'commitFail',
     countdownMs, flashStart, countdownText,
-    objective, timeLimitMs, failText: 'FAIL',
+    objective, timeLimitMs, failText: 'FAIL', modifiers,
     onPathChange, onComplete, onFail, onTick, onObjectiveBlocked,
     onCountdownEnd: () => { $('status').textContent = ''; },
   });
@@ -314,13 +322,17 @@ $('burndens').addEventListener('input', (e) => { $('burndensVal').textContent = 
 function syncStatusUI() {
   $('burndens').disabled = !$('burnon').checked;
   $('burnrow').classList.toggle('is-off', !$('burnon').checked);
+  const drain = $('drainon').checked;
+  $('drainbase').disabled = !drain; $('drainstep').disabled = !drain;
+  $('drainrow').classList.toggle('is-off', !drain);
 }
 $('burnon').addEventListener('change', syncStatusUI);
+$('drainon').addEventListener('change', syncStatusUI);
 
 // Re-apply generation knobs on the SAME seed when any change, so you can A/B a
 // single knob (e.g. Primary length) without the seed shifting underneath you.
 // (Regenerate is still the way to roll a fresh board.)
-['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec', 'burnon', 'burndens']
+['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec', 'burnon', 'burndens', 'drainon', 'drainbase', 'drainstep']
   .forEach((id) => $(id).addEventListener('change', buildGame));
 
 // Print the current settings as a paste-ready snippet for presets/trs.js (the

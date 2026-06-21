@@ -14,6 +14,7 @@
 // =============================================================================
 
 import { clampGridSize } from './util/clamp.js';
+import { makeRng } from './util/rng.js';
 import { Emitter } from './util/events.js';
 import { neighbors4, inBounds, isSolvable } from './core/gridModel.js';
 import { canExtend, backtrackIndex, reachedGoal } from './core/pathRules.js';
@@ -47,6 +48,7 @@ export class GridPathPuzzle {
       countdownText: 'GO',        // the overlay label
       objective: null,            // optional win gate: { type, min, icon?, label? } — null = off
       failText: null,             // optional: big centred banner shown on fail (null = off)
+      modifiers: null,            // optional runtime status modifiers (see _normalizeModifiers) — null = off
       ...options,
     };
     this.options.size = clampGridSize(this.options.size, 'size');
@@ -61,6 +63,13 @@ export class GridPathPuzzle {
     // Build the first level from options.level (authored) or options.generate.
     this.level = this._resolveLevel(options.level ?? options.generate ?? null);
     this.state = createGameState(this.level, this.options.initialRunState);
+
+    // Runtime status modifiers (drain/shatter/confused/freeze). A seeded RNG keeps
+    // the random ones reproducible per level seed (tests inject `options.rng`).
+    this._mods = this._normalizeModifiers(this.options.modifiers);
+    this._rng = this.options.rng || makeRng(this.level.seed);
+    this._fillKey = this._resolveFillKey();
+    this._decayTimers = null;
 
     this._mounted = false;
     this._timerRunning = false;
@@ -103,6 +112,7 @@ export class GridPathPuzzle {
 
   loadLevel(source) {
     this._clearCountdown();
+    this._clearDecay();
     this.level = this._resolveLevel(source);
     this.state = createGameState(this.level, this.options.initialRunState);
     this.renderer.setLevel(this.level);
@@ -113,6 +123,7 @@ export class GridPathPuzzle {
 
   reset() {
     this._clearCountdown();
+    this._clearDecay();
     this._stopTimer();
     this.state = createGameState(this.level, this.options.initialRunState);
     this.renderer.update([], { status: 'idle' });
@@ -123,6 +134,7 @@ export class GridPathPuzzle {
   destroy() {
     if (!this._mounted) return;
     this._clearCountdown();
+    this._clearDecay();
     this._stopTimer();
     this.pointer?.destroy();
     this.keyboard?.destroy();
@@ -197,6 +209,78 @@ export class GridPathPuzzle {
     this._fire('onObjectiveBlocked', 'objectiveBlocked', { type: this._objective.type, have, need: this._objective.min, missing });
   }
 
+  // ---- runtime status modifiers -------------------------------------------
+  _normalizeModifiers(m) {
+    if (!m) return null;
+    const out = {};
+    if (m.slow > 0 && m.slow < 1) out.slow = m.slow;                                    // freeze
+    if (m.confusion > 0) out.confusion = Math.min(1, m.confusion);                       // confused
+    if (m.decay && m.decay.type && m.decay.baseMs > 0) out.decay = { type: m.decay.type, baseMs: m.decay.baseMs | 0, stepMs: Math.max(0, m.decay.stepMs | 0) }; // drain
+    if (m.wander && m.wander.type && m.wander.chance > 0) out.wander = { type: m.wander.type, chance: Math.min(1, m.wander.chance) }; // shatter
+    return Object.keys(out).length ? out : null;
+  }
+
+  // The plain background/filler node key (passable normal, no trap/icon) — used
+  // when a payload is removed (drain) or vacated (shatter).
+  _resolveFillKey() {
+    const entries = Object.entries(this.nodeTypes);
+    const normals = entries.filter(([, d]) => d.role === 'normal' && d.passable !== false && !d.failsOnPass);
+    return (normals.find(([, d]) => !d.icon && !d.label) ?? normals[0])?.[0];
+  }
+
+  _isOnPath(x, y) { return this.state.path.some((c) => c.x === x && c.y === y); }
+
+  // DRAIN: each payload of the decay type vanishes on a timer — closest-to-start
+  // first (base), each further one +stepMs. Crossing a payload secures it.
+  _setupDecay() {
+    if (!this._mods?.decay) return;
+    const { type, baseMs, stepMs } = this._mods.decay;
+    const cells = [];
+    for (let y = 0; y < this.level.rows; y++) {
+      for (let x = 0; x < this.level.cols; x++) {
+        if (this.level.cells[y][x] === type) {
+          cells.push({ x, y, d: Math.abs(x - this.level.start.x) + Math.abs(y - this.level.start.y) });
+        }
+      }
+    }
+    cells.sort((a, b) => a.d - b.d);
+    this._decayTimers = new Map();
+    cells.forEach((c, i) => {
+      const expiry = baseMs + i * stepMs;
+      this._decayTimers.set(`${c.x},${c.y}`, { x: c.x, y: c.y, expiry, done: false });
+      this.renderer?.startDecay(c.x, c.y, expiry);
+    });
+  }
+
+  _tickDecay() {
+    if (!this._decayTimers) return;
+    for (const t of this._decayTimers.values()) {
+      if (t.done) continue;
+      if (this._isOnPath(t.x, t.y)) continue; // secured by crossing (also handled in _afterChange)
+      if (this.state.elapsedMs >= t.expiry) {
+        t.done = true;
+        this.level.cells[t.y][t.x] = this._fillKey;
+        this.renderer?.updateCell(t.x, t.y, this._fillKey);
+        this.renderer?.clearDecay(t.x, t.y);
+        this._fire('onDecay', 'decay', { x: t.x, y: t.y, type: this._mods.decay.type });
+        this._afterChange(); // refresh objective + canReachGoal (path unchanged)
+      }
+    }
+  }
+
+  // Stop the timer (and its ring) on any decay payload now on the path.
+  _secureCrossedPayloads() {
+    if (!this._decayTimers) return;
+    for (const t of this._decayTimers.values()) {
+      if (!t.done && this._isOnPath(t.x, t.y)) { t.done = true; this.renderer?.clearDecay(t.x, t.y); }
+    }
+  }
+
+  _clearDecay() {
+    if (this._decayTimers) for (const t of this._decayTimers.values()) this.renderer?.clearDecay(t.x, t.y);
+    this._decayTimers = null;
+  }
+
   // ---- timer --------------------------------------------------------------
   start() {
     if (this._timerRunning) return this;
@@ -226,6 +310,7 @@ export class GridPathPuzzle {
     // keeps the previous run's high `_lastTickEmit`, suppressing `tick` until real
     // time passes that old mark — the timer would appear frozen at "—".
     this._lastTickEmit = -Infinity;
+    if (this._mods?.decay && !this._decayTimers) this._setupDecay(); // start payload drain timers
     if (typeof requestAnimationFrame === 'function') this._loop();
   }
 
@@ -264,6 +349,7 @@ export class GridPathPuzzle {
   _loop() {
     if (!this._timerRunning) return;
     this.state.elapsedMs = now() - this._timerStart;
+    if (this._decayTimers) this._tickDecay();
     const limit = this.level.timeLimitMs;
     // Throttle tick emission to ~10/sec so hosts don't get spammed every frame.
     if (this.state.elapsedMs - this._lastTickEmit >= 100) {
@@ -431,6 +517,7 @@ export class GridPathPuzzle {
   // Re-render + broadcast a live preview after any path change. `added` (cells
   // appended by this move) is forwarded to the renderer for pass animations.
   _afterChange({ added = [], ...extra } = {}) {
+    this._secureCrossedPayloads(); // a crossed decay payload stops draining
     this.renderer.update(this.state.path, { pendingFail: this.state.pendingFail, status: this.state.status, added });
     this._fire('onPathChange', 'pathChange', {
       path: describePath(this.state.path, this.level),

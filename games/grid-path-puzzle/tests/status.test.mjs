@@ -45,3 +45,59 @@ test('burning: density 0 (off) places none', () => {
     assert((tally(lvl).burning || 0) === 0, `no burning when density 0 (seed ${seed})`);
   }
 });
+
+// ---- runtime modifiers (facade + DOM stub) ---------------------------------
+const mkEl = () => {
+  const cls = new Set();
+  return {
+    className: '', dataset: {}, style: { setProperty() {} }, hidden: false, textContent: '', title: '',
+    classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), toggle: (c, on) => { on ? cls.add(c) : cls.delete(c); }, contains: (c) => cls.has(c) },
+    appendChild() { return this; }, remove() {}, querySelector() { return null; }, querySelectorAll() { return []; },
+    setAttribute() {}, getAttribute() { return null; }, addEventListener() {}, removeEventListener() {}, dispatchEvent() {}, get offsetWidth() { return 0; },
+  };
+};
+globalThis.window = globalThis.window || { addEventListener() {}, removeEventListener() {} };
+globalThis.document = globalThis.document || { createElement: mkEl, createElementNS: mkEl, head: mkEl(), elementFromPoint() { return null; } };
+const { GridPathPuzzle } = await import('../module/GridPathPuzzle.js');
+
+const NT2 = {
+  start: { role: 'start', passable: true, color: '#fff' },
+  goal: { role: 'goal', passable: true, color: '#3a0' },
+  normal: { role: 'normal', passable: true, color: '#345' },
+  p: { role: 'normal', passable: true, color: '#5cf', icon: '🩸' },
+};
+const GRID2 = [
+  ['start', 'p', 'p', 'p', 'goal'],
+  ['normal', 'normal', 'normal', 'normal', 'normal'],
+  ['normal', 'normal', 'normal', 'normal', 'normal'],
+  ['normal', 'normal', 'normal', 'normal', 'normal'],
+  ['normal', 'normal', 'normal', 'normal', 'normal'],
+];
+const makeD = (opts) => new GridPathPuzzle({ mount: mkEl(), nodeTypes: NT2, level: { grid: GRID2.map((r) => r.slice()) }, countdownMs: 0, ...opts });
+
+test('drain: timers rank closest-to-start first with base + step', () => {
+  const g = makeD({ modifiers: { decay: { type: 'p', baseMs: 3000, stepMs: 250 } } });
+  g.start();
+  const exp = [...g._decayTimers.values()].map((t) => t.expiry).sort((a, b) => a - b);
+  assert(exp.length === 3, `3 payload timers (got ${exp.length})`);
+  assert(exp[0] === 3000 && exp[1] === 3250 && exp[2] === 3500, `expiries 3000/3250/3500 (got ${exp})`);
+});
+
+test('drain: crossing a payload secures it (timer stops)', () => {
+  const g = makeD({ modifiers: { decay: { type: 'p', baseMs: 3000, stepMs: 250 } } });
+  g.start();
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 1, y: 0 }); // cross the closest payload
+  assert(g._decayTimers.get('1,0').done === true, 'crossed payload is secured');
+});
+
+test('drain: an un-crossed payload vanishes after its timer', () => {
+  let decayed = 0;
+  const g = makeD({ modifiers: { decay: { type: 'p', baseMs: 3000, stepMs: 250 } }, onDecay: () => { decayed++; } });
+  g.start();
+  g.state.elapsedMs = 3001; // past the closest payload's expiry only
+  g._tickDecay();
+  assert(g.level.cells[0][1] !== 'p', 'closest payload drained to filler');
+  assert(g.level.cells[0][2] === 'p' && g.level.cells[0][3] === 'p', 'farther payloads still present');
+  assert(decayed === 1, 'onDecay fired once');
+});

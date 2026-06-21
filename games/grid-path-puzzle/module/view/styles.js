@@ -95,6 +95,15 @@ const CSS = `
   0%, 100% { box-shadow: inset 0 0 0 3px #ffffff, 0 0 14px 3px rgba(255,255,255,.85); }
   50%      { box-shadow: inset 0 0 0 3px #ffd34d, 0 0 18px 5px rgba(255,211,77,.9); } }
 
+/* DRAIN: a ring on a payload that shrinks as its timer runs out, then it vanishes. */
+.gpp-decay { position: absolute; inset: 14%; border-radius: 50%; box-sizing: border-box;
+  border: 2px solid rgba(255,90,90,.9); pointer-events: none; z-index: 4; }
+.gpp-decay.gpp-decay-run { animation-name: gpp-decay; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes gpp-decay {
+  0%   { transform: scale(1);   opacity: .9; }
+  80%  { transform: scale(.25); opacity: .9; }
+  100% { transform: scale(.1);  opacity: .2; } }
+
 /* Objective gate (opt-in via the objective option): a "collect N" badge + a
    locked GOAL until the minimum payloads are chained. */
 .gpp-objective { position: absolute; top: 0; left: 50%; transform: translate(-50%, -55%);
