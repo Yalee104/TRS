@@ -20,6 +20,11 @@
       .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #8a90a0; margin: 0 0 12px; }
       .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 9px 0; font-size: 13px; }
       .row label { color: #aeb4c0; }
+      /* a sub-row visually nested under the control above it */
+      .row.sub { padding-left: 14px; margin-top: 4px; border-left: 2px solid #2a2e3a; }
+      /* greyed-out state when a control's parent toggle is off */
+      .row.is-off { opacity: .4; }
+      input:disabled { cursor: not-allowed; }
       input[type="range"] { width: 140px; }
       input[type="number"], input[type="text"] { background: #0e0f13; color: #e6e6e6; border: 1px solid #2a2e3a; border-radius: 6px; padding: 4px 6px; }
       input[type="number"] { width: 84px; }
@@ -116,7 +121,7 @@
           <h3>Generation knobs</h3>
           <dl>
             <dt>Payload count (min–max)</dt><dd>Exact number of payload icons, rolled in this range per board (no longer +1). <b>Cluster on</b> = the run sits together (easy to grab); <b>off</b> = spread along the route. <i>Cleanse & Overclock require ≥3 chained — keep their min ≥ 3.</i></dd>
-            <dt>Require min chain (objective gate)</dt><dd><b>Optional</b> win rule: the GOAL stays 🔒 locked until you've crossed at least <b>Min chain</b> matching payloads (badge pips fill, turn green when met). Reaching the goal early just prompts "Need X more" — it's blocked, not a fail. Capped at the payload-count <b>min</b> so it's always achievable. Off = reaching the goal always solves.</dd>
+            <dt>Require min chain (Payload)</dt><dd><b>Optional</b> win rule: the GOAL stays 🔒 locked (its number counts down the payloads still needed) until you've crossed at least <b>Min chain</b> matching payloads (badge pips fill, turn green when met). Reaching the goal early just prompts "Need X more" — it's blocked, not a fail. Capped at the payload-count <b>min</b> so it's always achievable. Off = reaching the goal always solves.</dd>
             <dt>Placement</dt><dd>Where payloads sit vs. the high-value primary route. <b>onPrimaryRoute</b>: along the long intended route. <b>lateOnRoute</b>: pushed toward the goal end. <b>offRoute</b>: off the route — bait you must detour for (may be relaxed back onto the route on tight grids). <b>anywhere</b>: no constraint.</dd>
             <dt>Link 🔗 (chain)</dt><dd>The amplifier that multiplies the combo (<b>attack only</b>). <b>Appears %</b> = chance the board includes it; <b>placement</b> = <b>near End</b> (reserved by the goal) or <b>random on route</b>.</dd>
             <dt>Alternate routes</dt><dd>How many distinct shorter <b>SAFE</b> routes (carrying no payloads) the generator guarantees. <b>0</b> = only the payload route (forces the risk); <b>1+</b> = a low-risk / low-reward bypass exists.</dd>
@@ -170,8 +175,8 @@
           <div class="row"><label>Grid size <span id="sizeVal">6</span></label><input id="size" type="range" min="4" max="15" value="6" /></div>
           <div class="row"><label>Payload count (min–max)</label>
             <span><input id="cmin" type="number" min="1" max="8" value="3" style="width:52px" />–<input id="cmax" type="number" min="1" max="8" value="5" style="width:52px" /></span></div>
-          <div class="row"><label>Require min chain (objective gate)</label><input id="objon" type="checkbox" /></div>
-          <div class="row"><label>Min chain to solve</label><input id="minchain" type="number" min="1" max="8" value="3" style="width:56px" disabled /></div>
+          <div class="row"><label>Require min chain (Payload)</label><input id="objon" type="checkbox" /></div>
+          <div class="row sub" id="minchainrow"><label>↳ Min chain to solve</label><input id="minchain" type="number" min="1" max="8" value="3" style="width:56px" disabled /></div>
           <div class="row"><label>Placement</label>
             <select id="placement">
               <option value="onPrimaryRoute" selected>onPrimaryRoute</option>

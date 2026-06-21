@@ -284,7 +284,11 @@ $('placement').addEventListener('change', () => {
 $('showroute').addEventListener('change', renderRouteOverlay);
 
 // Enable/grey the Min-chain knob with its toggle.
-function syncObjUI() { $('minchain').disabled = !$('objon').checked; }
+function syncObjUI() {
+  const on = $('objon').checked;
+  $('minchain').disabled = !on;
+  $('minchainrow').classList.toggle('is-off', !on);
+}
 $('objon').addEventListener('change', syncObjUI);
 
 // Re-apply generation knobs on the SAME seed when any change, so you can A/B a

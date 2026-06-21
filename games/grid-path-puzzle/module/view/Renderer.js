@@ -100,10 +100,11 @@ export class Renderer {
     this._pipEls?.forEach((pip, i) => pip.classList.toggle('gpp-obj-pip-filled', i < current));
     if (this._objNumEl) this._objNumEl.textContent = `${current}/${min}`;
     this.objBadge?.classList.toggle('gpp-objective-met', !!met);
-    this._setGoalLocked(!met, min);
+    // The lock shows how many MORE payloads are needed — counts down to 0.
+    this._setGoalLocked(!met, Math.max(0, min - current));
   }
 
-  _setGoalLocked(locked, min) {
+  _setGoalLocked(locked, remaining) {
     if (!this.goalEl) return;
     this.goalEl.classList.toggle('gpp-goal-locked', !!locked);
     if (locked) {
@@ -112,7 +113,7 @@ export class Renderer {
         this._goalLockEl.className = 'gpp-goal-lock';
         this.goalEl.appendChild(this._goalLockEl);
       }
-      this._goalLockEl.textContent = `🔒${min ?? this._objMin ?? ''}`;
+      this._goalLockEl.textContent = `🔒${remaining}`;
       this._goalLockEl.hidden = false;
     } else if (this._goalLockEl) {
       this._goalLockEl.hidden = true;
