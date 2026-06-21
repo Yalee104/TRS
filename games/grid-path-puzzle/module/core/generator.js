@@ -407,6 +407,9 @@ function tryBuildRouteLevel({ cols, rows, nodeTypes, cats, plan, rng, opts }) {
 function resolvePlace(place, rng) {
   const usedByGroup = {};
   return place.map((p) => {
+    // Optional probabilistic inclusion: `chance` in [0,1). Rolled with the seeded
+    // rng so it's reproducible. Entries without `chance` never consume rng here.
+    if (p.chance != null && rng() >= p.chance) return null;
     let type = p.type;
     if (type && typeof type === 'object' && Array.isArray(type.oneOf)) {
       let pool = type.oneOf.slice();
@@ -422,7 +425,7 @@ function resolvePlace(place, rng) {
     let count = p.count;
     if (count && count.min != null && count.max != null) count = { exact: randInt(rng, count.min, count.max) };
     return { ...p, type, count };
-  });
+  }).filter(Boolean);
 }
 
 // Assign valuable node types to primary-route interior cells per the (resolved)

@@ -45,6 +45,8 @@ function readKnobs() {
     alternateRoutes: Number($('alt').value),
     channeling: $('channel').value,
     primaryLengthTarget: $('plt').value,
+    chainChance: Math.max(0, Math.min(100, Number($('chainpct').value))) / 100,
+    chainPlacement: $('chainplace').value,
   };
 }
 
@@ -75,6 +77,22 @@ function buildGame() {
   window.__puzzle = game;
   renderLegend();
   resetReadout();
+  updateSolveWarn();
+}
+
+// Warn when the board can't satisfy the skill's MIN_CHAIN: e.g. Cleanse/Overclock
+// need 3 chained, so a payload max below that makes the TRS unsolvable.
+function updateSolveWarn() {
+  const el = $('solvewarn');
+  const skill = skillOf();
+  const need = MIN_CHAIN[skill] || 1;
+  const max = Number($('cmax').value);
+  if (need > max) {
+    el.style.display = '';
+    el.textContent = `⚠ ${metaOf(skill).name} needs ${need} chained to solve, but payload max is ${max} — raise the payload count.`;
+  } else {
+    el.style.display = 'none';
+  }
 }
 
 // ---- combo readout ----------------------------------------------------------
@@ -185,6 +203,7 @@ function setPhase(next) {
   phase = next;
   $('phase-attack').classList.toggle('active', phase === 'attack');
   $('phase-defense').classList.toggle('active', phase === 'defense');
+  $('chainrows').style.display = phase === 'attack' ? '' : 'none'; // chain is attack-only
   renderComponents();
   buildGame();
 }
@@ -227,6 +246,8 @@ function exportConfig() {
     `  alternateRoutes: ${k.alternateRoutes},`,
     `  channeling: ${q(k.channeling)},`,
     `  primaryLengthTarget: ${q(k.primaryLengthTarget)},`,
+    `  chainChance: ${k.chainChance}, // attack only`,
+    `  chainPlacement: ${q(k.chainPlacement)},`,
     '};',
     '// presentation (module options — set where the puzzle is constructed, e.g. strategy bridge.js):',
     `//   countdownMs: ${go.countdownMs}, flashStart: ${go.flashStart}, countdownText: ${q(go.countdownText)}`,

@@ -67,11 +67,20 @@ export function genPlan(skillKey, withChain, trsMods = {}, knobs = {}) {
   const cluster = knobs.cluster !== undefined ? knobs.cluster : true;
   const count = knobs.count || { min: 2, max: 4 };
   const placement = knobs.placement || 'onPrimaryRoute';
+  // One payload group — its size is exactly `count` (min..max). (NOTE: this drops
+  // the legacy extra "+1" singleton, so for verbs with MIN_CHAIN > 1 — Cleanse /
+  // Overclock (3) — the caller must keep count.min high enough to be solvable.)
   const place = [
     { type: skillKey, count, placement, cluster, order: 0 },
-    { type: skillKey, count: { exact: 1 }, placement, order: 1 },
   ];
-  if (withChain) place.push({ type: 'chain', count: { exact: 1 }, placement: 'lateOnRoute', order: 10 });
+  if (withChain) {
+    // The chain 🔗 amplifier: placement + an optional appearance probability are
+    // tunable. `chainPlacement` 'lateOnRoute' = near the goal, 'onPrimaryRoute' =
+    // a random spot along the route. `chainChance` (0..1) < 1 means it may be absent.
+    const chain = { type: 'chain', count: { exact: 1 }, placement: knobs.chainPlacement || 'lateOnRoute', order: 10 };
+    if (knobs.chainChance != null && knobs.chainChance < 1) chain.chance = knobs.chainChance;
+    place.push(chain);
+  }
   return {
     place,
     alternateRoutes: knobs.alternateRoutes ?? 1,

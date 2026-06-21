@@ -133,6 +133,23 @@ test('payload count is honored whether cluster is ON or OFF (regression)', () =>
   }
 });
 
+test('place entries with `chance` are probabilistically included (regression)', () => {
+  const planWith = (chance) => ({
+    place: [
+      { type: 'freeze', count: { min: 2, max: 2 }, placement: 'onPrimaryRoute', cluster: true, order: 0 },
+      { type: 'chain', count: { exact: 1 }, placement: 'lateOnRoute', order: 10, chance },
+    ],
+    alternateRoutes: 1, primaryLengthTarget: 'long', channeling: 'strong',
+    trapDensity: 0.2, blockerDensity: 0.18, lateGap: { min: 1, max: 2 }, endpointMode: 'edgeRandom',
+  });
+  for (let seed = 0; seed < 8; seed++) {
+    const off = generate({ size: 11, nodeTypes: OFF_NT, seed, routePlan: planWith(0) });
+    if (off.primaryRoute) assert((tally(off).chain || 0) === 0, `chance:0 omits chain (seed ${seed})`);
+    const on = generate({ size: 11, nodeTypes: OFF_NT, seed, routePlan: planWith(1) });
+    if (on.primaryRoute) assert((tally(on).chain || 0) === 1, `chance:1 keeps exactly one chain (seed ${seed})`);
+  }
+});
+
 test('over-constrained 4x4 still returns a solvable board (graceful fallback)', () => {
   const warns = [];
   const orig = console.warn;

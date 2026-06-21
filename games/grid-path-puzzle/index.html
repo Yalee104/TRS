@@ -65,8 +65,10 @@
       .meta { display: flex; gap: 16px; font-size: 12px; color: #9aa0aa; margin-top: 8px; flex-wrap: wrap; }
       .meta b { color: #cdd2da; }
       .warn { color: #ff8a5a; }
-      /* reference / help panel below the board */
-      .help { grid-column: 1 / -1; }
+      /* left column holds the board + the reference panel directly under it */
+      .boardcol { min-width: 0; }
+      .help { margin-top: 14px; }
+      .help dd i { color: #ffb27a; font-style: normal; }
       .help h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #8a90a0; margin: 14px 0 8px; }
       .help h3:first-of-type { margin-top: 0; }
       .help dl { display: grid; grid-template-columns: 168px 1fr; gap: 4px 14px; margin: 0; font-size: 12.5px; line-height: 1.5; }
@@ -94,7 +96,31 @@
         <button id="phase-defense">🛡️ Defense</button>
       </div>
 
-      <div id="board"></div>
+      <div class="boardcol">
+        <div id="board"></div>
+
+        <div class="panel help">
+          <h3>Launch Pad (TRS quality)</h3>
+          <dl>
+            <dt>Healthy (full HP)</dt><dd>Grid <b>−1</b>, trap & blocker density <b>−0.08</b> — smaller, sparser, easier.</dd>
+            <dt>Damaged (~50% HP)</dt><dd>Grid <b>±0</b>, trap & blocker density <b>−0.04</b> — slightly eased.</dd>
+            <dt>Baseline (near-zero HP)</dt><dd>Grid size & density <b>exactly as the Generation panel</b> — no modifier.</dd>
+            <dt>Destroyed (the cliff)</dt><dd>Grid <b>+2</b>, trap <b>+0.10</b> / blocker <b>+0.12</b> — bigger and congested, the hardest.</dd>
+          </dl>
+          <p style="font-size:11.5px;color:#6f7686;margin:6px 0 0;">The bonus layers on top of the Generation panel: e.g. Destroyed with the trap slider at 0.20 paints at ≈0.30.</p>
+
+          <h3>Generation knobs</h3>
+          <dl>
+            <dt>Payload count (min–max)</dt><dd>Exact number of payload icons, rolled in this range per board (no longer +1). <b>Cluster on</b> = the run sits together (easy to grab); <b>off</b> = spread along the route. <i>Cleanse & Overclock require ≥3 chained — keep their min ≥ 3.</i></dd>
+            <dt>Placement</dt><dd>Where payloads sit vs. the high-value primary route. <b>onPrimaryRoute</b>: along the long intended route. <b>lateOnRoute</b>: pushed toward the goal end. <b>offRoute</b>: off the route — bait you must detour for (may be relaxed back onto the route on tight grids). <b>anywhere</b>: no constraint.</dd>
+            <dt>Link 🔗 (chain)</dt><dd>The amplifier that multiplies the combo (<b>attack only</b>). <b>Appears %</b> = chance the board includes it; <b>placement</b> = <b>near End</b> (reserved by the goal) or <b>random on route</b>.</dd>
+            <dt>Alternate routes</dt><dd>How many distinct shorter <b>SAFE</b> routes (carrying no payloads) the generator guarantees. <b>0</b> = only the payload route (forces the risk); <b>1+</b> = a low-risk / low-reward bypass exists.</dd>
+            <dt>Channeling</dt><dd>How hazards crowd the primary route. <b>strong</b> = blockers/traps biased to sit right beside the route (×1.6), funneling you onto it. <b>soft</b> = hazards spread evenly.</dd>
+            <dt>Primary length</dt><dd>Length of the intended (high-combo) route. <b>long</b> ≈ 1.6× the shortest path, <b>medium</b> ≈ 1.3×, <b>short</b> = the shortest. Longer = more room for icons but more hazard exposure.</dd>
+            <dt>Trap / Blocker density</dt><dd>Base chance an off-route cell becomes a <b>trap</b> (☠️ fails on entry) / <b>blocker</b> (⛔ impassable). Launch Pad shifts these.</dd>
+          </dl>
+        </div>
+      </div>
 
       <div>
         <div class="panel">
@@ -107,6 +133,7 @@
             <span>Reach <b id="reach">yes</b></span>
           </div>
           <div id="trsinfo" class="meta"></div>
+          <div id="solvewarn" class="warn" style="font-size:12px;margin-top:6px;display:none"></div>
           <div class="btns">
             <button id="reset" style="grid-column: 1 / -1;">↻ Reset (replay this board)</button>
           </div>
@@ -150,6 +177,10 @@
           <div class="row"><label>Alternate routes</label><input id="alt" type="number" min="0" max="3" value="1" style="width:56px" /></div>
           <div class="row"><label>Channeling</label><select id="channel"><option value="strong" selected>strong</option><option value="soft">soft</option></select></div>
           <div class="row"><label>Primary length</label><select id="plt"><option value="long" selected>long</option><option value="medium">medium</option><option value="short">short</option></select></div>
+          <div id="chainrows">
+            <div class="row"><label>Link 🔗 appears (%)</label><input id="chainpct" type="number" min="0" max="100" step="5" value="100" style="width:64px" /></div>
+            <div class="row"><label>Link 🔗 placement</label><select id="chainplace"><option value="lateOnRoute" selected>near End (goal)</option><option value="onPrimaryRoute">random on route</option></select></div>
+          </div>
           <div class="row"><label>Seed</label><span><input id="seed" type="number" value="1" style="width:84px" /> <button id="random" style="padding:4px 8px">🎲</button></span></div>
           <div id="placehint" class="warn" style="font-size:11px;display:none;margin-top:2px">off-route payloads may be relaxed back onto the route on tight grids.</div>
         </div>
@@ -160,27 +191,6 @@
           <div class="row"><label>Flash START cell</label><input id="flash" type="checkbox" checked /></div>
           <div class="row"><label>GO text</label><input id="gotext" type="text" value="GO" style="width:84px" /></div>
         </div>
-      </div>
-
-      <div class="panel help">
-        <h3>Launch Pad (TRS quality)</h3>
-        <dl>
-          <dt>Healthy (full HP)</dt><dd>Grid <b>−1</b>, trap & blocker density <b>−0.08</b> — smaller, sparser, easier.</dd>
-          <dt>Damaged (~50% HP)</dt><dd>Grid <b>±0</b>, trap & blocker density <b>−0.04</b> — slightly eased.</dd>
-          <dt>Baseline (near-zero HP)</dt><dd>Grid size & density <b>exactly as the Generation panel</b> — no modifier.</dd>
-          <dt>Destroyed (the cliff)</dt><dd>Grid <b>+2</b>, trap <b>+0.10</b> / blocker <b>+0.12</b> — bigger and congested, the hardest.</dd>
-        </dl>
-        <p style="font-size:11.5px;color:#6f7686;margin:6px 0 0;">The bonus layers on top of the Generation panel: e.g. Destroyed with the trap slider at 0.20 paints at ≈0.30.</p>
-
-        <h3>Generation knobs</h3>
-        <dl>
-          <dt>Payload count (min–max)</dt><dd>Size of the main payload run. The recipe also drops <b>1 extra guaranteed</b> payload, so total icons = <b>count + 1</b>. <b>Cluster on</b> = the run sits together (easy to grab); <b>off</b> = spread along the route.</dd>
-          <dt>Placement</dt><dd>Where payloads sit vs. the high-value primary route. <b>onPrimaryRoute</b>: along the long intended route. <b>lateOnRoute</b>: pushed toward the goal end. <b>offRoute</b>: off the route — bait you must detour for (may be relaxed back onto the route on tight grids). <b>anywhere</b>: no constraint.</dd>
-          <dt>Alternate routes</dt><dd>How many distinct shorter <b>SAFE</b> routes (carrying no payloads) the generator guarantees. <b>0</b> = only the payload route (forces the risk); <b>1+</b> = a low-risk / low-reward bypass exists.</dd>
-          <dt>Channeling</dt><dd>How hazards crowd the primary route. <b>strong</b> = blockers/traps biased to sit right beside the route (×1.6), funneling you onto it. <b>soft</b> = hazards spread evenly.</dd>
-          <dt>Primary length</dt><dd>Length of the intended (high-combo) route. <b>long</b> ≈ 1.6× the shortest path, <b>medium</b> ≈ 1.3×, <b>short</b> = the shortest. Longer = more room for icons but more hazard exposure.</dd>
-          <dt>Trap / Blocker density</dt><dd>Base chance an off-route cell becomes a <b>trap</b> (☠️ fails on entry) / <b>blocker</b> (⛔ impassable). Launch Pad shifts these.</dd>
-        </dl>
       </div>
 
       <div class="legend" id="legend"></div>
