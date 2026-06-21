@@ -77,9 +77,26 @@ function buildGame() {
   game.start(); // kick the GO pause (or start immediately if countdownMs is 0)
   window.__puzzle = game;
   lastSeed = Number($('seed').value);
+  const pr = game.level.primaryRoute, sr = game.level.safeRoute;
+  $('routelen').textContent = pr ? `${pr.length}${sr ? ` · safe ${sr.length}` : ''}` : '—';
   renderLegend();
   resetReadout();
   updateSolveWarn();
+  renderRouteOverlay();
+}
+
+// Debug overlay: outline the generator's intended primary (reward) + safe routes
+// on the board so the effect of Primary length / Placement is actually visible.
+// (The routes are level metadata the module exposes; it never draws them itself.)
+function renderRouteOverlay() {
+  const board = $('board');
+  board.querySelectorAll('.pg-primary, .pg-safe').forEach((c) => c.classList.remove('pg-primary', 'pg-safe'));
+  if (!$('showroute').checked || !game?.level) return;
+  const mark = (route, cls) => (route || []).forEach((p) => {
+    board.querySelector(`.gpp-cell[data-x="${p.x}"][data-y="${p.y}"]`)?.classList.add(cls);
+  });
+  mark(game.level.safeRoute, 'pg-safe');
+  mark(game.level.primaryRoute, 'pg-primary');
 }
 
 // Regenerate: rebuild from the current knobs. If the seed is unchanged since the
@@ -236,6 +253,14 @@ $('placement').addEventListener('change', () => {
   const off = $('placement').value === 'offRoute' || $('placement').value === 'anywhere';
   $('placehint').style.display = off ? '' : 'none';
 });
+
+$('showroute').addEventListener('change', renderRouteOverlay);
+
+// Re-apply generation knobs on the SAME seed when any change, so you can A/B a
+// single knob (e.g. Primary length) without the seed shifting underneath you.
+// (Regenerate is still the way to roll a fresh board.)
+['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace']
+  .forEach((id) => $(id).addEventListener('change', buildGame));
 
 // Print the current settings as a paste-ready snippet for presets/trs.js (the
 // playground never writes files — this is the bridge to "baking" tuned defaults).
