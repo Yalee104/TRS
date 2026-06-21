@@ -24,12 +24,20 @@ const $ = (id) => document.getElementById(id);
 const round = (n) => Math.round(n * 100) / 100;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
-// Effective "min chain" for the objective gate: the knob, defaulted to the skill's
-// inherent MIN_CHAIN, clamped to the payload-count min so it's always achievable.
+// Effective "min chain" for the objective gate: the knob, clamped to the
+// payload-count min so it can never exceed it (and is always achievable).
 function minChainValue() {
   const cmin = Number($('cmin').value) || 1;
-  const raw = Number($('minchain').value) || MIN_CHAIN[skillOf()] || 1;
-  return clamp(raw, 1, cmin);
+  return clamp(Number($('minchain').value) || 1, 1, cmin);
+}
+
+// Keep the Min-chain field itself within [1, payload-count min] — the rule is it
+// cannot exceed the payload min — and cap the spinner's max accordingly.
+function clampMinChainInput() {
+  const cmin = Number($('cmin').value) || 1;
+  const el = $('minchain');
+  el.max = cmin;
+  el.value = clamp(Number(el.value) || 1, 1, cmin);
 }
 
 const COMPONENTS = ['weapon', 'generator', 'tower', 'engine', 'launchpad'];
@@ -70,6 +78,7 @@ const skillSeqFromPath = (pathDesc) => pathDesc.map((c) => c.typeKey).filter((k)
 
 function buildGame() {
   if (game) game.destroy();
+  clampMinChainInput(); // keep Min chain <= payload-count min
   const preset = $('lpmod').value;
   palette = buildPalette({ phase, component, preset, knobs: readKnobs() });
   const size = Math.max(4, Number($('size').value) + (LAUNCHPAD_MODS[preset]?.sizeDelta || 0));
@@ -250,16 +259,12 @@ function renderComponents() {
 }
 
 // ---- controls ---------------------------------------------------------------
-// Default the Min-chain knob to the (new) skill's inherent MIN_CHAIN.
-function trackMinChainDefault() { $('minchain').value = MIN_CHAIN[skillOf()] || 1; }
-
 function setPhase(next) {
   phase = next;
   $('phase-attack').classList.toggle('active', phase === 'attack');
   $('phase-defense').classList.toggle('active', phase === 'defense');
   $('chainrows').style.display = phase === 'attack' ? '' : 'none'; // chain is attack-only
   renderComponents();
-  trackMinChainDefault();
   buildGame();
 }
 $('phase-attack').addEventListener('click', () => setPhase('attack'));
@@ -269,7 +274,6 @@ $('components').addEventListener('click', (e) => {
   if (!b) return;
   component = b.dataset.comp;
   renderComponents();
-  trackMinChainDefault();
   buildGame();
 });
 
@@ -283,9 +287,11 @@ $('placement').addEventListener('change', () => {
 
 $('showroute').addEventListener('change', renderRouteOverlay);
 
-// Enable/grey the Min-chain knob with its toggle.
+// Enable/grey the Min-chain knob with its toggle. Enabling defaults the value to
+// the payload-count min (and the field is capped there).
 function syncObjUI() {
   const on = $('objon').checked;
+  if (on) $('minchain').value = Number($('cmin').value) || 1;
   $('minchain').disabled = !on;
   $('minchainrow').classList.toggle('is-off', !on);
 }
@@ -351,6 +357,5 @@ $('size').value = DEFAULT_GRID_SIZE;
 $('sizeVal').textContent = String(DEFAULT_GRID_SIZE);
 
 renderComponents();
-trackMinChainDefault();
 syncObjUI();
 buildGame();
