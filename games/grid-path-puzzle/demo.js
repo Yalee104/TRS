@@ -22,6 +22,15 @@ import {
 
 const $ = (id) => document.getElementById(id);
 const round = (n) => Math.round(n * 100) / 100;
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+// Effective "min chain" for the objective gate: the knob, defaulted to the skill's
+// inherent MIN_CHAIN, clamped to the payload-count min so it's always achievable.
+function minChainValue() {
+  const cmin = Number($('cmin').value) || 1;
+  const raw = Number($('minchain').value) || MIN_CHAIN[skillOf()] || 1;
+  return clamp(raw, 1, cmin);
+}
 
 const COMPONENTS = ['weapon', 'generator', 'tower', 'engine', 'launchpad'];
 const COMP_LABEL = { weapon: 'Weapon', generator: 'Generator', tower: 'Tower', engine: 'Engine', launchpad: 'Launch Pad' };
@@ -65,13 +74,18 @@ function buildGame() {
   palette = buildPalette({ phase, component, preset, knobs: readKnobs() });
   const size = Math.max(4, Number($('size').value) + (LAUNCHPAD_MODS[preset]?.sizeDelta || 0));
   const { countdownMs, flashStart, countdownText } = goOpts();
+  const skill = skillOf();
+  const objective = $('objon').checked
+    ? { type: skill, min: minChainValue(), icon: metaOf(skill).icon, label: metaOf(skill).name }
+    : null; // null/omitted = gate off (reaching goal solves)
   game = new GridPathPuzzle({
     mount: $('board'),
     nodeTypes: catalogFromConfig(palette),
     generate: { size, seed: Number($('seed').value), routePlan: palette.generation },
     trapEntryMode: 'commitFail',
     countdownMs, flashStart, countdownText,
-    onPathChange, onComplete, onFail, onTick,
+    objective,
+    onPathChange, onComplete, onFail, onTick, onObjectiveBlocked,
     onCountdownEnd: () => { $('status').textContent = ''; },
   });
   game.start(); // kick the GO pause (or start immediately if countdownMs is 0)
@@ -109,16 +123,18 @@ function regenerate() {
   buildGame();
 }
 
-// Warn when the board can't satisfy the skill's MIN_CHAIN: e.g. Cleanse/Overclock
-// need 3 chained, so a payload max below that makes the TRS unsolvable.
+// Warn when the requirement can't be guaranteed: the active min-chain (the gate,
+// or the skill's inherent MIN_CHAIN) must be <= the payload-count MIN, since min
+// is the worst-case number of payloads the generator places.
 function updateSolveWarn() {
   const el = $('solvewarn');
   const skill = skillOf();
-  const need = MIN_CHAIN[skill] || 1;
-  const max = Number($('cmax').value);
-  if (need > max) {
+  const gate = $('objon').checked ? (Number($('minchain').value) || 1) : 0;
+  const need = Math.max(MIN_CHAIN[skill] || 1, gate);
+  const min = Number($('cmin').value);
+  if (need > min) {
     el.style.display = '';
-    el.textContent = `⚠ ${metaOf(skill).name} needs ${need} chained to solve, but payload max is ${max} — raise the payload count.`;
+    el.textContent = `⚠ ${metaOf(skill).name} needs ${need} chained to solve, but payload min is ${min} — raise the payload min or lower Min chain.`;
   } else {
     el.style.display = 'none';
   }
@@ -153,7 +169,7 @@ function renderCombo(result, isFinal) {
 // "potency" the route would yield, the resolved skill, and the min-chain check.
 function renderTrsInfo(info) {
   const skill = skillOf();
-  const need = MIN_CHAIN[skill] || 1;
+  const need = $('objon').checked ? minChainValue() : (MIN_CHAIN[skill] || 1);
   const seq = info ? skillSeqFromPath(info.path) : [];
   const chained = seq.filter((k) => k === skill).length;
   const value = info ? (evaluate(seq, palette).items?.[0]?.value ?? 0) : 0;
@@ -186,6 +202,12 @@ function onFail(info) {
   el.className = 'lose';
   el.textContent = info.reason === 'timeout' ? '⏱ Time up — failed!'
     : info.reason === 'trap' ? '💥 Hit a hazard — failed!' : '❌ Failed.';
+}
+
+function onObjectiveBlocked(info) {
+  const el = $('status');
+  el.className = 'warn';
+  el.textContent = `🔒 Locked — chain ${info.missing} more ${metaOf(skillOf()).icon} to solve`;
 }
 
 function onTick(info) {
@@ -228,12 +250,16 @@ function renderComponents() {
 }
 
 // ---- controls ---------------------------------------------------------------
+// Default the Min-chain knob to the (new) skill's inherent MIN_CHAIN.
+function trackMinChainDefault() { $('minchain').value = MIN_CHAIN[skillOf()] || 1; }
+
 function setPhase(next) {
   phase = next;
   $('phase-attack').classList.toggle('active', phase === 'attack');
   $('phase-defense').classList.toggle('active', phase === 'defense');
   $('chainrows').style.display = phase === 'attack' ? '' : 'none'; // chain is attack-only
   renderComponents();
+  trackMinChainDefault();
   buildGame();
 }
 $('phase-attack').addEventListener('click', () => setPhase('attack'));
@@ -243,6 +269,7 @@ $('components').addEventListener('click', (e) => {
   if (!b) return;
   component = b.dataset.comp;
   renderComponents();
+  trackMinChainDefault();
   buildGame();
 });
 
@@ -256,10 +283,14 @@ $('placement').addEventListener('change', () => {
 
 $('showroute').addEventListener('change', renderRouteOverlay);
 
+// Enable/grey the Min-chain knob with its toggle.
+function syncObjUI() { $('minchain').disabled = !$('objon').checked; }
+$('objon').addEventListener('change', syncObjUI);
+
 // Re-apply generation knobs on the SAME seed when any change, so you can A/B a
 // single knob (e.g. Primary length) without the seed shifting underneath you.
 // (Regenerate is still the way to roll a fresh board.)
-['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace']
+['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain']
   .forEach((id) => $(id).addEventListener('change', buildGame));
 
 // Print the current settings as a paste-ready snippet for presets/trs.js (the
@@ -316,4 +347,6 @@ $('size').value = DEFAULT_GRID_SIZE;
 $('sizeVal').textContent = String(DEFAULT_GRID_SIZE);
 
 renderComponents();
+trackMinChainDefault();
+syncObjUI();
 buildGame();

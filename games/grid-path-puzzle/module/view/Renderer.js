@@ -58,7 +58,82 @@ export class Renderer {
     this.overlay.hidden = true;
     this.wrap.appendChild(this.overlay);
 
+    // Objective badge (hidden until setObjective()).
+    this.objBadge = document.createElement('div');
+    this.objBadge.className = 'gpp-objective';
+    this.objBadge.hidden = true;
+    this.wrap.appendChild(this.objBadge);
+
     this.root.appendChild(this.wrap);
+  }
+
+  // ---- objective gate (optional) ------------------------------------------
+  /** Configure the objective badge + locked-goal visual. Idempotent. */
+  setObjective({ min = 1, icon = '' } = {}) {
+    if (!this.objBadge) return;
+    this._objMin = min;
+    this.objBadge.textContent = '';
+    const ico = document.createElement('span');
+    ico.className = 'gpp-obj-icon';
+    ico.textContent = icon;
+    const pips = document.createElement('div');
+    pips.className = 'gpp-obj-pips';
+    this._pipEls = [];
+    for (let i = 0; i < min; i++) {
+      const pip = document.createElement('i');
+      pip.className = 'gpp-obj-pip';
+      pips.appendChild(pip);
+      this._pipEls.push(pip);
+    }
+    this._objNumEl = document.createElement('span');
+    this._objNumEl.className = 'gpp-obj-num';
+    this.objBadge.appendChild(ico);
+    this.objBadge.appendChild(pips);
+    this.objBadge.appendChild(this._objNumEl);
+    this.objBadge.hidden = false;
+    this.objBadge.classList.remove('gpp-objective-met');
+    this._setGoalLocked(true, min);
+  }
+
+  /** Reflect live progress: fill pips, color when met, lock/unlock the goal. */
+  updateObjective(current = 0, min = this._objMin || 1, met = false) {
+    this._pipEls?.forEach((pip, i) => pip.classList.toggle('gpp-obj-pip-filled', i < current));
+    if (this._objNumEl) this._objNumEl.textContent = `${current}/${min}`;
+    this.objBadge?.classList.toggle('gpp-objective-met', !!met);
+    this._setGoalLocked(!met, min);
+  }
+
+  _setGoalLocked(locked, min) {
+    if (!this.goalEl) return;
+    this.goalEl.classList.toggle('gpp-goal-locked', !!locked);
+    if (locked) {
+      if (!this._goalLockEl) {
+        this._goalLockEl = document.createElement('span');
+        this._goalLockEl.className = 'gpp-goal-lock';
+        this.goalEl.appendChild(this._goalLockEl);
+      }
+      this._goalLockEl.textContent = `🔒${min ?? this._objMin ?? ''}`;
+      this._goalLockEl.hidden = false;
+    } else if (this._goalLockEl) {
+      this._goalLockEl.hidden = true;
+    }
+  }
+
+  /** Brief "Need X more" prompt when the player hits a locked goal. */
+  showObjectiveNeed(missing = 0) {
+    if (!this.wrap) return;
+    if (!this.objNeedEl) {
+      this.objNeedEl = document.createElement('div');
+      this.objNeedEl.className = 'gpp-obj-need';
+      this.wrap.appendChild(this.objNeedEl);
+    }
+    this.objNeedEl.textContent = missing > 0 ? `Need ${missing} more` : 'Need more';
+    this.objNeedEl.hidden = false;
+    this.objNeedEl.classList.remove('gpp-obj-need-show');
+    void this.objNeedEl.offsetWidth; // restart the fade animation
+    this.objNeedEl.classList.add('gpp-obj-need-show');
+    if (this._objNeedTimer) clearTimeout(this._objNeedTimer);
+    this._objNeedTimer = setTimeout(() => { if (this.objNeedEl) this.objNeedEl.hidden = true; }, 1100);
   }
 
   /** Show the centred pre-start label ("GO"); replays its pop animation each call. */
@@ -92,6 +167,8 @@ export class Renderer {
     this.gridEl.textContent = '';
     this.cellEls = [];
     this.startEl = null; // captured below; used by setStartFlash()
+    this.goalEl = null;  // captured below; used by the locked-goal visual
+    this._goalLockEl = null; // stale after a rebuild (old goal cell was dropped)
 
     for (let y = 0; y < level.rows; y++) {
       const row = [];
@@ -103,7 +180,7 @@ export class Renderer {
         cell.dataset.y = y;
         cell.style.background = def.color || '#333';
         if (def.role === 'start') { cell.classList.add('gpp-start'); this.startEl = cell; }
-        if (def.role === 'goal') cell.classList.add('gpp-goal');
+        if (def.role === 'goal') { cell.classList.add('gpp-goal'); this.goalEl = cell; }
         if (def.passable === false) cell.classList.add('gpp-blocker');
         if (def.effectKind) cell.dataset.kind = def.effectKind; // tints pass animations
         // A node's "sprite": prefer an icon glyph, else fall back to a text label.
@@ -176,6 +253,7 @@ export class Renderer {
   }
 
   destroy() {
+    if (this._objNeedTimer) clearTimeout(this._objNeedTimer);
     this.wrap.remove();
   }
 }

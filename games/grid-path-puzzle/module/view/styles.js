@@ -81,6 +81,42 @@ const CSS = `
 @keyframes gpp-startflash {
   0%, 100% { box-shadow: inset 0 0 0 3px #ffffff, 0 0 14px 3px rgba(255,255,255,.85); }
   50%      { box-shadow: inset 0 0 0 3px #ffd34d, 0 0 18px 5px rgba(255,211,77,.9); } }
+
+/* Objective gate (opt-in via the objective option): a "collect N" badge + a
+   locked GOAL until the minimum payloads are chained. */
+.gpp-objective { position: absolute; top: 0; left: 50%; transform: translate(-50%, -55%);
+  z-index: 8; display: flex; align-items: center; gap: calc(10cqi / var(--cols));
+  padding: calc(6cqi / var(--cols)) calc(12cqi / var(--cols));
+  background: rgba(16,18,26,.92); border: 1px solid #3a4150; border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.5); white-space: nowrap; pointer-events: none; }
+.gpp-objective[hidden] { display: none; }
+.gpp-obj-icon { font-size: calc(34cqi / var(--cols)); line-height: 1; }
+.gpp-obj-pips { display: flex; gap: calc(5cqi / var(--cols)); }
+.gpp-obj-pip { width: calc(14cqi / var(--cols)); height: calc(14cqi / var(--cols));
+  border-radius: 50%; background: transparent; border: 2px solid #6b7280; box-sizing: border-box; }
+.gpp-obj-pip-filled { background: #ffd34d; border-color: #ffd34d; }
+.gpp-obj-num { font: 700 calc(24cqi / var(--cols)) system-ui, sans-serif; color: #cdd2da;
+  font-variant-numeric: tabular-nums; }
+.gpp-objective-met .gpp-obj-pip-filled { background: #5ef08a; border-color: #5ef08a; }
+.gpp-objective-met .gpp-obj-num { color: #5ef08a; }
+/* Locked goal: hide the flag glyph, show the lock + the required count. */
+.gpp-goal-locked .gpp-icon, .gpp-goal-locked .gpp-label { visibility: hidden; }
+.gpp-goal-lock { position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; font: 700 calc(34cqi / var(--cols)) system-ui, sans-serif;
+  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none; }
+.gpp-goal-lock[hidden] { display: none; }
+/* "Need X more" prompt shown when the player hits the locked goal. */
+.gpp-obj-need { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%);
+  z-index: 9; padding: calc(6cqi / var(--cols)) calc(12cqi / var(--cols)); border-radius: 8px;
+  background: rgba(180,40,40,.92); color: #fff; font: 700 calc(30cqi / var(--cols)) system-ui, sans-serif;
+  white-space: nowrap; pointer-events: none; }
+.gpp-obj-need[hidden] { display: none; }
+.gpp-obj-need.gpp-obj-need-show { animation: gpp-obj-need 1.1s ease-out; }
+@keyframes gpp-obj-need {
+  0%   { opacity: 0; transform: translate(-50%, 30%); }
+  20%  { opacity: 1; transform: translate(-50%, 0); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; } }
 `;
 
 let refCount = 0;

@@ -24,13 +24,16 @@ const game = new GridPathPuzzle({
   countdownMs: 0,                             // optional: pre-start "GO" pause (ms); 0 = off
   flashStart: false,                          // optional: flash the START cell during that pause
   countdownText: 'GO',                        // optional: the overlay label
+  objective: null,                            // optional: { type, min, icon?, label? } — win gate; null = off
 });
 
-game.on('complete', (r) => console.log(r.runState));   // reached goal
+game.on('complete', (r) => console.log(r.runState));   // reached goal (+ objective met, if any)
 game.on('fail',     (f) => console.log(f.reason));     // 'trap' | 'timeout'
 game.on('pathChange', (i) => updateHud(i.previewRunState));
 game.on('countdownStart', () => {});                   // "GO" pause began (if countdownMs > 0)
 game.on('ready',          () => {});                   // pause ended → grid interactive + timer running
+game.on('objectiveProgress', (i) => {});               // { type, have, need, met } on every path change
+game.on('objectiveBlocked',  (i) => {});               // hit the goal while short: { type, have, need, missing }
 game.start();                                          // kick the timer (or the GO pause if countdownMs > 0)
 ```
 
@@ -42,6 +45,21 @@ becomes interactive, the timer begins, and a `ready` event (option `onCountdownE
 pulses the START cell during the pause. The pause time is excluded from `elapsedMs`. All three options
 default OFF, so existing hosts (which call `start()` immediately) are unaffected — `status` adds a
 transient `'ready'` step only when `countdownMs > 0`.
+
+### Objective gate — "chain N before the goal opens" (opt-in)
+
+Pass `objective: { type, min, icon?, label? }` to require the path to cross at least `min` cells of
+node-type `type` (counted as a **total**, adjacency-independent) before reaching GOAL counts as a win:
+
+- Reaching the goal while **short does NOT commit and does NOT fail** — it's *blocked*: the path stays
+  drawn, an `objectiveBlocked` event fires, and a brief "Need X more" prompt shows. The player reroutes
+  to collect more, then finishes. `objectiveProgress` (`{ type, have, need, met }`) fires on every path
+  change (including backtracks, which can re-lock).
+- The renderer shows a **badge** (the `icon` + `min` pips that fill and turn green when met) and a
+  **locked GOAL** (🔒 + the number) until met. `icon` defaults to `nodeTypes[type].icon`.
+- `getState().objective` exposes `{ type, min, have, met }` (or `null` when off).
+- Default OFF (`null`/omitted, or `min <= 0`), so existing hosts are byte-identical. The module stays
+  generic — it only counts crossings of a node-type key; it has no notion of "payloads" or combos.
 
 ## Defining node types (your power-ups & obstacles)
 

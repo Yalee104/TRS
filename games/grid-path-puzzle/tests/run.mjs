@@ -17,5 +17,8 @@ await import('./generatorRouteFirst.test.mjs');
 console.log('\nlifecycle.test.mjs');
 await import('./lifecycle.test.mjs');
 
+console.log('\nobjective.test.mjs');
+await import('./objective.test.mjs');
+
 const { summary } = await import('./harness.mjs');
 summary();

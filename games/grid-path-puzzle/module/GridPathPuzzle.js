@@ -45,11 +45,17 @@ export class GridPathPuzzle {
       countdownMs: 0,              // pre-start "GO" pause before the timer/interaction begin (0 = off)
       flashStart: false,          // flash the START cell during that pause
       countdownText: 'GO',        // the overlay label
+      objective: null,            // optional win gate: { type, min, icon?, label? } — null = off
       ...options,
     };
     this.options.size = clampGridSize(this.options.size, 'size');
     this.nodeTypes = this.options.nodeTypes;
     this.emitter = new Emitter();
+
+    // Optional "objective gate": the path must cross >= min cells of node-type
+    // `type` before reaching GOAL counts as a win (generic; the host decides what
+    // `type` means). null when off, so existing hosts are byte-identical.
+    this._objective = this._normalizeObjective(this.options.objective);
 
     // Build the first level from options.level (authored) or options.generate.
     this.level = this._resolveLevel(options.level ?? options.generate ?? null);
@@ -87,6 +93,7 @@ export class GridPathPuzzle {
     if (this._mounted) return this;
     this.renderer = new Renderer(this.options.mount, this.nodeTypes);
     this.renderer.setLevel(this.level);
+    this._applyObjective();
     this.pointer = new PointerController(this.renderer.gridEl, this);
     if (this.options.allowKeyboard) this.keyboard = new KeyboardController(this.renderer.gridEl, this);
     this._mounted = true;
@@ -98,6 +105,7 @@ export class GridPathPuzzle {
     this.level = this._resolveLevel(source);
     this.state = createGameState(this.level, this.options.initialRunState);
     this.renderer.setLevel(this.level);
+    this._applyObjective();
     this._stopTimer();
     return this;
   }
@@ -107,6 +115,7 @@ export class GridPathPuzzle {
     this._stopTimer();
     this.state = createGameState(this.level, this.options.initialRunState);
     this.renderer.update([], { status: 'idle' });
+    if (this._objective) this.renderer?.updateObjective(0, this._objective.min, false);
     return this;
   }
 
@@ -132,6 +141,9 @@ export class GridPathPuzzle {
         moveBudget: this.level.moveBudget ?? null,
         timeLimitMs: this.level.timeLimitMs ?? null,
       },
+      objective: this._objective
+        ? { type: this._objective.type, min: this._objective.min, have: this._objectiveCount(), met: this._objectiveMet() }
+        : null,
     };
   }
 
@@ -141,6 +153,47 @@ export class GridPathPuzzle {
   getHead() {
     const p = this.state.path;
     return p.length ? p[p.length - 1] : null;
+  }
+
+  // ---- objective gate (optional) ------------------------------------------
+  // Normalize the option; null (off) when missing/invalid so existing hosts are
+  // unaffected. Resolves a display icon generically from the node-type catalog.
+  _normalizeObjective(obj) {
+    if (!obj || !obj.type || !(obj.min > 0)) return null;
+    const def = this.nodeTypes[obj.type];
+    return {
+      type: obj.type,
+      min: Math.max(1, obj.min | 0),
+      icon: obj.icon ?? def?.icon ?? obj.label ?? obj.type,
+      label: obj.label ?? def?.label ?? obj.type,
+    };
+  }
+
+  // Count path cells whose node-type is the objective type (TOTAL, not a run).
+  _objectiveCount(path = this.state.path) {
+    if (!this._objective) return 0;
+    let n = 0;
+    for (const c of path) if (this.level.cells[c.y][c.x] === this._objective.type) n++;
+    return n;
+  }
+
+  _objectiveMet(path = this.state.path) {
+    return !this._objective || this._objectiveCount(path) >= this._objective.min;
+  }
+
+  // Apply the objective to a freshly-built board (badge + locked goal + counts).
+  _applyObjective() {
+    if (!this._objective) return;
+    this.renderer?.setObjective(this._objective);
+    this.renderer?.updateObjective(this._objectiveCount(), this._objective.min, this._objectiveMet());
+  }
+
+  _fireObjectiveBlocked() {
+    if (!this._objective) return;
+    const have = this._objectiveCount();
+    const missing = Math.max(0, this._objective.min - have);
+    this.renderer?.showObjectiveNeed(missing);
+    this._fire('onObjectiveBlocked', 'objectiveBlocked', { type: this._objective.type, have, need: this._objective.min, missing });
   }
 
   // ---- timer --------------------------------------------------------------
@@ -330,14 +383,24 @@ export class GridPathPuzzle {
   endDrag() {
     if (this.state.status !== 'drawing') return;
     if (this.state.pendingFail) { this._fail('trap'); return; }
-    if (reachedGoal(this.state.path, this.level, this.nodeTypes)) { this._commit('goal'); return; }
+    if (reachedGoal(this.state.path, this.level, this.nodeTypes)) {
+      if (this._objectiveMet()) { this._commit('goal'); return; }
+      // At the goal but the objective isn't met — BLOCK (not a fail): leave the
+      // path drawn so the player can reroute to collect more, and prompt them.
+      this._afterChange();
+      this._fireObjectiveBlocked();
+      return;
+    }
     this._afterChange(); // released short of the goal — leave the path drawn
   }
 
   /** Host "Execute / See results" button: commit if the head is on the goal. */
   execute() {
     if (this.state.pendingFail) { this._fail('trap'); return; }
-    if (reachedGoal(this.state.path, this.level, this.nodeTypes)) this._commit('goal');
+    if (reachedGoal(this.state.path, this.level, this.nodeTypes)) {
+      if (this._objectiveMet()) { this._commit('goal'); return; }
+      this._fireObjectiveBlocked();
+    }
   }
 
   // ---- outcomes -----------------------------------------------------------
@@ -375,6 +438,12 @@ export class GridPathPuzzle {
       canReachGoal: this._canReachGoal(),
       ...extra,
     });
+    if (this._objective) {
+      const have = this._objectiveCount();
+      const met = have >= this._objective.min;
+      this.renderer?.updateObjective(have, this._objective.min, met);
+      this._fire('onObjectiveProgress', 'objectiveProgress', { type: this._objective.type, have, need: this._objective.min, met });
+    }
   }
 
   // BFS from the head over unvisited solvable cells, within the remaining budget.
