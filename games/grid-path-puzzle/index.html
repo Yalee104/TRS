@@ -102,12 +102,11 @@
         <div class="panel help">
           <h3>Launch Pad (TRS quality)</h3>
           <dl>
-            <dt>Healthy (full HP)</dt><dd>Grid <b>−1</b>, trap & blocker density <b>−0.08</b> — smaller, sparser, easier.</dd>
-            <dt>Damaged (~50% HP)</dt><dd>Grid <b>±0</b>, trap & blocker density <b>−0.04</b> — slightly eased.</dd>
-            <dt>Baseline (near-zero HP)</dt><dd>Grid size & density <b>exactly as the Generation panel</b> — no modifier.</dd>
-            <dt>Destroyed (the cliff)</dt><dd>Grid <b>+2</b>, trap <b>+0.10</b> / blocker <b>+0.12</b> — bigger and congested, the hardest.</dd>
+            <dt>Baseline (full HP)</dt><dd>Grid size & density <b>exactly as the Generation panel</b> — no modifier.</dd>
+            <dt>Damaged (≤50% HP)</dt><dd>Grid <b>+1</b>, blocker density <b>+0.10</b> — bigger and more congested.</dd>
+            <dt>Destroyed (the cliff)</dt><dd>Grid <b>+2</b>, blocker density <b>+0.20</b> — biggest and most congested, the hardest.</dd>
           </dl>
-          <p style="font-size:11.5px;color:#6f7686;margin:6px 0 0;">The bonus layers on top of the Generation panel: e.g. Destroyed with the trap slider at 0.20 paints at ≈0.30.</p>
+          <p style="font-size:11.5px;color:#6f7686;margin:6px 0 0;">The blocker bonus layers on top of the Generation panel: e.g. Destroyed with the blocker slider at 0.40 paints at ≈0.60. Trap density is never modified by the pad.</p>
 
           <h3>Generation knobs</h3>
           <dl>
@@ -152,19 +151,18 @@
           <div class="comp-grid" id="components"></div>
           <div class="row"><label>Launch Pad (TRS quality)</label>
             <select id="lpmod">
-              <option value="healthy">Healthy (eases)</option>
-              <option value="damaged">Damaged</option>
-              <option value="baseline" selected>Baseline</option>
-              <option value="destroyed">Destroyed (congests)</option>
+              <option value="baseline" selected>Baseline (full HP)</option>
+              <option value="damaged">Damaged (congests)</option>
+              <option value="destroyed">Destroyed (congests more)</option>
             </select></div>
         </div>
 
         <div class="panel">
           <h2>Generation</h2>
-          <div class="row"><label>Cluster payloads</label><input id="cluster" type="checkbox" checked /></div>
-          <div class="row"><label>Grid size <span id="sizeVal">8</span></label><input id="size" type="range" min="4" max="15" value="8" /></div>
+          <div class="row"><label>Cluster payloads</label><input id="cluster" type="checkbox" /></div>
+          <div class="row"><label>Grid size <span id="sizeVal">6</span></label><input id="size" type="range" min="4" max="15" value="6" /></div>
           <div class="row"><label>Payload count (min–max)</label>
-            <span><input id="cmin" type="number" min="1" max="8" value="2" style="width:52px" />–<input id="cmax" type="number" min="1" max="8" value="4" style="width:52px" /></span></div>
+            <span><input id="cmin" type="number" min="1" max="8" value="3" style="width:52px" />–<input id="cmax" type="number" min="1" max="8" value="5" style="width:52px" /></span></div>
           <div class="row"><label>Placement</label>
             <select id="placement">
               <option value="onPrimaryRoute" selected>onPrimaryRoute</option>
@@ -172,8 +170,8 @@
               <option value="offRoute">offRoute</option>
               <option value="anywhere">anywhere</option>
             </select></div>
-          <div class="row"><label>Trap density <span id="trapVal">0.20</span></label><input id="trap" type="range" min="0" max="0.6" step="0.02" value="0.2" /></div>
-          <div class="row"><label>Blocker density <span id="blockVal">0.18</span></label><input id="block" type="range" min="0" max="0.6" step="0.02" value="0.18" /></div>
+          <div class="row"><label>Trap density <span id="trapVal">0.00</span></label><input id="trap" type="range" min="0" max="0.6" step="0.02" value="0" /></div>
+          <div class="row"><label>Blocker density <span id="blockVal">0.40</span></label><input id="block" type="range" min="0" max="0.6" step="0.02" value="0.4" /></div>
           <div class="row"><label>Alternate routes</label><input id="alt" type="number" min="0" max="3" value="1" style="width:56px" /></div>
           <div class="row"><label>Channeling</label><select id="channel"><option value="strong" selected>strong</option><option value="soft">soft</option></select></div>
           <div class="row"><label>Primary length</label><select id="plt"><option value="long" selected>long</option><option value="medium">medium</option><option value="short">short</option></select></div>

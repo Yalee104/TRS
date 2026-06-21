@@ -50,22 +50,25 @@ export const DEFENSE_META = {
 
 const CHAIN = { class: 'amplifier', icon: '🔗', color: '#e6a24a', op: 'multiply', potency: CHAIN_MULT };
 
-// The player's LAUNCH-PAD health gates everyone's TRS quality (`trsMods`). These
-// presets replicate the cascade gradient (full → bonus, destroyed → congestion).
+// The player's LAUNCH-PAD health gates everyone's TRS quality (`trsMods`): a
+// healthy pad is the easy baseline, and damage congests the grid (bigger + more
+// blockers). Trap density is NOT modified by the pad.
 export const LAUNCHPAD_MODS = {
-  healthy:   { sizeDelta: -1, blockerBonus: -0.08, trapBonus: -0.08 }, // full HP
-  damaged:   { sizeDelta: 0,  blockerBonus: -0.04, trapBonus: -0.04 }, // ~50% HP
-  baseline:  {},                                                       // near-zero HP (bonus gone)
-  destroyed: { sizeDelta: 2,  blockerBonus: 0.12,  trapBonus: 0.1 },   // the cliff
+  baseline:  {},                                  // full HP — no modifier
+  damaged:   { sizeDelta: 1, blockerBonus: 0.10 }, // <= 50% HP
+  destroyed: { sizeDelta: 2, blockerBonus: 0.20 }, // the cliff
 };
+
+// Recommended base grid size for a TRS board (the host adds the pad's sizeDelta).
+export const DEFAULT_GRID_SIZE = 6;
 
 /**
  * Build the routePlan for a skill. `knobs` overrides individual generation fields
  * (used by the playground); omit it (default {}) for the exact strategy behaviour.
  */
 export function genPlan(skillKey, withChain, trsMods = {}, knobs = {}) {
-  const cluster = knobs.cluster !== undefined ? knobs.cluster : true;
-  const count = knobs.count || { min: 2, max: 4 };
+  const cluster = knobs.cluster !== undefined ? knobs.cluster : false;
+  const count = knobs.count || { min: 3, max: 5 };
   const placement = knobs.placement || 'onPrimaryRoute';
   // One payload group — its size is exactly `count` (min..max). (NOTE: this drops
   // the legacy extra "+1" singleton, so for verbs with MIN_CHAIN > 1 — Cleanse /
@@ -90,8 +93,8 @@ export function genPlan(skillKey, withChain, trsMods = {}, knobs = {}) {
     // bonus layers ON TOP of the base density (or the playground's knob override),
     // so the preset still shifts density even when knobs set the base. With
     // knobs = {} this is identical to the strategy default (0.2 / 0.18 + bonus).
-    trapDensity: Math.max(0, (knobs.trapDensity ?? 0.2) + (trsMods.trapBonus || 0)),
-    blockerDensity: Math.max(0, (knobs.blockerDensity ?? 0.18) + (trsMods.blockerBonus || 0)),
+    trapDensity: Math.max(0, (knobs.trapDensity ?? 0) + (trsMods.trapBonus || 0)),
+    blockerDensity: Math.max(0, (knobs.blockerDensity ?? 0.4) + (trsMods.blockerBonus || 0)),
     channeling: knobs.channeling || 'strong',
     lateGap: knobs.lateGap || { min: 1, max: 2 },
     endpointMode: 'edgeRandom',

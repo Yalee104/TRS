@@ -16,7 +16,7 @@ import { GridPathPuzzle } from './module/GridPathPuzzle.js';
 import { evaluate } from './combo/ComboEngine.js';
 import { effectBadges } from './combo/effects.js';
 import {
-  buildPalette, catalogFromConfig, LAUNCHPAD_MODS,
+  buildPalette, catalogFromConfig, LAUNCHPAD_MODS, DEFAULT_GRID_SIZE,
   ATTACK_EFFECT, DEFENSE_VERB, OFFENSE_META, DEFENSE_META, MIN_CHAIN,
 } from './presets/trs.js';
 
@@ -273,6 +273,10 @@ $('export').addEventListener('click', exportConfig);
 $('generate').addEventListener('click', buildGame);
 $('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); buildGame(); });
 $('reset').addEventListener('click', () => { game.reset(); game.start(); resetReadout(); }); // re-arm + replay GO
+
+// Initialise the grid-size control from the preset's recommended default.
+$('size').value = DEFAULT_GRID_SIZE;
+$('sizeVal').textContent = String(DEFAULT_GRID_SIZE);
 
 renderComponents();
 buildGame();
