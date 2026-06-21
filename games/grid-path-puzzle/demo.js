@@ -205,6 +205,7 @@ function onComplete(result) {
   const el = $('status');
   el.className = 'win';
   el.textContent = `✅ Solved: ${combo.items[0]?.tier ?? '—'} (potency ${round(combo.items[0]?.value ?? 0)})`;
+  $('solved').textContent = `${(result.time.elapsedMs / 1000).toFixed(1)}s`;
 }
 
 function onFail(info) {
@@ -232,6 +233,7 @@ function resetReadout() {
   $('status').textContent = '';
   $('status').className = '';
   $('time').textContent = '—';
+  $('solved').textContent = '—';
   $('reach').textContent = 'yes';
   $('reach').className = '';
   const st = game.getState();
