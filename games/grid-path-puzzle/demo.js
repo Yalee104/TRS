@@ -1,98 +1,79 @@
 // =============================================================================
-//  demo.js  —  a host that USES the grid-path-puzzle module + ComboEngine
+//  demo.js  —  the TRS Puzzle Playground (a host that USES the puzzle module)
 // =============================================================================
 //
-//  This is the "embedding game" side. It:
-//   1. Loads an Offensive OR Defensive config (pure JSON data).
-//   2. Builds the module's nodeTypes catalog FROM that config, and asks the
-//      module to generate a board with the config's route-first generation plan.
-//   3. Reads the module's ordered path on every change, runs the generic
-//      ComboEngine over the skill sequence, and renders a live combo readout.
+//  Reproduces the exact puzzle the TRS strategy game would build for a given
+//  {phase, component, Launch-Pad health} plus live generation knobs, so puzzles
+//  can be verified before they ship to the strategy game. It uses the shared
+//  preset `presets/trs.js` (the same palette/genPlan strategy will adopt) and
+//  exercises the module's new GO-pause / START-flash options.
 //
-//  Nothing in module/ knows about combos — it just emits the path; the engine
-//  (combo/) is generic and driven entirely by the chosen config.
+//  Nothing in module/ knows about TRS — it just emits the path; the generic
+//  ComboEngine (combo/) scores it from the chosen palette.
 // =============================================================================
 
 import { GridPathPuzzle } from './module/GridPathPuzzle.js';
 import { evaluate } from './combo/ComboEngine.js';
 import { effectBadges } from './combo/effects.js';
-import OFFENSIVE from './combo/configs/offensive.json';
-import DEFENSIVE from './combo/configs/defensive.json';
+import {
+  buildPalette, catalogFromConfig, LAUNCHPAD_MODS,
+  ATTACK_EFFECT, DEFENSE_VERB, OFFENSE_META, DEFENSE_META, MIN_CHAIN,
+} from './presets/trs.js';
 
-const CONFIGS = { offensive: OFFENSIVE, defensive: DEFENSIVE };
 const $ = (id) => document.getElementById(id);
 const round = (n) => Math.round(n * 100) / 100;
 
-// Hand-authored levels (one per mode) — for fixed/custom maps. The intended
-// combo runs along the top row, then down the right column (a clean solvable
-// path); hazards sit off it. These showcase each mode's signature combo.
-const AUTHORED = {
-  offensive: {
-    grid: [
-      ['start', 'freeze', 'freeze', 'freeze', 'chain', 'multihack'],
-      ['normal', 'trap', 'blocker', 'trap', 'normal', 'normal'],
-      ['confuse', 'normal', 'drain', 'blocker', 'trap', 'normal'],
-      ['normal', 'blocker', 'normal', 'normal', 'normal', 'normal'],
-      ['normal', 'trap', 'normal', 'blocker', 'trap', 'normal'],
-      ['normal', 'normal', 'normal', 'normal', 'normal', 'goal'],
-    ],
-    start: { x: 0, y: 0 }, goal: { x: 5, y: 5 }, moveBudget: 16,
-  },
-  defensive: {
-    grid: [
-      ['start', 'shield', 'cleanse', 'overclock', 'prolong', 'amplify'],
-      ['normal', 'trap', 'blocker', 'normal', 'blocker', 'normal'],
-      ['repair', 'normal', 'normal', 'normal', 'trap', 'normal'],
-      ['normal', 'blocker', 'trap', 'normal', 'normal', 'normal'],
-      ['normal', 'normal', 'normal', 'blocker', 'trap', 'normal'],
-      ['normal', 'repair', 'normal', 'normal', 'normal', 'goal'],
-    ],
-    start: { x: 0, y: 0 }, goal: { x: 5, y: 5 }, moveBudget: 16,
-  },
-};
+const COMPONENTS = ['weapon', 'generator', 'tower', 'engine', 'launchpad'];
+const COMP_LABEL = { weapon: 'Weapon', generator: 'Generator', tower: 'Tower', engine: 'Engine', launchpad: 'Launch Pad' };
 
-let mode = 'offensive';
-let config = CONFIGS[mode];
+let phase = 'attack';
+let component = 'weapon';
+let palette = null;  // current palette config (from presets/trs.js)
 let game = null;
 
-// Build the module's nodeTypes from a config: the base cells + the skills +
-// any power-ups. Extra config fields (class, value, tiers…) are ignored by the
-// module and consumed by the engine.
-function catalogFromConfig(cfg) {
-  const nt = { ...cfg.base };
-  for (const [k, d] of Object.entries(cfg.skills)) nt[k] = { role: 'normal', passable: true, ...d };
-  if (cfg.powerups) for (const [k, d] of Object.entries(cfg.powerups)) nt[k] = { role: 'normal', passable: true, ...d };
-  return nt;
+// ---- palette / build --------------------------------------------------------
+const skillOf = () => (phase === 'attack' ? ATTACK_EFFECT[component] : DEFENSE_VERB[component]);
+const metaOf = (skill) => (phase === 'attack' ? OFFENSE_META[skill] : DEFENSE_META[skill]);
+
+function readKnobs() {
+  return {
+    cluster: $('cluster').checked,
+    count: { min: Number($('cmin').value), max: Number($('cmax').value) },
+    placement: $('placement').value,
+    trapDensity: Number($('trap').value),
+    blockerDensity: Number($('block').value),
+    alternateRoutes: Number($('alt').value),
+    channeling: $('channel').value,
+    primaryLengthTarget: $('plt').value,
+  };
+}
+
+function goOpts() {
+  const on = $('go').checked;
+  return { countdownMs: on ? Number($('goms').value) : 0, flashStart: $('flash').checked, countdownText: $('gotext').value || 'GO' };
 }
 
 // The engine's input: the skill-node keys the path crossed, in order.
-const skillSeqFromPath = (pathDesc) => pathDesc.map((c) => c.typeKey).filter((k) => config.skills[k]);
-
-function currentSize() { return Number($('size').value); }
-function currentSeed() { return Number($('seed').value); }
+const skillSeqFromPath = (pathDesc) => pathDesc.map((c) => c.typeKey).filter((k) => palette.skills[k]);
 
 function buildGame() {
   if (game) game.destroy();
-  config = CONFIGS[mode];
-  const nodeTypes = catalogFromConfig(config);
+  const preset = $('lpmod').value;
+  palette = buildPalette({ phase, component, preset, knobs: readKnobs() });
+  const size = Math.max(4, Number($('size').value) + (LAUNCHPAD_MODS[preset]?.sizeDelta || 0));
+  const { countdownMs, flashStart, countdownText } = goOpts();
   game = new GridPathPuzzle({
     mount: $('board'),
-    nodeTypes,
-    generate: { size: currentSize(), seed: currentSeed(), routePlan: config.generation },
+    nodeTypes: catalogFromConfig(palette),
+    generate: { size, seed: Number($('seed').value), routePlan: palette.generation },
     trapEntryMode: 'commitFail',
-    onPathChange: onPathChange,
-    onComplete: onComplete,
-    onFail: onFail,
-    onTick: onTick,
+    countdownMs, flashStart, countdownText,
+    onPathChange, onComplete, onFail, onTick,
+    onCountdownEnd: () => { $('status').textContent = ''; },
   });
+  game.start(); // kick the GO pause (or start immediately if countdownMs is 0)
   window.__puzzle = game;
   renderLegend();
-  resetReadout();
-}
-
-function regenerate() {
-  config = CONFIGS[mode];
-  game.loadLevel({ size: currentSize(), seed: currentSeed(), routePlan: config.generation });
   resetReadout();
 }
 
@@ -106,28 +87,37 @@ function renderCombo(result, isFinal) {
   let html = '';
   if (result.special) {
     html += `<div class="banner beam">⚡ ${result.special.name}</div>`;
-    const applied = (result.special.applies || []).map((k) => config.skills[k]?.icon || k).join(' ');
-    html += `<div class="combo-sub">applies ${applied} to <b>all</b> for ${result.special.durationSec}s</div>`;
-  } else if (result.label && mode === 'defensive') {
+  } else if (result.label && phase === 'defense') {
     html += `<div class="banner fortress">🏰 ${result.label}</div>`;
   }
   for (const it of result.items) {
-    const sk = config.skills[it.skill] || {};
+    const sk = palette.skills[it.skill] || {};
     const badges = effectBadges(it.effects).map((b) => `<span class="badge ${b.fxClass}">${b.label}</span>`).join('');
     const gv = it.gameValue != null ? `${round(it.gameValue)} ${it.unit || ''}` : '';
     const dur = it.durationSec != null ? ` · ${round(it.durationSec)}s` : '';
-    const tgt = it.targets === 'all' ? ' · 🎯 all' : '';
     html += `<div class="combo-item"><span class="ci-icon">${sk.icon || ''}</span>`
       + `<span class="ci-tier">${it.tier}</span>`
-      + `<span class="ci-val">${gv}${dur}${tgt}</span> ${badges}</div>`;
+      + `<span class="ci-val">${gv}${dur}</span> ${badges}</div>`;
   }
   panel.innerHTML = html;
   if (isFinal) { panel.classList.remove('fx'); void panel.offsetWidth; panel.classList.add('fx'); }
 }
 
+// "potency" the route would yield, the resolved skill, and the min-chain check.
+function renderTrsInfo(info) {
+  const skill = skillOf();
+  const need = MIN_CHAIN[skill] || 1;
+  const seq = info ? skillSeqFromPath(info.path) : [];
+  const chained = seq.filter((k) => k === skill).length;
+  const value = info ? (evaluate(seq, palette).items?.[0]?.value ?? 0) : 0;
+  $('trsinfo').innerHTML = `<span>Skill <b>${metaOf(skill).icon} ${skill}</b></span>`
+    + `<span>Chained <b>${chained}/${need}</b> ${chained >= need ? '✅ solve' : '⛔ short'}</span>`
+    + `<span>Potency <b>${round(value)}</b></span>`;
+}
+
 function onPathChange(info) {
-  renderCombo(evaluate(skillSeqFromPath(info.path), config), false);
-  window.__combo = evaluate(skillSeqFromPath(info.path), config);
+  renderCombo(evaluate(skillSeqFromPath(info.path), palette), false);
+  renderTrsInfo(info);
   $('steps').textContent = `${info.steps} / ${info.budget.max ?? '∞'}`;
   const reach = $('reach');
   reach.textContent = info.canReachGoal ? 'yes' : 'no';
@@ -137,13 +127,11 @@ function onPathChange(info) {
 }
 
 function onComplete(result) {
-  const combo = evaluate(skillSeqFromPath(result.path), config);
-  renderCombo(combo, true); // isFinal → FX flourish
+  const combo = evaluate(skillSeqFromPath(result.path), palette);
+  renderCombo(combo, true);
   const el = $('status');
   el.className = 'win';
-  el.textContent = combo.special ? `✅ ${combo.special.name} unleashed!`
-    : combo.label && mode === 'defensive' ? `✅ ${combo.label} raised!`
-    : `✅ Combo executed: ${combo.items[0]?.tier ?? '—'}`;
+  el.textContent = `✅ Solved: ${combo.items[0]?.tier ?? '—'} (potency ${round(combo.items[0]?.value ?? 0)})`;
 }
 
 function onFail(info) {
@@ -161,6 +149,7 @@ function onTick(info) {
 
 function resetReadout() {
   renderCombo(null, false);
+  renderTrsInfo(null);
   $('status').textContent = '';
   $('status').className = '';
   $('time').textContent = '—';
@@ -168,35 +157,59 @@ function resetReadout() {
   $('reach').className = '';
   const st = game.getState();
   $('steps').textContent = `0 / ${st.level.moveBudget ?? '∞'}`;
-  $('combo-title').textContent = `Combo — ${config.title}`;
+  $('combo-title').textContent = `Combo — ${phase === 'attack' ? 'Attack' : 'Defense'}: ${COMP_LABEL[component]} (${metaOf(skillOf()).name})`;
 }
 
 function renderLegend() {
-  const cfg = config;
   const entries = [
-    ...Object.entries(cfg.base).filter(([k]) => k !== 'normal'),
-    ...Object.entries(cfg.skills),
-    ...Object.entries(cfg.powerups || {}),
+    ...Object.entries(palette.base).filter(([k]) => k !== 'normal'),
+    ...Object.entries(palette.skills),
   ];
   $('legend').innerHTML = entries
     .map(([k, d]) => `<span><i class="sw" style="background:${d.color || '#333'}"></i>${d.icon ? d.icon + ' ' : ''}${d.label || k}</span>`)
     .join('');
 }
 
+// ---- component selector -----------------------------------------------------
+function renderComponents() {
+  $('components').innerHTML = COMPONENTS.map((c) => {
+    const skill = phase === 'attack' ? ATTACK_EFFECT[c] : DEFENSE_VERB[c];
+    const meta = phase === 'attack' ? OFFENSE_META[skill] : DEFENSE_META[skill];
+    return `<button data-comp="${c}" class="${c === component ? 'active' : ''}">${COMP_LABEL[c]}`
+      + `<br><span style="font-size:11px;color:#9aa0aa">${meta.icon} ${meta.name}</span></button>`;
+  }).join('');
+}
+
 // ---- controls ---------------------------------------------------------------
-function setMode(next) {
-  mode = next;
-  $('mode-offensive').classList.toggle('active', mode === 'offensive');
-  $('mode-defensive').classList.toggle('active', mode === 'defensive');
+function setPhase(next) {
+  phase = next;
+  $('phase-attack').classList.toggle('active', phase === 'attack');
+  $('phase-defense').classList.toggle('active', phase === 'defense');
+  renderComponents();
   buildGame();
 }
-$('mode-offensive').addEventListener('click', () => setMode('offensive'));
-$('mode-defensive').addEventListener('click', () => setMode('defensive'));
-$('size').addEventListener('input', (e) => { $('sizeVal').textContent = e.target.value; $('sizeVal2').textContent = e.target.value; });
-$('generate').addEventListener('click', regenerate);
-$('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); regenerate(); });
-$('authored').addEventListener('click', () => { game.loadLevel(AUTHORED[mode]); resetReadout(); });
-$('reset').addEventListener('click', () => { game.reset(); resetReadout(); });
+$('phase-attack').addEventListener('click', () => setPhase('attack'));
+$('phase-defense').addEventListener('click', () => setPhase('defense'));
+$('components').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-comp]');
+  if (!b) return;
+  component = b.dataset.comp;
+  renderComponents();
+  buildGame();
+});
+
+$('size').addEventListener('input', (e) => { $('sizeVal').textContent = e.target.value; });
+$('trap').addEventListener('input', (e) => { $('trapVal').textContent = Number(e.target.value).toFixed(2); });
+$('block').addEventListener('input', (e) => { $('blockVal').textContent = Number(e.target.value).toFixed(2); });
+$('placement').addEventListener('change', () => {
+  const off = $('placement').value === 'offRoute' || $('placement').value === 'anywhere';
+  $('placehint').style.display = off ? '' : 'none';
+});
+
+$('generate').addEventListener('click', buildGame);
+$('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); buildGame(); });
+$('reset').addEventListener('click', () => { game.reset(); game.start(); resetReadout(); }); // re-arm + replay GO
 $('execute').addEventListener('click', () => game.execute());
 
+renderComponents();
 buildGame();

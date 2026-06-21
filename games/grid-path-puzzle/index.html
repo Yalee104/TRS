@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Grid Path Puzzle — combo demo</title>
+    <title>TRS Puzzle Playground</title>
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
@@ -11,8 +11,8 @@
         font-family: system-ui, sans-serif; }
       a.back { position: fixed; top: 12px; left: 14px; color: #8a90a0; font-size: 13px; text-decoration: none; }
       a.back:hover { color: #cdd2da; }
-      .layout { max-width: 1000px; margin: 0 auto; padding: 46px 20px 60px;
-        display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 26px; align-items: start; }
+      .layout { max-width: 1040px; margin: 0 auto; padding: 46px 20px 60px;
+        display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 26px; align-items: start; }
       h1 { grid-column: 1 / -1; font-size: 20px; margin: 0 0 2px; }
       p.sub { grid-column: 1 / -1; color: #9aa0aa; margin: 0 0 8px; font-size: 13px; }
       #board { width: 100%; }
@@ -20,21 +20,29 @@
       .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #8a90a0; margin: 0 0 12px; }
       .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 9px 0; font-size: 13px; }
       .row label { color: #aeb4c0; }
-      input[type="range"] { width: 150px; }
-      input[type="number"] { width: 84px; background: #0e0f13; color: #e6e6e6; border: 1px solid #2a2e3a; border-radius: 6px; padding: 4px 6px; }
+      input[type="range"] { width: 140px; }
+      input[type="number"], input[type="text"] { background: #0e0f13; color: #e6e6e6; border: 1px solid #2a2e3a; border-radius: 6px; padding: 4px 6px; }
+      input[type="number"] { width: 84px; }
+      input[type="checkbox"] { width: 16px; height: 16px; accent-color: #5b8def; }
+      select { background: #0e0f13; color: #e6e6e6; border: 1px solid #2a2e3a; border-radius: 6px; padding: 4px 6px; font-size: 13px; }
       button { cursor: pointer; background: #2b3a55; color: #eaf0ff; border: 1px solid #3a4d70; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
       button:hover { background: #34466a; }
       .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
       .stat { font-variant-numeric: tabular-nums; }
 
-      /* mode segmented control */
+      /* phase segmented control */
       .modeseg { display: grid; grid-template-columns: 1fr 1fr; gap: 0; grid-column: 1 / -1; max-width: 360px;
         border: 1px solid #3a4d70; border-radius: 9px; overflow: hidden; margin-bottom: 6px; }
       .modeseg button { border: 0; border-radius: 0; background: #15171f; color: #aeb4c0; padding: 9px; }
       .modeseg button.active { background: #2b3a55; color: #fff; }
 
+      /* component selector */
+      .comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+      .comp-grid button { font-size: 12px; padding: 6px; line-height: 1.3; }
+      .comp-grid button.active { background: #2b3a55; color: #fff; border-color: #5a7ab0; }
+
       /* combo readout */
-      #combo { min-height: 120px; }
+      #combo { min-height: 90px; }
       .combo-empty { color: #6f7686; font-size: 13px; }
       .banner { font-weight: 800; font-size: 15px; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; text-align: center; letter-spacing: .03em; }
       .banner.beam { background: linear-gradient(90deg,#3a2b55,#553a4d); color: #ffd6f0; box-shadow: 0 0 14px rgba(255,120,200,.4); }
@@ -54,7 +62,7 @@
 
       #status { margin-top: 10px; font-size: 14px; min-height: 20px; }
       #status.win { color: #5ef08a; } #status.lose { color: #ff6a6a; }
-      .meta { display: flex; gap: 16px; font-size: 12px; color: #9aa0aa; margin-top: 8px; }
+      .meta { display: flex; gap: 16px; font-size: 12px; color: #9aa0aa; margin-top: 8px; flex-wrap: wrap; }
       .meta b { color: #cdd2da; }
       .warn { color: #ff8a5a; }
       .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; grid-column: 1 / -1; font-size: 12px; color: #9aa0aa; }
@@ -65,14 +73,15 @@
   <body>
     <a class="back" href="/">← all games</a>
     <div class="layout">
-      <h1>🧩 Grid Path Puzzle — Combo Demo</h1>
-      <p class="sub">Drag from <b>START</b> 🚀 to <b>GOAL</b> 🏁. The <b>order</b> you pass skills builds a
-        combo (skill nodes feed it; ☠️ traps fail you; ⛔ blocks). Take the short safe route for a weak
-        combo, or the long route for a big one. Drag back to erase. Keyboard: focus grid, arrows, Enter.</p>
+      <h1>🧪 TRS Puzzle Playground</h1>
+      <p class="sub">Generates the exact TRS puzzle for a chosen <b>phase + component</b>, with live
+        generation knobs — a tool to verify puzzles before they ship to the strategy game. Drag
+        <b>START</b> 🚀 → <b>GOAL</b> 🏁; the order you cross skill icons builds the combo. A pre-start
+        <b>GO</b> pause + START flash are toggleable.</p>
 
       <div class="modeseg">
-        <button id="mode-offensive" class="active">⚔️ Offensive</button>
-        <button id="mode-defensive">🛡️ Defensive</button>
+        <button id="phase-attack" class="active">⚔️ Attack</button>
+        <button id="phase-defense">🛡️ Defense</button>
       </div>
 
       <div id="board"></div>
@@ -85,26 +94,57 @@
           <div class="meta">
             <span>Steps <b id="steps">0 / ∞</b></span>
             <span>Time <b id="time">—</b></span>
-            <span>Reach goal <b id="reach">yes</b></span>
+            <span>Reach <b id="reach">yes</b></span>
           </div>
+          <div id="trsinfo" class="meta"></div>
           <div class="btns">
             <button id="execute">Execute</button>
-            <button id="reset">Reset</button>
+            <button id="reset">↻ Reset (replay GO)</button>
+          </div>
+          <div class="btns">
+            <button id="generate" style="grid-column: 1 / -1;">🎲 Generate (apply knobs)</button>
           </div>
         </div>
 
         <div class="panel">
-          <h2>Level</h2>
-          <div class="row"><label>Size <span id="sizeVal">10</span>×<span id="sizeVal2">10</span></label>
-            <input id="size" type="range" min="4" max="15" value="10" /></div>
-          <div class="row"><label>Seed</label><input id="seed" type="number" value="1" /></div>
-          <div class="btns">
-            <button id="generate">Generate</button>
-            <button id="random">🎲 Random</button>
-          </div>
-          <div class="btns">
-            <button id="authored" style="grid-column: 1 / -1;">📐 Authored level</button>
-          </div>
+          <h2>Component</h2>
+          <div class="comp-grid" id="components"></div>
+          <div class="row"><label>Launch Pad (TRS quality)</label>
+            <select id="lpmod">
+              <option value="healthy">Healthy (eases)</option>
+              <option value="damaged">Damaged</option>
+              <option value="baseline" selected>Baseline</option>
+              <option value="destroyed">Destroyed (congests)</option>
+            </select></div>
+        </div>
+
+        <div class="panel">
+          <h2>Generation</h2>
+          <div class="row"><label>Cluster payloads</label><input id="cluster" type="checkbox" checked /></div>
+          <div class="row"><label>Grid size <span id="sizeVal">8</span></label><input id="size" type="range" min="4" max="15" value="8" /></div>
+          <div class="row"><label>Payload count (min–max)</label>
+            <span><input id="cmin" type="number" min="1" max="8" value="2" style="width:52px" />–<input id="cmax" type="number" min="1" max="8" value="4" style="width:52px" /></span></div>
+          <div class="row"><label>Placement</label>
+            <select id="placement">
+              <option value="onPrimaryRoute" selected>onPrimaryRoute</option>
+              <option value="lateOnRoute">lateOnRoute</option>
+              <option value="offRoute">offRoute</option>
+              <option value="anywhere">anywhere</option>
+            </select></div>
+          <div class="row"><label>Trap density <span id="trapVal">0.20</span></label><input id="trap" type="range" min="0" max="0.6" step="0.02" value="0.2" /></div>
+          <div class="row"><label>Blocker density <span id="blockVal">0.18</span></label><input id="block" type="range" min="0" max="0.6" step="0.02" value="0.18" /></div>
+          <div class="row"><label>Alternate routes</label><input id="alt" type="number" min="0" max="3" value="1" style="width:56px" /></div>
+          <div class="row"><label>Channeling</label><select id="channel"><option value="strong" selected>strong</option><option value="soft">soft</option></select></div>
+          <div class="row"><label>Primary length</label><select id="plt"><option value="long" selected>long</option><option value="medium">medium</option><option value="short">short</option></select></div>
+          <div class="row"><label>Seed</label><span><input id="seed" type="number" value="1" style="width:84px" /> <button id="random" style="padding:4px 8px">🎲</button></span></div>
+          <div id="placehint" class="warn" style="font-size:11px;display:none;margin-top:2px">off-route payloads may be relaxed back onto the route on tight grids.</div>
+        </div>
+
+        <div class="panel">
+          <h2>Presentation (module options)</h2>
+          <div class="row"><label>Pre-start GO pause</label><span><input id="go" type="checkbox" checked /> <input id="goms" type="number" min="0" max="5000" step="250" value="1000" style="width:68px" /> ms</span></div>
+          <div class="row"><label>Flash START cell</label><input id="flash" type="checkbox" checked /></div>
+          <div class="row"><label>GO text</label><input id="gotext" type="text" value="GO" style="width:84px" /></div>
         </div>
       </div>
 
