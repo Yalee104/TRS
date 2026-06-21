@@ -158,6 +158,9 @@ export class GridPathPuzzle {
       this._countdownTimer = setTimeout(() => this._beginAfterCountdown(), cd);
       return this;
     }
+    // No GO pause (or already drawing): start immediately. If flashing is on and
+    // play hasn't begun, flash START until the first drag (cleared in tryBegin).
+    if (this.options.flashStart && this.state.status !== 'drawing') this.renderer?.setStartFlash(true);
     this._beginTimer();
     return this;
   }
@@ -165,14 +168,19 @@ export class GridPathPuzzle {
   _beginTimer() {
     this._timerRunning = true;
     this._timerStart = now() - this.state.elapsedMs;
+    // Reset the tick-throttle baseline; otherwise a re-start (after reset/loadLevel)
+    // keeps the previous run's high `_lastTickEmit`, suppressing `tick` until real
+    // time passes that old mark — the timer would appear frozen at "—".
+    this._lastTickEmit = -Infinity;
     if (typeof requestAnimationFrame === 'function') this._loop();
   }
 
   // Called when the "GO" pause ends: clear the overlay and start the timer/play.
+  // The START keeps flashing past this point — it stops only when the first drag
+  // begins (see tryBegin) — so the player can still spot START after "GO".
   _beginAfterCountdown() {
     this._countdownTimer = null;
     this.renderer?.hideCountdown();
-    this.renderer?.setStartFlash(false);
     if (this.state.status === 'ready') this.state.status = 'idle';
     this._beginTimer();
     this._fire('onCountdownEnd', 'ready', {});
@@ -227,6 +235,7 @@ export class GridPathPuzzle {
     this.state.path = [{ x: cell.x, y: cell.y }];
     this.state.pendingFail = false;
     this.state.status = 'drawing';
+    this.renderer?.setStartFlash(false); // first drag begun — stop flashing START
     if (this.options.autoStart) this.start();
     this._afterChange();
     return true;

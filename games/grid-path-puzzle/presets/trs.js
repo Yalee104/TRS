@@ -77,9 +77,12 @@ export function genPlan(skillKey, withChain, trsMods = {}, knobs = {}) {
     alternateRoutes: knobs.alternateRoutes ?? 1,
     primaryLengthTarget: knobs.primaryLengthTarget || 'long',
     safeLengthMode: 'shortest',
-    // Launch Pad eases (healthy) or congests (damaged/destroyed) the grid via these densities.
-    trapDensity: knobs.trapDensity ?? Math.max(0, 0.2 + (trsMods.trapBonus || 0)),
-    blockerDensity: knobs.blockerDensity ?? Math.max(0, 0.18 + (trsMods.blockerBonus || 0)),
+    // Launch Pad eases (healthy) or congests (damaged/destroyed) the grid: its
+    // bonus layers ON TOP of the base density (or the playground's knob override),
+    // so the preset still shifts density even when knobs set the base. With
+    // knobs = {} this is identical to the strategy default (0.2 / 0.18 + bonus).
+    trapDensity: Math.max(0, (knobs.trapDensity ?? 0.2) + (trsMods.trapBonus || 0)),
+    blockerDensity: Math.max(0, (knobs.blockerDensity ?? 0.18) + (trsMods.blockerBonus || 0)),
     channeling: knobs.channeling || 'strong',
     lateGap: knobs.lateGap || { min: 1, max: 2 },
     endpointMode: 'edgeRandom',

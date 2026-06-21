@@ -453,7 +453,8 @@ function planRouteSlots(interior, place, lateGap, rng) {
   const clustered = routeNodes.filter((p) => p.cluster);
   const nonClustered = shuffleCopy(routeNodes.filter((p) => !p.cluster), rng);
   const clusteredTotal = clustered.reduce((s, p) => s + countOf(p), 0);
-  const leadNeed = clusteredTotal + nonClustered.length;
+  const nonClusteredTotal = nonClustered.reduce((s, p) => s + countOf(p), 0);
+  const leadNeed = clusteredTotal + nonClusteredTotal;
   const slack = Math.max(0, leadEnd - leadNeed);
 
   // clustered run starts at a random offset within the slack (position variety)
@@ -464,13 +465,17 @@ function planRouteSlots(interior, place, lateGap, rng) {
       assignments.set(cellKey(c.x, c.y), p.type);
     }
   }
-  if (nonClustered.length) {
-    const span = Math.max(1, Math.floor((leadEnd - cursor) / nonClustered.length));
+  // Non-clustered payloads spread out across the remaining lead span — one cell
+  // per UNIT (honoring each entry's count), not one cell per entry.
+  if (nonClusteredTotal > 0) {
+    const span = Math.max(1, Math.floor((leadEnd - cursor) / nonClusteredTotal));
     let pos = cursor;
     for (const p of nonClustered) {
-      const c = interior[Math.min(pos, leadEnd - 1)];
-      assignments.set(cellKey(c.x, c.y), p.type);
-      pos += span;
+      for (let i = 0; i < countOf(p); i++) {
+        const c = interior[Math.min(pos, leadEnd - 1)];
+        assignments.set(cellKey(c.x, c.y), p.type);
+        pos += span;
+      }
     }
   }
   return { ok: true, assignments, offRoute };

@@ -111,6 +111,28 @@ test('reproducible: same seed + routePlan => identical board', () => {
   assert(JSON.stringify(a.cells) === JSON.stringify(b.cells), 'cells identical for same seed');
 });
 
+test('payload count is honored whether cluster is ON or OFF (regression)', () => {
+  // genPlan emits two same-skill entries: a count{min,max} run (clusterable) + a
+  // guaranteed singleton. Total featured payloads must be (run count + 1) in BOTH
+  // modes. Before the fix, cluster:false placed one cell per ENTRY (always 2).
+  const planFor = (cluster) => ({
+    place: [
+      { type: 'freeze', count: { min: 3, max: 3 }, placement: 'onPrimaryRoute', cluster, order: 0 },
+      { type: 'freeze', count: { exact: 1 }, placement: 'onPrimaryRoute', order: 1 },
+    ],
+    alternateRoutes: 1, primaryLengthTarget: 'long', channeling: 'strong',
+    trapDensity: 0.2, blockerDensity: 0.18, lateGap: { min: 1, max: 2 }, endpointMode: 'edgeRandom',
+  });
+  for (const cluster of [true, false]) {
+    for (let seed = 0; seed < 8; seed++) {
+      const lvl = generate({ size: 12, nodeTypes: OFF_NT, seed, routePlan: planFor(cluster) });
+      if (!lvl.primaryRoute) continue; // skip rare fallback
+      assert((tally(lvl).freeze || 0) === 4,
+        `cluster:${cluster} seed ${seed} should place 3+1 freeze (got ${tally(lvl).freeze || 0})`);
+    }
+  }
+});
+
 test('over-constrained 4x4 still returns a solvable board (graceful fallback)', () => {
   const warns = [];
   const orig = console.warn;

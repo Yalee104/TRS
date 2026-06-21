@@ -252,7 +252,6 @@ $('export').addEventListener('click', exportConfig);
 $('generate').addEventListener('click', buildGame);
 $('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); buildGame(); });
 $('reset').addEventListener('click', () => { game.reset(); game.start(); resetReadout(); }); // re-arm + replay GO
-$('execute').addEventListener('click', () => game.execute());
 
 renderComponents();
 buildGame();
