@@ -152,6 +152,17 @@ test('Freeze suspends the part system: frozen enemy Tower scatters aim; frozen E
   assert(full > dodged, 'frozen enemy Engine → no dodge, focus-fire lands full');
 });
 
+test('Confuse on YOUR Tower blinds your telegraph; on the ENEMY Tower it does not scatter aim', () => {
+  const s = fresh();
+  assert(planAttack(s, s.enemies[0]).visible === true, 'telegraph visible with a healthy Tower');
+  applyStatus(s.player.components.tower, 'confuse', { turns: 2 });
+  assert(planAttack(s, s.enemies[0]).visible === false, 'confused player Tower → telegraph hidden');
+
+  const e = fresh();
+  applyStatus(e.enemies[0].components.tower, 'confuse', { turns: 2 });
+  assert(planAttack(e, e.enemies[0]).scattered === false, 'confused enemy Tower still aims (no scatter — that is Freeze)');
+});
+
 // --- statuses + synergies ----------------------------------------------------
 test('Burning DoT ticks then statuses decay each round', () => {
   const s = fresh();

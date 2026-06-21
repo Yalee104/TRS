@@ -10,7 +10,7 @@
 
 import { isAlive } from '../core/components.js';
 import { combatCondition, firepowerMult } from '../core/firepower.js';
-import { systemState, coreShieldUp, towerActive, effectiveAim } from '../core/cascade.js';
+import { systemState, coreShieldUp, towerActive, towerVisionOk, effectiveAim } from '../core/cascade.js';
 
 /** The archetype keys defined in config (skips the `_comment` doc field). The roster
  *  is 100% config-driven: add an entry under game.json#archetypes and it's selectable. */
@@ -102,8 +102,8 @@ export function planAttack(state, enemy) {
     }
   }
 
-  // You SEE the telegraph only if YOUR Tower is active (alive and not frozen).
-  const visible = state.config.telegraph.gated ? towerActive(state.player) : true;
+  // You SEE the telegraph only if YOUR Tower has vision (alive, not frozen/locked, not Confused).
+  const visible = state.config.telegraph.gated ? towerVisionOk(state.player) : true;
   return { eid: enemy.eid, archetype: enemy.archetype, label: enemy.label, entries, visible, scattered: !enemyTowerOk };
 }
 

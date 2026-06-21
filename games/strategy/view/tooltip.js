@@ -20,14 +20,14 @@ const SYSTEM = {
   core: 'The heart of the aircraft. If it reaches 0 HP the battle ends. Protected by an indestructible shield (below) until enough shield-linked parts are destroyed.',
   generator: 'Powers every system. Drives the largest share of your firepower (Combat Condition) and is the biggest shield-linked part.',
   weapon: 'Your base / automatic firepower — a big slice of Combat Condition.',
-  tower: 'Sensors — two roles. VISION: YOUR Tower lets you SEE the enemy’s telegraphed strike before you defend; lose it and you defend blind. AIM: the owner’s Tower governs its targeting — destroy the ENEMY’s Tower (or Freeze it) and its strikes SCATTER to random parts and deal only ×0.6 damage.',
+  tower: 'Sensors — two roles. VISION: YOUR Tower lets you SEE the enemy’s telegraphed strike before you defend; lose it (destroyed, Frozen, or CONFUSED) and you defend blind. AIM: the owner’s Tower governs its targeting — destroy the ENEMY’s Tower (or Freeze it) and its strikes SCATTER to random parts and deal only ×0.6 damage (Confuse does NOT scatter aim).',
   engine: 'Evasion — dodges part of every hit (×0.15 at full HP, scaling with HP). YOUR Engine reduces ALL incoming damage in defense; the ENEMY’s Engine dodges part of your focus-fire in attack. Destroyed/Frozen → 0% (hits land in full). (Initiative/resolve-order is parked.)',
   launchpad: 'Governs its OWNER’s TRS quality: healthy = easier grids (fewer blockers/traps), damaged = grids drift to baseline, destroyed = congested. Also carries a small share of attack strength.',
 };
 
 const EFFECT_DESC = {
   freeze: 'Freeze — suspends the part for its duration: ×0 firepower contribution AND its system goes offline (frozen Tower → aim scatters; frozen Engine → no evasion). Alone: a Frozen focus is brittle (+40% dmg). ⚠ Cancels with Burning.',
-  confuse: 'Confuse — scrambles the part’s fire: −50% of its firepower contribution to the enemy’s next attack. (Meaningful on Weapon / Tower.)',
+  confuse: 'Confuse — scrambles the part’s fire: −50% of its firepower contribution to the enemy’s next attack. On a TOWER it also jams the sensors → that owner loses telegraph vision (a confused YOUR Tower = you defend blind). (Meaningful on Weapon / Tower.)',
   drain: 'Drain — siphons the part: damage feeds your firepower pool AND heals your Core; also chokes the part’s output (×0.6).',
   burning: 'Burning — damage-over-time each round that BYPASSES the Core shield (the anti-shield tool). ⚠ Cancels with Freeze.',
   shatter: 'Shatter — alone, the part takes +50% from all your fire; valid on ANY part, so it’s the universal combo enabler (Glass, Meltdown, Backfire, Collapse).',
