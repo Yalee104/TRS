@@ -70,7 +70,7 @@ function buildDefenseProfile(state, comp, queued) {
     const get = (k) => (c.a.key === k ? c.a : (c.b.key === k ? c.b : null));
     profile.names.push(c.def.name);
     switch (c.def.name) {
-      case 'Sustain': profile.shield += get('shield').mag; profile.repair += get('repair').mag; profile.persistShield = true; break;
+      case 'Sustain': profile.shield += get('shield').mag; profile.persistShield = true; break;  // shield persists; Repair's heal is consumed (no HP)
       case 'Purified Barrier': profile.shield += get('shield').mag; profile.immune = true; break;
       case 'Bastion': profile.shield += get('shield').mag; profile.capFrac = K.bastion?.capFrac || 0; profile.persistShield = true; break;
       case 'Reactive Plating': profile.shield += get('shield').mag; profile.reflectFrac = K.reactivePlating?.reflectFrac || 0; profile.persistShield = true; break;

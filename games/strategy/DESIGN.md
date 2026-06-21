@@ -378,8 +378,8 @@ apply independently). Numbers live in `config → defense.combos`.
 | **Hardened** | | | — | — |
 
 **Sustain** (Shield + Repair) — *durability.*
-- *Does:* creates a **shield that persists to the next defense resolve** (carries through the attack phase); re-forming it refreshes it. Leftover absorbs again next time you're hit.
-- *Example:* shield 40, takes 25 → 15 carries to next defense resolve instead of vanishing. *On:* any part.
+- *Does:* the **shield persists to the next defense resolve** (carries through the attack phase); re-forming it refreshes it. Leftover absorbs again next time you're hit. The **Repair is consumed to power the persistence — it grants NO HP heal** (combo replaces both bases).
+- *Example:* shield 40, takes 25 → 15 carries to next defense resolve instead of vanishing (and no HP was restored). *On:* any part.
 
 **Purified Barrier** (Shield + Cleanse) — *status wall.*
 - *Does:* while the shield holds, the part is **immune to incoming statuses** this resolve (debuffs bounce off).

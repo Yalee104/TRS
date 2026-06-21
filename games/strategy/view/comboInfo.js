@@ -27,7 +27,7 @@ const OFFENSE_INFO = [
 ];
 
 const DEFENSE_INFO = [
-  { name: 'Sustain', icon: '🔁', recipe: ['shield', 'repair'], does: 'Shield persists to your next defense resolve; repair tops it up.', example: 'Leftover 15 shield carries over.', on: 'Any part.' },
+  { name: 'Sustain', icon: '🔁', recipe: ['shield', 'repair'], does: 'Your shield persists to the next defense resolve. Repair is consumed — no HP heal.', example: 'Leftover 15 shield carries over.', on: 'Any part.' },
   { name: 'Purified Barrier', icon: '✨', recipe: ['shield', 'cleanse'], does: 'While the shield holds, the part is immune to incoming statuses this resolve.', example: 'An incoming freeze is warded off.', on: 'Any part.' },
   { name: 'Bastion', icon: '🏰', recipe: ['shield', 'harden'], does: 'Caps total damage to the part at ~25% of its max HP this resolve.', example: '3 enemies for 90 → capped to ~25.', on: 'Any part.' },
   { name: 'Reactive Plating', icon: '🪞', recipe: ['shield', 'overclock'], does: 'Reflects ~50% of absorbed damage at the attacker (lowest-HP part, Core-first if exposed).', example: 'Shield eats 40 → ~20 reflected.', on: 'Any part.' },

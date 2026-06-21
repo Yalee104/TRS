@@ -394,12 +394,15 @@ test('Reactive Plating reflects absorbed damage back at the attacker', () => {
   assert(enemyTotalHp(s) < before, 'the attacker took reflected damage');
 });
 
-test('Sustain shield persists to the next defense resolve', () => {
+test('Sustain shield persists to the next defense resolve; Repair grants NO heal (option B)', () => {
   const s = defScene();
+  s.player.components.weapon.hp = 40;             // damaged, so any heal would show
   defend(s, 'weapon', 6, 'weapon'); defend(s, 'generator', 6, 'weapon'); // Sustain on weapon
-  tele(s, [{ component: 'engine', share: 1 }]);  // strike elsewhere so the weapon shield survives
+  tele(s, [{ component: 'engine', share: 1 }]);  // strike elsewhere so the weapon shield survives untouched
   resolveDefense(s);
-  assert(s.player.components.weapon.carry && s.player.components.weapon.carry.shield > 0, 'shield carried over');
+  const w = s.player.components.weapon;
+  assert(w.carry && w.carry.shield > 0, 'shield carried over');
+  assert(w.hp === 40, 'Sustain healed no HP — the Repair was consumed by the combo');
 });
 
 test('Cleanse strips only the oldest (lone); Reboot strips all', () => {
