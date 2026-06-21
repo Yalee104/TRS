@@ -206,6 +206,49 @@ $('placement').addEventListener('change', () => {
   $('placehint').style.display = off ? '' : 'none';
 });
 
+// Print the current settings as a paste-ready snippet for presets/trs.js (the
+// playground never writes files — this is the bridge to "baking" tuned defaults).
+function exportConfig() {
+  const k = readKnobs();
+  const preset = $('lpmod').value;
+  const go = goOpts();
+  const q = (v) => (typeof v === 'string' ? `'${v}'` : v);
+  const text = [
+    '// TRS Puzzle Playground — current config',
+    `// phase: ${phase} · component: ${component} (${skillOf()}) · Launch Pad: ${preset} · size ${$('size').value} · seed ${$('seed').value}`,
+    "// To ship as the DEFAULT difficulty, set these in genPlan()'s defaults in",
+    '//   games/grid-path-puzzle/presets/trs.js',
+    'const knobs = {',
+    `  cluster: ${k.cluster},`,
+    `  count: { min: ${k.count.min}, max: ${k.count.max} },`,
+    `  placement: ${q(k.placement)},`,
+    `  trapDensity: ${k.trapDensity},`,
+    `  blockerDensity: ${k.blockerDensity},`,
+    `  alternateRoutes: ${k.alternateRoutes},`,
+    `  channeling: ${q(k.channeling)},`,
+    `  primaryLengthTarget: ${q(k.primaryLengthTarget)},`,
+    '};',
+    '// presentation (module options — set where the puzzle is constructed, e.g. strategy bridge.js):',
+    `//   countdownMs: ${go.countdownMs}, flashStart: ${go.flashStart}, countdownText: ${q(go.countdownText)}`,
+  ].join('\n');
+
+  const ta = $('exportout');
+  ta.style.display = '';
+  ta.value = text;
+  ta.focus();
+  ta.select();
+  const msg = $('exportmsg');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => { msg.textContent = '✅ copied to clipboard'; },
+      () => { msg.textContent = 'select the text above and copy (Ctrl/Cmd+C)'; },
+    );
+  } else {
+    msg.textContent = 'select the text above and copy (Ctrl/Cmd+C)';
+  }
+}
+
+$('export').addEventListener('click', exportConfig);
 $('generate').addEventListener('click', buildGame);
 $('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); buildGame(); });
 $('reset').addEventListener('click', () => { game.reset(); game.start(); resetReadout(); }); // re-arm + replay GO
