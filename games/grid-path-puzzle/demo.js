@@ -65,6 +65,7 @@ function readKnobs() {
     primaryLengthTarget: $('plt').value,
     chainChance: Math.max(0, Math.min(100, Number($('chainpct').value))) / 100,
     chainPlacement: $('chainplace').value,
+    burningDensity: $('burnon').checked ? Number($('burndens').value) : 0, // 🔥 status (generation hazard)
   };
 }
 
@@ -308,10 +309,18 @@ function syncTouUI() {
 }
 $('touon').addEventListener('change', syncTouUI);
 
+// ---- statuses ---------------------------------------------------------------
+$('burndens').addEventListener('input', (e) => { $('burndensVal').textContent = Number(e.target.value).toFixed(2); });
+function syncStatusUI() {
+  $('burndens').disabled = !$('burnon').checked;
+  $('burnrow').classList.toggle('is-off', !$('burnon').checked);
+}
+$('burnon').addEventListener('change', syncStatusUI);
+
 // Re-apply generation knobs on the SAME seed when any change, so you can A/B a
 // single knob (e.g. Primary length) without the seed shifting underneath you.
 // (Regenerate is still the way to roll a fresh board.)
-['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec']
+['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec', 'burnon', 'burndens']
   .forEach((id) => $(id).addEventListener('change', buildGame));
 
 // Print the current settings as a paste-ready snippet for presets/trs.js (the
@@ -370,4 +379,5 @@ $('sizeVal').textContent = String(DEFAULT_GRID_SIZE);
 renderComponents();
 syncObjUI();
 syncTouUI();
+syncStatusUI();
 buildGame();

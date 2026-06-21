@@ -30,6 +30,9 @@ export const BASE_CELLS = {
   normal:  { role: 'normal', passable: true,  color: '#39404e' },
   blocker: { role: 'normal', passable: false, color: '#2a2e39', icon: '⛔' },
   trap:    { role: 'normal', passable: true,  color: '#d04a4a', icon: '☠️', label: 'Trap', failsOnPass: true },
+  // A SECOND hazard (the "burning" status): like a trap (fails on entry) but with
+  // its own density + an animated flame icon. Placed only when burningDensity > 0.
+  burning: { role: 'normal', passable: true,  color: '#7a2d18', icon: '🔥', label: 'Burning', failsOnPass: true, anim: 'flame', effectKind: 'danger' },
 };
 
 export const OFFENSE_META = {
@@ -100,6 +103,9 @@ export function genPlan(skillKey, withChain, trsMods = {}, knobs = {}) {
     channeling: knobs.channeling || 'strong',
     lateGap: knobs.lateGap || { min: 1, max: 2 },
     endpointMode: 'edgeRandom',
+    // "Burning" status: a second off-route hazard type at its own density (0 = off).
+    burningType: 'burning',
+    burningDensity: knobs.burningDensity ?? 0,
   };
 }
 

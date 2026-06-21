@@ -34,6 +34,12 @@ const CSS = `
   white-space: nowrap; }
 .gpp-icon.gpp-pop, .gpp-label.gpp-pop { animation: gpp-pop .32s ease; }
 @keyframes gpp-pop { 0% { transform: scale(1); } 32% { transform: scale(1.5); } 100% { transform: scale(1); } }
+/* Looping "flame" flicker for the burning hazard icon (a few repeating frames). */
+.gpp-anim-flame { animation: gpp-flame .5s steps(3, end) infinite; transform-origin: center 75%; }
+@keyframes gpp-flame {
+  0%   { filter: brightness(1) drop-shadow(0 0 1px #ff7a18); transform: scale(1) translateY(0); }
+  50%  { filter: brightness(1.5) drop-shadow(0 0 5px #ff3b00); transform: scale(1.14) translateY(-4%); }
+  100% { filter: brightness(.95) drop-shadow(0 0 2px #ff5a00); transform: scale(1.02) translateY(0); } }
 
 /* Floating "+DMG" / "Freeze" / "-MULT" text that rises and fades on pass. */
 .gpp-float { position: absolute; transform: translate(-50%, -50%); z-index: 5;

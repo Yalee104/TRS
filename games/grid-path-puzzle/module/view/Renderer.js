@@ -201,6 +201,7 @@ export class Renderer {
           span.className = def.icon ? 'gpp-icon' : 'gpp-label';
           // Multi-glyph icons (e.g. '💥💥💥') get a class that shrinks them to fit.
           if (def.icon && glyphCount(glyph) > 1) span.classList.add('gpp-icon-multi');
+          if (def.anim) span.classList.add(`gpp-anim-${def.anim}`); // looping icon animation
           span.textContent = glyph;
           cell.appendChild(span);
         }
