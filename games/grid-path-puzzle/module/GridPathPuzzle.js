@@ -281,6 +281,30 @@ export class GridPathPuzzle {
     this._decayTimers = null;
   }
 
+  // SHATTER: with `wander.chance`, relocate one random un-crossed payload to a
+  // random empty (plain filler) adjacent cell. Called once per step added.
+  _maybeWander() {
+    const w = this._mods?.wander;
+    if (!w || this._rng() >= w.chance) return;
+    const payloads = [];
+    for (let y = 0; y < this.level.rows; y++) {
+      for (let x = 0; x < this.level.cols; x++) {
+        if (this.level.cells[y][x] === w.type && !this._isOnPath(x, y)) payloads.push({ x, y });
+      }
+    }
+    if (!payloads.length) return;
+    const p = payloads[Math.floor(this._rng() * payloads.length)];
+    const empties = neighbors4(p.x, p.y).filter((n) => inBounds(this.level, n.x, n.y)
+      && this.level.cells[n.y][n.x] === this._fillKey && !this._isOnPath(n.x, n.y));
+    if (!empties.length) return;
+    const dest = empties[Math.floor(this._rng() * empties.length)];
+    this.level.cells[p.y][p.x] = this._fillKey;
+    this.level.cells[dest.y][dest.x] = w.type;
+    this.renderer?.updateCell(p.x, p.y, this._fillKey);
+    this.renderer?.updateCell(dest.x, dest.y, w.type);
+    this._fire('onShatter', 'shatter', { from: { x: p.x, y: p.y }, to: dest, type: w.type });
+  }
+
   // ---- timer --------------------------------------------------------------
   start() {
     if (this._timerRunning) return this;
@@ -444,6 +468,7 @@ export class GridPathPuzzle {
         return;
       }
       this.state.path.push(step);
+      this._maybeWander(); // SHATTER: chance to relocate an un-crossed payload each step
     }
     finish();
   }

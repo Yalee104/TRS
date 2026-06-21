@@ -101,3 +101,31 @@ test('drain: an un-crossed payload vanishes after its timer', () => {
   assert(g.level.cells[0][2] === 'p' && g.level.cells[0][3] === 'p', 'farther payloads still present');
   assert(decayed === 1, 'onDecay fired once');
 });
+
+test('shatter: a step relocates an un-crossed payload to an empty neighbor', () => {
+  let moved = 0;
+  const g = new GridPathPuzzle({ mount: mkEl(), nodeTypes: NT2, level: { grid: GRID2.map((r) => r.slice()) }, countdownMs: 0, rng: () => 0, modifiers: { wander: { type: 'p', chance: 1 } }, onShatter: () => { moved++; } });
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 0, y: 1 }); // one step down → triggers wander (rng()=0 < chance 1)
+  assert(g.level.cells[0][1] === 'normal', 'payload (1,0) vacated');
+  assert(g.level.cells[1][1] === 'p', 'payload moved to the empty neighbor (1,1)');
+  assert(moved === 1, 'onShatter fired');
+});
+
+test('shatter: chance 0 (off) never moves a payload', () => {
+  const g = new GridPathPuzzle({ mount: mkEl(), nodeTypes: NT2, level: { grid: GRID2.map((r) => r.slice()) }, countdownMs: 0, rng: () => 0, modifiers: { wander: { type: 'p', chance: 0 } } });
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 0, y: 1 });
+  assert(g.level.cells[0][1] === 'p' && g.level.cells[0][2] === 'p' && g.level.cells[0][3] === 'p', 'all payloads intact when off');
+});
+
+test('shatter: never lands a payload on the path or a non-empty cell', () => {
+  // chance 1, deterministic: drive several steps and assert payload count is conserved
+  const g = new GridPathPuzzle({ mount: mkEl(), nodeTypes: NT2, level: { grid: GRID2.map((r) => r.slice()) }, countdownMs: 0, rng: () => 0.0001, modifiers: { wander: { type: 'p', chance: 1 } } });
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 0, y: 4 }); // walk down the left column (several steps)
+  let count = 0;
+  for (const row of g.level.cells) for (const k of row) if (k === 'p') count++;
+  assert(count === 3, `payload count conserved (got ${count})`);
+  for (const c of g.state.path) assert(g.level.cells[c.y][c.x] !== 'p', 'no payload sitting on the path');
+});
