@@ -165,7 +165,7 @@ Kept (not dropped): an effect only does something on appropriate targets, so cho
 *and* your effects is a real matching decision (Confuse on a Generator is wasted).
 | Effect | Valid / meaningful targets | What it does there |
 |---|---|---|
-| **Freeze** | any *functional* part (not Core) | ×0 firepower contribution **and** suspends the part's system for the duration: frozen **Tower** → owner's aim scatters + ~40% softer; frozen **Engine** → no evasion. (Generator shield/brownout + Launch Pad TRS stay tied to destruction.) **Cancels with Burning** — applying one wipes both. |
+| **Freeze** | any *functional* part (not Core) | ×0 firepower contribution **and** suspends the part's system for the duration: frozen **Tower** → suspends *both* Tower roles — an **enemy** Tower's aim scatters (~40% softer), **your** Tower goes **blind** (no telegraph preview); frozen **Engine** → no evasion. (Generator shield/brownout + Launch Pad TRS stay tied to destruction.) **Cancels with Burning** — applying one wipes both. |
 | **Confuse** | parts that aim/fire — **Weapon Storage, Tower** | ×0.5 firepower contribution; **on your own Tower it also jams your telegraph — you can't see incoming attacks/statuses** (no effect on an enemy Tower, which never telegraphs your attacks) |
 | **Drain** | best on **Generator & Core** (HP on any) | siphon HP to you (heals your Core); kill the Generator to drop the Core shield |
 | **Burning** | any part | flat DoT each round; **bypasses the Core shield**; best on high-HP (Core, Generator). **Cancels with Freeze.** |
@@ -179,7 +179,7 @@ solve to succeed (`minChain`). **Stacks** = re-applying the same status to the s
 
 | Status (source) | Valid on | Min Chain | Stacks? | Full effect ( [scaled] grows with potency · [flat] fixed ) |
 |---|---|---|---|---|
-| **Freeze** ❄️ (Weapon) | any non-Core | **1** | **Refresh** (MAX), pool adds | ① pool +1.5×p [scaled] · ② part contributes **×0** firepower [flat]; frozen Tower→aim scatters (−40%), Engine→no evasion [flat]; **on Focus +40%** [flat]; duration round(p/4), 1–3 [scaled]. **Cancels with Burning.** |
+| **Freeze** ❄️ (Weapon) | any non-Core | **1** | **Refresh** (MAX), pool adds | ① pool +1.5×p [scaled] · ② part contributes **×0** firepower [flat]; frozen Tower → enemy aim scatters (−40%) / **your telegraph goes blind**; frozen Engine → no evasion [flat]; **on Focus +40%** [flat]; duration round(p/4), 1–3 [scaled]. **Cancels with Burning.** |
 | **Confuse** 🌀 (Tower) | Weapon, Tower | **1** | Refresh (MAX), pool adds | ① pool +1.0×p [scaled] · ② part ×0.5 (−50%) firepower [flat]; **on your own Tower → telegraph blinded (no incoming preview)** [flat]; duration round(p/4), 1–3 [scaled] |
 | **Drain** 🩸 (Generator) | any part | **1** | **Heal per apply**, choke MAX, pool adds | ① pool +3.0×p [scaled] · ② heal +2.0×p to your Core, once [scaled]; part ×0.6 (−40%) firepower [flat]; duration round(p/5), 1–2 [scaled] |
 | **Burning** 🔥 (Launch Pad) | any part | **1** | **STACKS** — DoT adds (cap 24), duration extends (cap 6); pool adds | ① pool +1.0×p [scaled] · ② DoT 1.2×p/round, **bypasses Core shield** [scaled]; part ×0.85 (−15%) firepower [flat]; duration round(p/3), 1–4 [scaled]. **Cancels with Freeze.** |

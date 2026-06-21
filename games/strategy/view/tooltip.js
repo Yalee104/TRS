@@ -26,7 +26,7 @@ const SYSTEM = {
 };
 
 const EFFECT_DESC = {
-  freeze: 'Freeze — suspends the part for its duration: ×0 firepower contribution AND its system goes offline (frozen Tower → aim scatters; frozen Engine → no evasion). Alone: a Frozen focus is brittle (+40% dmg). ⚠ Cancels with Burning.',
+  freeze: 'Freeze — suspends the part for its duration: ×0 firepower contribution AND its system goes offline. Frozen Tower → suspends both roles: an enemy Tower’s aim scatters, YOUR Tower goes blind (no telegraph). Frozen Engine → no evasion. Alone: a Frozen focus is brittle (+40% dmg). ⚠ Cancels with Burning.',
   confuse: 'Confuse — scrambles the part’s fire: −50% of its firepower contribution to the enemy’s next attack. On a TOWER it also jams the sensors → that owner loses telegraph vision (a confused YOUR Tower = you defend blind). (Meaningful on Weapon / Tower.)',
   drain: 'Drain — siphons the part: damage feeds your firepower pool AND heals your Core; also chokes the part’s output (×0.6).',
   burning: 'Burning — damage-over-time each round that BYPASSES the Core shield (the anti-shield tool). ⚠ Cancels with Freeze.',
