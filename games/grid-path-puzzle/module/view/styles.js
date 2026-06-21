@@ -95,6 +95,17 @@ const CSS = `
   0%, 100% { box-shadow: inset 0 0 0 3px #ffffff, 0 0 14px 3px rgba(255,255,255,.85); }
   50%      { box-shadow: inset 0 0 0 3px #ffd34d, 0 0 18px 5px rgba(255,211,77,.9); } }
 
+/* CONFUSED: the whole grid gently wobbles, the drawn path turns purple, + a badge. */
+.gpp-confused { animation: gpp-wobble 1.7s ease-in-out infinite; }
+@keyframes gpp-wobble {
+  0%, 100% { transform: rotate(-.7deg); }
+  50%      { transform: rotate(.7deg); } }
+.gpp-confused .gpp-path { stroke: #c58cff; }
+.gpp-confused-badge { position: absolute; top: 0; left: 0; transform: translateY(-55%); z-index: 8;
+  background: rgba(58,30,82,.94); border: 1px solid #6b4a8c; border-radius: 999px;
+  padding: calc(5cqi / var(--cols)) calc(11cqi / var(--cols)); color: #ecd9ff; white-space: nowrap;
+  font: 700 calc(22cqi / var(--cols)) system-ui, sans-serif; pointer-events: none; }
+
 /* DRAIN: a ring on a payload that shrinks as its timer runs out, then it vanishes. */
 .gpp-decay { position: absolute; inset: 14%; border-radius: 50%; box-sizing: border-box;
   border: 2px solid rgba(255,90,90,.9); pointer-events: none; z-index: 4; }

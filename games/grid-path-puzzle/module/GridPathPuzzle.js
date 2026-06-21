@@ -104,6 +104,7 @@ export class GridPathPuzzle {
     this.renderer = new Renderer(this.options.mount, this.nodeTypes);
     this.renderer.setLevel(this.level);
     this._applyObjective();
+    this._applyModifierVisuals();
     this.pointer = new PointerController(this.renderer.gridEl, this);
     if (this.options.allowKeyboard) this.keyboard = new KeyboardController(this.renderer.gridEl, this);
     this._mounted = true;
@@ -117,6 +118,7 @@ export class GridPathPuzzle {
     this.state = createGameState(this.level, this.options.initialRunState);
     this.renderer.setLevel(this.level);
     this._applyObjective();
+    this._applyModifierVisuals();
     this._stopTimer();
     return this;
   }
@@ -192,6 +194,11 @@ export class GridPathPuzzle {
 
   _objectiveMet(path = this.state.path) {
     return !this._objective || this._objectiveCount(path) >= this._objective.min;
+  }
+
+  // Persistent visual indicators for active modifiers (currently: confused).
+  _applyModifierVisuals() {
+    if (this._mods?.confusion) this.renderer?.setConfused(true);
   }
 
   // Apply the objective to a freshly-built board (badge + locked goal + counts).
@@ -485,6 +492,17 @@ export class GridPathPuzzle {
     } else {
       if (dy !== 0) cands.push({ x: head.x, y: head.y + Math.sign(dy) });
       if (dx !== 0) cands.push({ x: head.x + Math.sign(dx), y: head.y });
+    }
+    // CONFUSED: sometimes veer to a random SAFE (non-hazard) legal neighbor — a
+    // DIFFERENT direction than intended when one exists. Never a trap/burning.
+    if (this._mods?.confusion && this._rng() < this._mods.confusion) {
+      const intended = cands[0];
+      const safe = neighbors4(head.x, head.y).filter((c) =>
+        canExtend(this.state.path, c, this.level, this.nodeTypes)
+        && !this.nodeTypes[this.level.cells[c.y][c.x]].failsOnPass);
+      const wrong = safe.filter((c) => !intended || c.x !== intended.x || c.y !== intended.y);
+      const pool = wrong.length ? wrong : safe;
+      if (pool.length) return pool[Math.floor(this._rng() * pool.length)];
     }
     for (const c of cands) {
       if (canExtend(this.state.path, c, this.level, this.nodeTypes)) return c;

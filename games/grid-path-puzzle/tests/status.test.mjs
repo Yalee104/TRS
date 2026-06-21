@@ -129,3 +129,28 @@ test('shatter: never lands a payload on the path or a non-empty cell', () => {
   assert(count === 3, `payload count conserved (got ${count})`);
   for (const c of g.state.path) assert(g.level.cells[c.y][c.x] !== 'p', 'no payload sitting on the path');
 });
+
+test('confused: a confused step veers to a different safe neighbor', () => {
+  const g = new GridPathPuzzle({ mount: mkEl(), nodeTypes: NT2, level: { grid: GRID2.map((r) => r.slice()) }, countdownMs: 0, rng: () => 0, modifiers: { confusion: 1 } });
+  g.state.path = [{ x: 0, y: 0 }]; g.state.status = 'drawing';
+  const step = g._stepToward({ x: 0, y: 0 }, { x: 4, y: 0 }); // intend to go right toward (1,0)
+  assert(step && !(step.x === 1 && step.y === 0), `veered off the intended (1,0) (got ${JSON.stringify(step)})`);
+  assert(step.x === 0 && step.y === 1, 'took the other safe neighbor (0,1)');
+});
+
+test('confused: never veers onto a hazard', () => {
+  const NTH = { ...NT2, t: { role: 'normal', passable: true, icon: '☠️', failsOnPass: true } };
+  const GH = [
+    ['normal', 'normal', 'normal', 'normal', 'normal'],
+    ['normal', 'normal', 't', 'normal', 'normal'],
+    ['normal', 'normal', 'start', 'goal', 'normal'],
+    ['normal', 'normal', 'normal', 'normal', 'normal'],
+    ['normal', 'normal', 'normal', 'normal', 'normal'],
+  ];
+  const g = new GridPathPuzzle({ mount: mkEl(), nodeTypes: NTH, level: { grid: GH.map((r) => r.slice()) }, countdownMs: 0, rng: () => 0, modifiers: { confusion: 1 } });
+  g.state.path = [{ x: 2, y: 2 }]; g.state.status = 'drawing';
+  for (let i = 0; i < 10; i++) {
+    const s = g._stepToward({ x: 2, y: 2 }, { x: 4, y: 2 });
+    assert(!(s && s.x === 2 && s.y === 1), 'never steps onto the trap at (2,1)');
+  }
+});

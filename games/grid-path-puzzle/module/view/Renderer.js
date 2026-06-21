@@ -166,6 +166,20 @@ export class Renderer {
     this.startEl?.classList.toggle('gpp-start-flash', !!on);
   }
 
+  /** CONFUSED indicator: wobble the grid + purple path + a 🌀 badge. */
+  setConfused(on) {
+    this.wrap?.classList.toggle('gpp-confused', !!on);
+    if (on && !this._confusedBadge && this.wrap) {
+      this._confusedBadge = document.createElement('div');
+      this._confusedBadge.className = 'gpp-confused-badge';
+      this._confusedBadge.textContent = '🌀 CONFUSED';
+      this.wrap.appendChild(this._confusedBadge);
+    } else if (!on && this._confusedBadge) {
+      this._confusedBadge.remove();
+      this._confusedBadge = null;
+    }
+  }
+
   // ---- live cell mutation (drain removes / shatter moves a node) ----------
   /** Repaint ONE cell to a new node type (background + glyph). */
   updateCell(x, y, typeKey) {

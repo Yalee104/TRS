@@ -79,6 +79,7 @@ function readModifiers(skill) {
   const m = {};
   if ($('drainon').checked) m.decay = { type: skill, baseMs: Number($('drainbase').value) * 1000, stepMs: Number($('drainstep').value) * 1000 };
   if ($('shatteron').checked) m.wander = { type: skill, chance: Number($('shatterchance').value) };
+  if ($('confon').checked) m.confusion = Number($('confchance').value);
   return Object.keys(m).length ? m : null;
 }
 
@@ -321,6 +322,7 @@ $('touon').addEventListener('change', syncTouUI);
 // ---- statuses ---------------------------------------------------------------
 $('burndens').addEventListener('input', (e) => { $('burndensVal').textContent = Number(e.target.value).toFixed(2); });
 $('shatterchance').addEventListener('input', (e) => { $('shatterchanceVal').textContent = Number(e.target.value).toFixed(2); });
+$('confchance').addEventListener('input', (e) => { $('confchanceVal').textContent = Number(e.target.value).toFixed(2); });
 function syncStatusUI() {
   $('burndens').disabled = !$('burnon').checked;
   $('burnrow').classList.toggle('is-off', !$('burnon').checked);
@@ -329,15 +331,18 @@ function syncStatusUI() {
   $('drainrow').classList.toggle('is-off', !drain);
   $('shatterchance').disabled = !$('shatteron').checked;
   $('shatterrow').classList.toggle('is-off', !$('shatteron').checked);
+  $('confchance').disabled = !$('confon').checked;
+  $('confrow').classList.toggle('is-off', !$('confon').checked);
 }
 $('burnon').addEventListener('change', syncStatusUI);
 $('drainon').addEventListener('change', syncStatusUI);
 $('shatteron').addEventListener('change', syncStatusUI);
+$('confon').addEventListener('change', syncStatusUI);
 
 // Re-apply generation knobs on the SAME seed when any change, so you can A/B a
 // single knob (e.g. Primary length) without the seed shifting underneath you.
 // (Regenerate is still the way to roll a fresh board.)
-['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec', 'burnon', 'burndens', 'drainon', 'drainbase', 'drainstep', 'shatteron', 'shatterchance']
+['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec', 'burnon', 'burndens', 'drainon', 'drainbase', 'drainstep', 'shatteron', 'shatterchance', 'confon', 'confchance']
   .forEach((id) => $(id).addEventListener('change', buildGame));
 
 // Print the current settings as a paste-ready snippet for presets/trs.js (the
