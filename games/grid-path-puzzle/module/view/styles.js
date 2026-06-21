@@ -69,6 +69,9 @@ const CSS = `
   stroke-linecap: round; opacity: .92; }
 .gpp-wrap[data-status="done"] .gpp-path   { stroke: #5ef08a; }
 .gpp-wrap[data-status="failed"] .gpp-path { stroke: #ff5a5a; }
+/* FREEZE: the icy preview line ahead of the slow solid fill. */
+.gpp-path-preview { fill: none; stroke: #7fd0ff; stroke-width: .16; opacity: .5;
+  stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: .3 .22; }
 
 /* Pre-start "GO" overlay (opt-in via the countdownMs option). */
 .gpp-countdown { position: absolute; inset: 0; z-index: 10; display: flex;

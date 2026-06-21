@@ -45,6 +45,10 @@ export class Renderer {
     this.svg = document.createElementNS(SVGNS, 'svg');
     this.svg.setAttribute('class', 'gpp-svg');
     this.svg.setAttribute('preserveAspectRatio', 'none');
+    // FREEZE: an icy "preview" line under the solid path (where the cursor dragged).
+    this.polyPreview = document.createElementNS(SVGNS, 'polyline');
+    this.polyPreview.setAttribute('class', 'gpp-path-preview');
+    this.svg.appendChild(this.polyPreview);
     this.poly = document.createElementNS(SVGNS, 'polyline');
     this.poly.setAttribute('class', 'gpp-path');
     this.svg.appendChild(this.poly);
@@ -216,6 +220,11 @@ export class Renderer {
     this.cellEls[y]?.[x]?.querySelector('.gpp-decay')?.remove();
   }
 
+  /** FREEZE: draw the icy preview polyline (where the cursor has dragged). */
+  setPreview(path) {
+    this.polyPreview?.setAttribute('points', (path || []).map((c) => `${c.x + 0.5},${c.y + 0.5}`).join(' '));
+  }
+
   /** Repaint the whole board for a (new) level. */
   setLevel(level) {
     this.level = level;
@@ -263,6 +272,7 @@ export class Renderer {
     }
 
     this.svg.setAttribute('viewBox', `0 0 ${level.cols} ${level.rows}`);
+    this.polyPreview?.setAttribute('points', ''); // clear any icy freeze preview
     this.update([], { status: 'idle' });
   }
 

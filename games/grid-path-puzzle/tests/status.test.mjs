@@ -154,3 +154,57 @@ test('confused: never veers onto a hazard', () => {
     assert(!(s && s.x === 2 && s.y === 1), 'never steps onto the trap at (2,1)');
   }
 });
+
+test('freeze: dragging extends the icy preview, not the solid path', () => {
+  const g = makeD({ modifiers: { slow: 0.5 } });
+  g.start();
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 3, y: 0 });
+  assert(g._previewPath.length === 4, `preview reached 4 cells (got ${g._previewPath.length})`);
+  assert(g.state.path.length === 1, `solid still at START (got ${g.state.path.length})`);
+});
+
+test('freeze: the solid fills along the preview at the frozen rate', () => {
+  const g = makeD({ modifiers: { slow: 0.5 } }); // 16*0.5 = 8 cps => 125 ms/cell
+  g.start();
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 3, y: 0 });
+  g.state.elapsedMs = 130; g._advanceFreeze();
+  assert(g.state.path.length === 2, `filled ~1 cell (got ${g.state.path.length})`);
+  g.state.elapsedMs = 1000; g._advanceFreeze();
+  assert(g.state.path.length === 4, `filled to the preview end (got ${g.state.path.length})`);
+});
+
+test('freeze: payloads count off the solid fill, not the preview', () => {
+  const g = makeD({ modifiers: { slow: 0.5 }, objective: { type: 'p', min: 2 } });
+  g.start();
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 3, y: 0 }); // preview crosses 3 payloads
+  assert(g.getState().objective.have === 0, 'nothing collected until the solid fills');
+  g.state.elapsedMs = 1000; g._advanceFreeze();
+  assert(g.getState().objective.have === 3, 'solid fill collected the payloads');
+});
+
+test('freeze: endDrag defers; commit happens when the slow fill reaches the goal', () => {
+  let done = false;
+  const g = makeD({ modifiers: { slow: 0.5 }, onComplete: () => { done = true; } });
+  g.start();
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 4, y: 0 }); // preview to the goal
+  g.endDrag();
+  assert(!done && g.state.status === 'drawing', 'not committed yet — fill still catching up');
+  g.state.elapsedMs = 2000; g._advanceFreeze();
+  assert(done === true, 'committed once the solid head reached the goal');
+});
+
+test('freeze: backtracking the preview trims a solid that ran ahead', () => {
+  const g = makeD({ modifiers: { slow: 0.5 } });
+  g.start();
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 3, y: 0 });
+  g.state.elapsedMs = 1000; g._advanceFreeze();
+  assert(g.state.path.length === 4, 'solid caught up to (3,0)');
+  g.tryMoveTo({ x: 1, y: 0 }); // backtrack the preview
+  assert(g._previewPath.length === 2, 'preview trimmed to START,(1,0)');
+  assert(g.state.path.length === 2, 'solid trimmed to match the shorter preview');
+});
