@@ -79,9 +79,11 @@ export function genPlan(skillKey, withChain, trsMods = {}, knobs = {}) {
   if (withChain) {
     // The chain 🔗 amplifier: placement + an optional appearance probability are
     // tunable. `chainPlacement` 'lateOnRoute' = near the goal, 'onPrimaryRoute' =
-    // a random spot along the route. `chainChance` (0..1) < 1 means it may be absent.
+    // a random spot along the route. `chainChance` (0..1) defaults to 1 (100% —
+    // always appears); < 1 means it may be absent.
+    const chainChance = knobs.chainChance ?? 1;
     const chain = { type: 'chain', count: { exact: 1 }, placement: knobs.chainPlacement || 'lateOnRoute', order: 10 };
-    if (knobs.chainChance != null && knobs.chainChance < 1) chain.chance = knobs.chainChance;
+    if (chainChance < 1) chain.chance = chainChance;
     place.push(chain);
   }
   return {

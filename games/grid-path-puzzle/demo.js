@@ -30,6 +30,7 @@ let phase = 'attack';
 let component = 'weapon';
 let palette = null;  // current palette config (from presets/trs.js)
 let game = null;
+let lastSeed = null; // seed used by the last build (so Regenerate can tell it changed)
 
 // ---- palette / build --------------------------------------------------------
 const skillOf = () => (phase === 'attack' ? ATTACK_EFFECT[component] : DEFENSE_VERB[component]);
@@ -75,9 +76,20 @@ function buildGame() {
   });
   game.start(); // kick the GO pause (or start immediately if countdownMs is 0)
   window.__puzzle = game;
+  lastSeed = Number($('seed').value);
   renderLegend();
   resetReadout();
   updateSolveWarn();
+}
+
+// Regenerate: rebuild from the current knobs. If the seed is unchanged since the
+// last build, roll a fresh one first so you actually get a NEW board (otherwise
+// it would just replay the same layout, like Reset).
+function regenerate() {
+  if (Number($('seed').value) === lastSeed) {
+    $('seed').value = Math.floor(Math.random() * 100000);
+  }
+  buildGame();
 }
 
 // Warn when the board can't satisfy the skill's MIN_CHAIN: e.g. Cleanse/Overclock
@@ -270,7 +282,7 @@ function exportConfig() {
 }
 
 $('export').addEventListener('click', exportConfig);
-$('generate').addEventListener('click', buildGame);
+$('generate').addEventListener('click', regenerate);
 $('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); buildGame(); });
 $('reset').addEventListener('click', () => { game.reset(); game.start(); resetReadout(); }); // re-arm + replay GO
 
