@@ -46,6 +46,7 @@ export class GridPathPuzzle {
       flashStart: false,          // flash the START cell during that pause
       countdownText: 'GO',        // the overlay label
       objective: null,            // optional win gate: { type, min, icon?, label? } — null = off
+      failText: null,             // optional: big centred banner shown on fail (null = off)
       ...options,
     };
     this.options.size = clampGridSize(this.options.size, 'size');
@@ -419,6 +420,7 @@ export class GridPathPuzzle {
     this._stopTimer();
     this.state.status = 'failed';
     this.renderer.update(this.state.path, { pendingFail: this.state.pendingFail, status: 'failed' });
+    if (this.options.failText) this.renderer?.showFail(this.options.failText);
     this._fire('onFail', 'fail', {
       reason,
       path: describePath(this.state.path, this.level),

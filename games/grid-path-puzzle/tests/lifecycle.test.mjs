@@ -56,3 +56,17 @@ test('reset() clears a pending countdown', () => {
   g.reset();
   assert(g._countdownTimer == null && g.state.status === 'idle', 'reset cleared the countdown');
 });
+
+test('timeLimitMs option propagates to the level (timeout enabled)', () => {
+  const g = make({ timeLimitMs: 5000 });
+  assert(g.getState().level.timeLimitMs === 5000, 'level carries the time limit');
+  const g2 = make({});
+  assert(g2.getState().level.timeLimitMs == null, 'no limit by default');
+});
+
+test('failText shows the fail banner and marks the run failed', () => {
+  const g = make({ failText: 'FAIL' });
+  g.start();
+  g._fail('timeout');
+  assert(g.state.status === 'failed', 'status failed on timeout');
+});

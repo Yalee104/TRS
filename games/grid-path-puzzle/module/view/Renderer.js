@@ -148,7 +148,17 @@ export class Renderer {
   }
 
   hideCountdown() {
-    if (this.overlay) { this.overlay.hidden = true; this.overlay.classList.remove('gpp-go'); }
+    if (this.overlay) { this.overlay.hidden = true; this.overlay.classList.remove('gpp-go', 'gpp-fail-banner'); }
+  }
+
+  /** Big centred "FAIL" banner (reuses the overlay; stays until reset/rebuild). */
+  showFail(text = 'FAIL') {
+    if (!this.overlay) return;
+    this.overlay.textContent = text;
+    this.overlay.hidden = false;
+    this.overlay.classList.remove('gpp-go', 'gpp-fail-banner');
+    void this.overlay.offsetWidth; // restart the pop animation
+    this.overlay.classList.add('gpp-fail-banner');
   }
 
   /** Toggle the flashing highlight on the START cell (during the pre-start pause). */

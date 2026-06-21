@@ -87,13 +87,14 @@ function buildGame() {
   const objective = $('objon').checked
     ? { type: skill, min: minChainValue(), icon: metaOf(skill).icon, label: metaOf(skill).name }
     : null; // null/omitted = gate off (reaching goal solves)
+  const timeLimitMs = $('touon').checked ? clamp(Number($('tousec').value) || 10, 2, 30) * 1000 : null;
   game = new GridPathPuzzle({
     mount: $('board'),
     nodeTypes: catalogFromConfig(palette),
     generate: { size, seed: Number($('seed').value), routePlan: palette.generation },
     trapEntryMode: 'commitFail',
     countdownMs, flashStart, countdownText,
-    objective,
+    objective, timeLimitMs, failText: 'FAIL',
     onPathChange, onComplete, onFail, onTick, onObjectiveBlocked,
     onCountdownEnd: () => { $('status').textContent = ''; },
   });
@@ -297,10 +298,18 @@ function syncObjUI() {
 }
 $('objon').addEventListener('change', syncObjUI);
 
+// Enable/grey the Timeout (seconds) field with its toggle.
+function syncTouUI() {
+  const on = $('touon').checked;
+  $('tousec').disabled = !on;
+  $('tourow').classList.toggle('is-off', !on);
+}
+$('touon').addEventListener('change', syncTouUI);
+
 // Re-apply generation knobs on the SAME seed when any change, so you can A/B a
 // single knob (e.g. Primary length) without the seed shifting underneath you.
 // (Regenerate is still the way to roll a fresh board.)
-['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain']
+['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec']
   .forEach((id) => $(id).addEventListener('change', buildGame));
 
 // Print the current settings as a paste-ready snippet for presets/trs.js (the
@@ -358,4 +367,5 @@ $('sizeVal').textContent = String(DEFAULT_GRID_SIZE);
 
 renderComponents();
 syncObjUI();
+syncTouUI();
 buildGame();

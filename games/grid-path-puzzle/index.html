@@ -202,6 +202,8 @@
           <div class="row"><label>Pre-start GO pause</label><span><input id="go" type="checkbox" checked /> <input id="goms" type="number" min="0" max="5000" step="250" value="1000" style="width:68px" /> ms</span></div>
           <div class="row"><label>Flash START cell</label><input id="flash" type="checkbox" checked /></div>
           <div class="row"><label>GO text</label><input id="gotext" type="text" value="GO" style="width:84px" /></div>
+          <div class="row"><label>Timeout (fail if not solved)</label><input id="touon" type="checkbox" /></div>
+          <div class="row sub" id="tourow"><label>↳ Timeout (seconds)</label><input id="tousec" type="number" min="2" max="30" value="10" style="width:56px" disabled /></div>
           <div class="row"><label>Show intended route (debug)</label><input id="showroute" type="checkbox" /></div>
           <p style="font-size:11px;color:#6f7686;margin:2px 0 0">🟡 primary (reward) route · 🔵 safe (no-payload) shortcut. Watch it stretch/shrink as you switch Primary length on the same seed.</p>
         </div>

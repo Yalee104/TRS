@@ -25,6 +25,7 @@ const game = new GridPathPuzzle({
   flashStart: false,                          // optional: flash the START cell during that pause
   countdownText: 'GO',                        // optional: the overlay label
   objective: null,                            // optional: { type, min, icon?, label? } — win gate; null = off
+  failText: null,                             // optional: big centred banner shown on any fail; null = off
 });
 
 game.on('complete', (r) => console.log(r.runState));   // reached goal (+ objective met, if any)
@@ -60,6 +61,13 @@ node-type `type` (counted as a **total**, adjacency-independent) before reaching
 - `getState().objective` exposes `{ type, min, have, met }` (or `null` when off).
 - Default OFF (`null`/omitted, or `min <= 0`), so existing hosts are byte-identical. The module stays
   generic — it only counts crossings of a node-type key; it has no notion of "payloads" or combos.
+
+### Timeout + fail banner
+
+`timeLimitMs` (already supported) fails the run with `reason: 'timeout'` when the timer (which runs from
+`start()`, excluding the GO pause) exceeds it. `failText` (default off) additionally shows a big centred
+banner with that text on **any** fail (timeout or trap), reusing the GO overlay in a red "fail" style.
+Both default off, so existing hosts are unaffected.
 
 ## Defining node types (your power-ups & obstacles)
 

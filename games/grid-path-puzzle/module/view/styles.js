@@ -76,6 +76,13 @@ const CSS = `
   35%  { opacity: 1; transform: scale(1.18); }
   80%  { opacity: 1; transform: scale(1); }
   100% { opacity: .92; transform: scale(1); } }
+/* Big "FAIL" banner (opt-in via the failText option) — reuses the overlay. */
+.gpp-countdown.gpp-fail-banner { color: #ff5a5a; animation: gpp-failpop .5s ease-out;
+  text-shadow: 0 3px 22px rgba(0,0,0,.8), 0 0 16px rgba(255,60,60,.55); }
+@keyframes gpp-failpop {
+  0%   { opacity: 0; transform: scale(.5) rotate(-5deg); }
+  45%  { opacity: 1; transform: scale(1.15) rotate(2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); } }
 /* START cell flashing during the pre-start pause (opt-in via flashStart). */
 .gpp-start-flash { animation: gpp-startflash .5s steps(1,end) infinite; z-index: 3; }
 @keyframes gpp-startflash {
