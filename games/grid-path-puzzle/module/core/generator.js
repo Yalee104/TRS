@@ -99,6 +99,7 @@ function lPath(start, goal) {
 //                   (and avoids stepping onto the goal early) so the route is long.
 function carveSpine({ cols, rows, start, goal, rng, difficulty, maxLen, forbidden = null, targetLen = null }) {
   const isForbidden = (n) => (forbidden ? forbidden.has(cellKey(n.x, n.y)) : false);
+  let best = null; // longest reaching path seen (fallback when no attempt hits targetLen)
   for (let attempt = 0; attempt < 12; attempt++) {
     const path = [start];
     const visited = new Set([cellKey(start.x, start.y)]);
@@ -117,9 +118,10 @@ function carveSpine({ cols, rows, start, goal, rng, difficulty, maxLen, forbidde
         const nonGoal = cands.filter((c) => !sameCell(c, goal));
         if (nonGoal.length) cands = nonGoal;
       }
-      // Lower difficulty => greedy/straight; higher => meander. While under the
-      // length target we force heavy meander.
-      const eff = wantLonger ? Math.max(difficulty, 0.85) : difficulty;
+      // Lower difficulty => greedy/straight; higher => meander. (While under the
+      // target we already steer away from the goal above; the meander rate itself
+      // is the mode's `difficulty`, so 'short' can stay genuinely greedy.)
+      const eff = difficulty;
       let choice;
       if (rng() > eff) {
         let best = Infinity;
@@ -137,12 +139,14 @@ function carveSpine({ cols, rows, start, goal, rng, difficulty, maxLen, forbidde
       visited.add(cellKey(choice.x, choice.y));
       current = choice;
     }
-    const longEnough = targetLen == null || path.length >= Math.min(targetLen, manhattan(start, goal) + 1);
-    if (reached && path.length <= maxLen && longEnough) return path;
+    if (reached && path.length <= maxLen) {
+      if (targetLen == null || path.length >= targetLen) return path; // meets the length target
+      if (!best || path.length > best.length) best = path;            // keep the longest near-miss
+    }
   }
-  // Fallback: the L-path if unconstrained; otherwise the shortest route avoiding
-  // forbidden cells (so a forced second route still resolves when possible).
-  if (!forbidden) return lPath(start, goal);
+  // Fallback: the longest reaching path we found (closest to the target); the
+  // L-path if we never reached; for a forbidden walk, a distinct shortest route.
+  if (!forbidden) return best || lPath(start, goal);
   return bfsGridPath(cols, rows, start, goal, forbidden) || lPath(start, goal);
 }
 
@@ -327,8 +331,8 @@ function tryBuildRouteLevel({ cols, rows, nodeTypes, cats, plan, rng, opts }) {
   const { start, goal } = pickEndpoints(cols, rows, plan.endpointMode, rng);
 
   // 2) the long primary route (the intended high-combo path)
-  const targetLen = primaryTarget(plan.primaryLengthTarget, start, goal, cols, rows);
-  const primary = carveSpine({ cols, rows, start, goal, rng, difficulty: 0.85, maxLen: cols * rows, targetLen });
+  const { targetLen, difficulty } = primarySpineParams(plan.primaryLengthTarget, start, goal, cols, rows);
+  const primary = carveSpine({ cols, rows, start, goal, rng, difficulty, maxLen: cols * rows, targetLen });
   if (primary.length < 3) return null;
   const onPrimary = new Set(primary.map((c) => cellKey(c.x, c.y)));
 
@@ -552,12 +556,16 @@ function shuffle(arr, rng) {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 }
-function primaryTarget(mode, start, goal, cols, rows) {
+// Targets for the primary spine: a preferred length AND a meander `difficulty`
+// (higher => wanderier => longer). Driving BOTH off the mode is what makes the
+// long/medium/short choice actually visible — with a fixed difficulty the walk
+// meanders the same regardless of the length target.
+function primarySpineParams(mode, start, goal, cols, rows) {
   const min = manhattan(start, goal) + 1;
-  if (typeof mode === 'number') return clamp(mode, min, cols * rows);
-  if (mode === 'long') return Math.min(Math.round(min * 1.6), Math.floor(cols * rows * 0.5));
-  if (mode === 'medium') return Math.min(Math.round(min * 1.3), Math.floor(cols * rows * 0.45));
-  return min; // 'shortest'
+  if (typeof mode === 'number') return { targetLen: clamp(mode, min, cols * rows), difficulty: 0.85 };
+  if (mode === 'long')   return { targetLen: Math.min(Math.round(min * 1.7), Math.floor(cols * rows * 0.6)),  difficulty: 0.92 };
+  if (mode === 'medium') return { targetLen: Math.min(Math.round(min * 1.3), Math.floor(cols * rows * 0.45)), difficulty: 0.5 };
+  return { targetLen: min, difficulty: 0.12 }; // 'short' => hug the shortest path
 }
 function pickEndpoints(cols, rows, mode, rng) {
   const minSep = Math.ceil((cols + rows) / 2);

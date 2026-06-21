@@ -150,6 +150,25 @@ test('place entries with `chance` are probabilistically included (regression)', 
   }
 });
 
+test('primaryLengthTarget scales route length: long > medium > short', () => {
+  const plan = (mode) => ({
+    place: [{ type: 'freeze', count: { min: 3, max: 3 }, placement: 'onPrimaryRoute', cluster: false, order: 0 }],
+    alternateRoutes: 1, primaryLengthTarget: mode, channeling: 'strong',
+    trapDensity: 0, blockerDensity: 0.4, lateGap: { min: 1, max: 2 }, endpointMode: 'edgeRandom',
+  });
+  const avgLen = (mode) => {
+    let sum = 0, n = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const lvl = generate({ size: 8, nodeTypes: OFF_NT, seed, routePlan: plan(mode) });
+      if (lvl.primaryRoute) { sum += lvl.primaryRoute.length; n++; }
+    }
+    return sum / n;
+  };
+  const s = avgLen('short'), m = avgLen('medium'), l = avgLen('long');
+  assert(l > m && m > s, `expected long > medium > short (short=${s.toFixed(1)} medium=${m.toFixed(1)} long=${l.toFixed(1)})`);
+  assert(l > s * 1.3, `long should be clearly longer than short (short=${s.toFixed(1)} long=${l.toFixed(1)})`);
+});
+
 test('over-constrained 4x4 still returns a solvable board (graceful fallback)', () => {
   const warns = [];
   const orig = console.warn;
