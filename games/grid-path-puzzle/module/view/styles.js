@@ -63,6 +63,24 @@ const CSS = `
   stroke-linecap: round; opacity: .92; }
 .gpp-wrap[data-status="done"] .gpp-path   { stroke: #5ef08a; }
 .gpp-wrap[data-status="failed"] .gpp-path { stroke: #ff5a5a; }
+
+/* Pre-start "GO" overlay (opt-in via the countdownMs option). */
+.gpp-countdown { position: absolute; inset: 0; z-index: 10; display: flex;
+  align-items: center; justify-content: center; pointer-events: none;
+  font: 800 calc(46cqi) system-ui, sans-serif; color: #fff; letter-spacing: .02em;
+  text-shadow: 0 3px 22px rgba(0,0,0,.7), 0 0 8px rgba(0,0,0,.5); }
+.gpp-countdown[hidden] { display: none; }
+.gpp-countdown.gpp-go { animation: gpp-go .85s ease-out; }
+@keyframes gpp-go {
+  0%   { opacity: 0; transform: scale(.4); }
+  35%  { opacity: 1; transform: scale(1.18); }
+  80%  { opacity: 1; transform: scale(1); }
+  100% { opacity: .92; transform: scale(1); } }
+/* START cell flashing during the pre-start pause (opt-in via flashStart). */
+.gpp-start-flash { animation: gpp-startflash .5s steps(1,end) infinite; z-index: 3; }
+@keyframes gpp-startflash {
+  0%, 100% { box-shadow: inset 0 0 0 3px #ffffff, 0 0 14px 3px rgba(255,255,255,.85); }
+  50%      { box-shadow: inset 0 0 0 3px #ffd34d, 0 0 18px 5px rgba(255,211,77,.9); } }
 `;
 
 let refCount = 0;

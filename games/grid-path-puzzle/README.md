@@ -21,12 +21,27 @@ const game = new GridPathPuzzle({
   moveBudget: null,                           // optional: max cells in the path
   timeLimitMs: null,                          // optional: countdown; expiry => fail
   trapEntryMode: 'commitFail',                // 'commitFail' | 'block'
+  countdownMs: 0,                             // optional: pre-start "GO" pause (ms); 0 = off
+  flashStart: false,                          // optional: flash the START cell during that pause
+  countdownText: 'GO',                        // optional: the overlay label
 });
 
 game.on('complete', (r) => console.log(r.runState));   // reached goal
 game.on('fail',     (f) => console.log(f.reason));     // 'trap' | 'timeout'
 game.on('pathChange', (i) => updateHud(i.previewRunState));
+game.on('countdownStart', () => {});                   // "GO" pause began (if countdownMs > 0)
+game.on('ready',          () => {});                   // pause ended → grid interactive + timer running
+game.start();                                          // kick the timer (or the GO pause if countdownMs > 0)
 ```
+
+### Pre-start "GO" pause (opt-in)
+
+With `countdownMs > 0`, calling `start()` first shows a centred **"GO"** overlay for that
+duration with the grid **non-interactive** and the **timer not running**; when it elapses the grid
+becomes interactive, the timer begins, and a `ready` event (option `onCountdownEnd`) fires. `flashStart`
+pulses the START cell during the pause. The pause time is excluded from `elapsedMs`. All three options
+default OFF, so existing hosts (which call `start()` immediately) are unaffected — `status` adds a
+transient `'ready'` step only when `countdownMs > 0`.
 
 ## Defining node types (your power-ups & obstacles)
 

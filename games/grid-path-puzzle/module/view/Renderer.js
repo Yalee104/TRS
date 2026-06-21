@@ -51,7 +51,33 @@ export class Renderer {
 
     this.wrap.appendChild(this.gridEl);
     this.wrap.appendChild(this.svg);
+
+    // Pre-start "GO" overlay (hidden until showCountdown()).
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'gpp-countdown';
+    this.overlay.hidden = true;
+    this.wrap.appendChild(this.overlay);
+
     this.root.appendChild(this.wrap);
+  }
+
+  /** Show the centred pre-start label ("GO"); replays its pop animation each call. */
+  showCountdown(text = 'GO') {
+    if (!this.overlay) return;
+    this.overlay.textContent = text;
+    this.overlay.hidden = false;
+    this.overlay.classList.remove('gpp-go');
+    void this.overlay.offsetWidth; // force reflow so the animation restarts
+    this.overlay.classList.add('gpp-go');
+  }
+
+  hideCountdown() {
+    if (this.overlay) { this.overlay.hidden = true; this.overlay.classList.remove('gpp-go'); }
+  }
+
+  /** Toggle the flashing highlight on the START cell (during the pre-start pause). */
+  setStartFlash(on) {
+    this.startEl?.classList.toggle('gpp-start-flash', !!on);
   }
 
   /** Repaint the whole board for a (new) level. */
@@ -65,6 +91,7 @@ export class Renderer {
     this.gridEl.style.setProperty('--rows', level.rows);
     this.gridEl.textContent = '';
     this.cellEls = [];
+    this.startEl = null; // captured below; used by setStartFlash()
 
     for (let y = 0; y < level.rows; y++) {
       const row = [];
@@ -75,7 +102,7 @@ export class Renderer {
         cell.dataset.x = x;
         cell.dataset.y = y;
         cell.style.background = def.color || '#333';
-        if (def.role === 'start') cell.classList.add('gpp-start');
+        if (def.role === 'start') { cell.classList.add('gpp-start'); this.startEl = cell; }
         if (def.role === 'goal') cell.classList.add('gpp-goal');
         if (def.passable === false) cell.classList.add('gpp-blocker');
         if (def.effectKind) cell.dataset.kind = def.effectKind; // tints pass animations

@@ -42,6 +42,9 @@ export class GridPathPuzzle {
       allowKeyboard: true,
       autoStart: true,
       trapEntryMode: 'commitFail', // 'commitFail' | 'block'
+      countdownMs: 0,              // pre-start "GO" pause before the timer/interaction begin (0 = off)
+      flashStart: false,          // flash the START cell during that pause
+      countdownText: 'GO',        // the overlay label
       ...options,
     };
     this.options.size = clampGridSize(this.options.size, 'size');
@@ -56,6 +59,7 @@ export class GridPathPuzzle {
     this._timerRunning = false;
     this._raf = null;
     this._lastTickEmit = 0;
+    this._countdownTimer = null; // setTimeout handle for the pre-start "GO" pause
 
     this.mount(); // build the DOM immediately (mount() is idempotent)
   }
@@ -90,6 +94,7 @@ export class GridPathPuzzle {
   }
 
   loadLevel(source) {
+    this._clearCountdown();
     this.level = this._resolveLevel(source);
     this.state = createGameState(this.level, this.options.initialRunState);
     this.renderer.setLevel(this.level);
@@ -98,6 +103,7 @@ export class GridPathPuzzle {
   }
 
   reset() {
+    this._clearCountdown();
     this._stopTimer();
     this.state = createGameState(this.level, this.options.initialRunState);
     this.renderer.update([], { status: 'idle' });
@@ -106,6 +112,7 @@ export class GridPathPuzzle {
 
   destroy() {
     if (!this._mounted) return;
+    this._clearCountdown();
     this._stopTimer();
     this.pointer?.destroy();
     this.keyboard?.destroy();
@@ -139,10 +146,42 @@ export class GridPathPuzzle {
   // ---- timer --------------------------------------------------------------
   start() {
     if (this._timerRunning) return this;
+    if (this._countdownTimer != null) return this; // a "GO" countdown is already pending
+    const cd = this.options.countdownMs | 0;
+    if (cd > 0 && this.state.status !== 'drawing') {
+      // Pre-start "GO" pause: show the overlay (and optionally flash START), block
+      // interaction and the timer, then actually begin when the countdown elapses.
+      this.state.status = 'ready';
+      this.renderer?.showCountdown(this.options.countdownText || 'GO');
+      if (this.options.flashStart) this.renderer?.setStartFlash(true);
+      this._fire('onCountdownStart', 'countdownStart', { countdownMs: cd });
+      this._countdownTimer = setTimeout(() => this._beginAfterCountdown(), cd);
+      return this;
+    }
+    this._beginTimer();
+    return this;
+  }
+
+  _beginTimer() {
     this._timerRunning = true;
     this._timerStart = now() - this.state.elapsedMs;
     if (typeof requestAnimationFrame === 'function') this._loop();
-    return this;
+  }
+
+  // Called when the "GO" pause ends: clear the overlay and start the timer/play.
+  _beginAfterCountdown() {
+    this._countdownTimer = null;
+    this.renderer?.hideCountdown();
+    this.renderer?.setStartFlash(false);
+    if (this.state.status === 'ready') this.state.status = 'idle';
+    this._beginTimer();
+    this._fire('onCountdownEnd', 'ready', {});
+  }
+
+  _clearCountdown() {
+    if (this._countdownTimer != null) { clearTimeout(this._countdownTimer); this._countdownTimer = null; }
+    this.renderer?.hideCountdown();
+    this.renderer?.setStartFlash(false);
   }
 
   pause() {
@@ -182,6 +221,7 @@ export class GridPathPuzzle {
 
   // ---- the drawing interaction (called by the controllers) ----------------
   tryBegin(cell) {
+    if (this.state.status === 'ready') return false; // "GO" pause still running — not interactive yet
     if (this.state.status === 'done' || this.state.status === 'failed') return false;
     if (cell.x !== this.level.start.x || cell.y !== this.level.start.y) return false; // path starts at START
     this.state.path = [{ x: cell.x, y: cell.y }];

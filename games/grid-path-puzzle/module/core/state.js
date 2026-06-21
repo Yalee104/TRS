@@ -28,6 +28,8 @@ export function createRunState(initial) {
 /**
  * The per-instance game state. `status` walks:
  *   'idle' -> 'drawing' -> 'done' | 'failed'
+ * With the optional pre-start "GO" pause (countdownMs > 0) an extra step appears:
+ *   'idle' -> 'ready' (countdown, not interactive) -> 'idle' -> 'drawing' -> ...
  */
 export function createGameState(level, baseRunState) {
   return {
