@@ -105,6 +105,8 @@
       .badges { margin-top: 5px; min-height: 18px; display: flex; flex-wrap: wrap; gap: 3px; }
       .st, .df, .tel { font-size: 11px; }
       .st.pending { opacity: .5; filter: grayscale(.6); border: 1px dashed #5b8def88; border-radius: 4px; padding: 0 2px; }
+      /* confused-telegraph predictions: could be a false alarm — amber dashed + faded + "?" */
+      .tel.uncertain, .st.uncertain { opacity: .55; border: 1px dashed #e6c84a; border-radius: 4px; padding: 0 2px; filter: none; }
       /* this-phase queued chain (statuses/verbs in order) + break markers/button */
       .queued { margin-top: 3px; min-height: 16px; display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
       .queued .brk { font-size: 11px; color: #ff8a3d; }

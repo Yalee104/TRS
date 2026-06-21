@@ -20,14 +20,14 @@ const SYSTEM = {
   core: 'The heart of the aircraft. If it reaches 0 HP the battle ends. Protected by an indestructible shield (below) until enough shield-linked parts are destroyed.',
   generator: 'Powers every system. Drives the largest share of your firepower (Combat Condition) and is the biggest shield-linked part.',
   weapon: 'Your base / automatic firepower — a big slice of Combat Condition.',
-  tower: 'Sensors — two roles. VISION: YOUR Tower lets you SEE the enemy’s telegraphed strike before you defend; lose it (destroyed, Frozen, or CONFUSED) and you defend blind. AIM: the owner’s Tower governs its targeting — destroy the ENEMY’s Tower (or Freeze it) and its strikes SCATTER to random parts and deal only ×0.6 damage (Confuse does NOT scatter aim).',
+  tower: 'Sensors — two roles. VISION: YOUR Tower lets you SEE the enemy’s telegraphed strike before you defend; destroyed/Frozen → blind (no preview); Confused → telegraph stays but is UNRELIABLE (~50% false alarms). AIM: the owner’s Tower governs its targeting — destroy the ENEMY’s Tower (or Freeze it) and its strikes SCATTER to random parts and deal only ×0.6 damage (Confuse does NOT scatter aim).',
   engine: 'Evasion — dodges part of every hit (×0.15 at full HP, scaling with HP). YOUR Engine reduces ALL incoming damage in defense; the ENEMY’s Engine dodges part of your focus-fire in attack. Destroyed/Frozen → 0% (hits land in full). (Initiative/resolve-order is parked.)',
   launchpad: 'Governs its OWNER’s TRS quality: healthy = easier grids (fewer blockers/traps), damaged = grids drift to baseline, destroyed = congested. Also carries a small share of attack strength.',
 };
 
 const EFFECT_DESC = {
   freeze: 'Freeze — suspends the part for its duration: ×0 firepower contribution AND its system goes offline. Frozen Tower → suspends both roles: an enemy Tower’s aim scatters, YOUR Tower goes blind (no telegraph). Frozen Engine → no evasion. Alone: a Frozen focus is brittle (+40% dmg). ⚠ Cancels with Burning.',
-  confuse: 'Confuse — scrambles the part’s fire: −50% of its firepower contribution to the enemy’s next attack. On a TOWER it also jams the sensors → that owner loses telegraph vision (a confused YOUR Tower = you defend blind). (Meaningful on Weapon / Tower.)',
+  confuse: 'Confuse — scrambles the part’s fire: −50% of its firepower contribution to the enemy’s next attack. On a TOWER it jams the sensors → the telegraph stays visible but UNRELIABLE: each predicted strike has a ~50% chance of being a false alarm (wrong part/status), shown faded with a “?”. (Distinct from Freeze, which blinds the telegraph entirely.) Meaningful on Weapon / Tower.',
   drain: 'Drain — siphons the part: damage feeds your firepower pool AND heals your Core; also chokes the part’s output (×0.6).',
   burning: 'Burning — damage-over-time each round that BYPASSES the Core shield (the anti-shield tool). ⚠ Cancels with Freeze.',
   shatter: 'Shatter — alone, the part takes +50% from all your fire; valid on ANY part, so it’s the universal combo enabler (Glass, Meltdown, Backfire, Collapse).',
@@ -51,7 +51,7 @@ function verbDesc(verb, config) {
 const CASCADE = {
   generator: { damaged: 'Core shield link + 40% firepower weight.', dead: 'Reactor shield contribution lost + brownout: all output ×0.5.' },
   weapon: { damaged: '35% firepower weight; base damage scales with HP.', dead: 'Base firepower collapses (only weakened TRS add-ons remain).' },
-  tower: { damaged: 'No change until destroyed (binary in v1).', dead: 'YOUR Tower → you defend blind (no telegraph preview). ENEMY Tower → its aim scatters to random parts and lands ~40% softer.' },
+  tower: { damaged: 'No change until destroyed (binary in v1); Confuse on it → your telegraph turns unreliable (~50% false).', dead: 'YOUR Tower → you defend blind (no telegraph preview). ENEMY Tower → its aim scatters to random parts and lands ~40% softer.' },
   engine: { damaged: 'Evasion fades with HP (less dodge, both in defense and vs your focus-fire).', dead: 'No evasion — incoming hits and your focus-fire on it land in full.' },
   launchpad: { damaged: 'TRS easing fades toward baseline; small attack-strength dip.', dead: 'Owner’s TRS congests (bigger grid, more blockers); loses its attack-strength share.' },
   core: { damaged: '', dead: 'Match over.' },
@@ -163,11 +163,12 @@ function dossier(state, side, id, eid) {
   if (side === 'player') {
     const incoming = state.enemies
       .filter((en) => en.telegraph && en.telegraph.visible)
-      .map((en) => ({ en, t: en.telegraph.entries.find((x) => x.component === id) }))
+      .map((en) => ({ en, t: (en.telegraph.display || en.telegraph.entries).find((x) => x.component === id) }))
       .filter((x) => x.t);
     if (incoming.length) {
-      const detail = incoming.map((x) => `${x.en.label}${x.t.status ? ` (+${x.t.status})` : ''}`).join(', ');
-      rows.push(`<div class="tt-tel">⚠️ Incoming strike from: ${detail}.</div>`);
+      const detail = incoming.map((x) => `${x.en.label}${x.t.status ? ` (+${x.t.status})` : ''}${x.t.uncertain ? '?' : ''}`).join(', ');
+      const unreliable = incoming.some((x) => x.t.uncertain);
+      rows.push(`<div class="tt-tel">⚠️ Incoming${unreliable ? ' (UNRELIABLE — Tower confused, ~50% false)' : ''} from: ${detail}.</div>`);
     }
   }
 

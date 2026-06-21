@@ -99,14 +99,6 @@ export function effectiveAim(aircraft, config) {
   return towerActive(aircraft) ? 1 : config.cascade.towerDestroyedAimMult;
 }
 
-/**
- * Does the Tower still give TELEGRAPH VISION? Active AND not Confused — Confuse jams the
- * sensors, so a confused Tower blinds its owner to incoming attacks (no effect on aim).
- */
-export function towerVisionOk(aircraft) {
-  return towerActive(aircraft) && !hasStatus(aircraft.components.tower, 'confuse');
-}
-
 /** Evasion this aircraft actually has — zero while its Engine is frozen/locked. */
 export function effectiveEvasion(aircraft, config) {
   if (isDisabled(aircraft.components.engine)) return 0;

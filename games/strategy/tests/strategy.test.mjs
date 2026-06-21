@@ -152,15 +152,21 @@ test('Freeze suspends the part system: frozen enemy Tower scatters aim; frozen E
   assert(full > dodged, 'frozen enemy Engine → no dodge, focus-fire lands full');
 });
 
-test('Confuse on YOUR Tower blinds your telegraph; on the ENEMY Tower it does not scatter aim', () => {
+test('Confuse on YOUR Tower makes the telegraph UNRELIABLE (visible but uncertain), true plan intact', () => {
   const s = fresh();
-  assert(planAttack(s, s.enemies[0]).visible === true, 'telegraph visible with a healthy Tower');
+  const clean = planAttack(s, s.enemies[0]);
+  assert(clean.visible === true && !clean.confused && clean.display.every((d) => !d.uncertain), 'clean: visible, all certain');
+
   applyStatus(s.player.components.tower, 'confuse', { turns: 2 });
-  assert(planAttack(s, s.enemies[0]).visible === false, 'confused player Tower → telegraph hidden');
+  const jammed = planAttack(s, s.enemies[0]);
+  assert(jammed.visible === true && jammed.confused === true, 'confused Tower → still visible, flagged confused');
+  assert(jammed.display.length && jammed.display.every((d) => d.uncertain), 'every shown prediction is uncertain');
+  assert(jammed.display.length === jammed.entries.length, 'display is 1:1 with the true plan');
+  assert(jammed.entries.length > 0, 'the TRUE entries (used at resolve) still exist');
 
   const e = fresh();
   applyStatus(e.enemies[0].components.tower, 'confuse', { turns: 2 });
-  assert(planAttack(e, e.enemies[0]).scattered === false, 'confused enemy Tower still aims (no scatter — that is Freeze)');
+  assert(planAttack(e, e.enemies[0]).scattered === false, 'confused ENEMY Tower still aims (no scatter — that is Freeze)');
 });
 
 // --- statuses + synergies ----------------------------------------------------

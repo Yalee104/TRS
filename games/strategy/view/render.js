@@ -142,21 +142,24 @@ function cardHtml(state, side, id, eid) {
   const cd = (side === 'player' && state.cooldowns?.[id] > 0)
     ? `<span class="cdbadge" title="recovering from a failed TRS — ${state.cooldowns[id]} round(s) left">⏳${state.cooldowns[id]}</span>` : '';
 
-  // Telegraph: aggregate incoming strikes from EVERY living enemy onto this player part.
+  // Telegraph: aggregate incoming strikes (the DISPLAYED prediction) from EVERY living enemy.
+  // A confused Tower marks predictions `uncertain` → rendered faded with a "?" (could be a false alarm).
   let tel = '';
   if (side === 'player') {
     const incoming = [];
     for (const en of state.enemies) {
       if (!en.telegraph || !en.telegraph.visible) continue;
-      const ent = en.telegraph.entries.find((x) => x.component === id);
+      const ent = (en.telegraph.display || en.telegraph.entries).find((x) => x.component === id);
       if (ent) incoming.push(ent);
     }
     if (incoming.length) {
+      const uncertain = incoming.some((e) => e.uncertain);
       const carried = incoming.filter((e) => e.status)
-        .map((e) => `<span class="st pending" title="incoming ${e.status} — lands AFTER your defenses">${STATUS_ICON[e.status] || ''}</span>`)
+        .map((e) => `<span class="st pending${e.uncertain ? ' uncertain' : ''}" title="incoming ${e.status}${e.uncertain ? ' — UNRELIABLE (Tower confused)' : ' — lands AFTER your defenses'}">${STATUS_ICON[e.status] || ''}${e.uncertain ? '?' : ''}</span>`)
         .join('');
       const n = incoming.length;
-      tel = `<span class="tel" title="incoming strike${n > 1 ? ` from ${n} enemies` : ''}">⚠️${n > 1 ? `×${n}` : ''}</span>${carried}`;
+      const title = uncertain ? 'incoming? — UNRELIABLE (Tower confused, ~50% false alarms)' : `incoming strike${n > 1 ? ` from ${n} enemies` : ''}`;
+      tel = `<span class="tel${uncertain ? ' uncertain' : ''}" title="${title}">⚠️${uncertain ? '?' : ''}${n > 1 ? `×${n}` : ''}</span>${carried}`;
     }
   }
 

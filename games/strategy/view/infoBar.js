@@ -53,12 +53,15 @@ function defenseHelp(state) {
   const living = state.enemies.filter((e) => isAlive(e.components.core));
   const threats = [];
   for (const e of living) {
-    if (e.telegraph && e.telegraph.visible) {
+    if (!(e.telegraph && e.telegraph.visible)) { threats.push(`${e.label}→ hidden (Tower down)`); continue; }
+    if (e.telegraph.confused) {
+      // confused Tower → show the UNRELIABLE prediction (no precise damage; targets may be false)
+      const list = (e.telegraph.display || []).map((t) => `${pName(state, t.component)}${t.status ? '+' + t.status : ''}?`).join(', ');
+      threats.push(`${e.label}→ ${list || '—'} <b>(⚠ unreliable)</b>`);
+    } else {
       const budget = currentBudget(state, e);
       const hits = e.telegraph.entries.map((t) => `${pName(state, t.component)} ~${Math.round(t.share * budget)}${t.status ? '+' + t.status : ''}`).join(', ');
       threats.push(`${e.label}→ ${hits}`);
-    } else {
-      threats.push(`${e.label}→ hidden (Tower down)`);
     }
   }
   const threat = '⚠️ Incoming — ' + (threats.join(' <span class="sep">|</span> ') || 'none');

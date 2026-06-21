@@ -8,9 +8,12 @@
 //  crippling its offence in your attack makes the telegraphed blow land softer.
 // =============================================================================
 
-import { isAlive } from '../core/components.js';
+import { isAlive, hasStatus } from '../core/components.js';
 import { combatCondition, firepowerMult } from '../core/firepower.js';
-import { systemState, coreShieldUp, towerActive, towerVisionOk, effectiveAim } from '../core/cascade.js';
+import { systemState, coreShieldUp, towerActive, effectiveAim } from '../core/cascade.js';
+
+// the five base statuses a confused telegraph may falsely show (local to avoid an import cycle)
+const FAKE_STATUS_POOL = ['freeze', 'confuse', 'drain', 'burning', 'shatter'];
 
 /** The archetype keys defined in config (skips the `_comment` doc field). The roster
  *  is 100% config-driven: add an entry under game.json#archetypes and it's selectable. */
@@ -102,9 +105,32 @@ export function planAttack(state, enemy) {
     }
   }
 
-  // You SEE the telegraph only if YOUR Tower has vision (alive, not frozen/locked, not Confused).
-  const visible = state.config.telegraph.gated ? towerVisionOk(state.player) : true;
-  return { eid: enemy.eid, archetype: enemy.archetype, label: enemy.label, entries, visible, scattered: !enemyTowerOk };
+  // You SEE the telegraph unless YOUR Tower is destroyed/frozen/locked (towerActive). A CONFUSED
+  // Tower keeps the telegraph visible but jams it: the displayed prediction is unreliable.
+  const visible = state.config.telegraph.gated ? towerActive(state.player) : true;
+  const confused = visible && hasStatus(state.player.components.tower, 'confuse');
+  const display = !visible ? [] : (confused ? fuzzedDisplay(state, entries) : entries.map((e) => ({ component: e.component, status: e.status, uncertain: false })));
+  return { eid: enemy.eid, archetype: enemy.archetype, label: enemy.label, entries, display, visible, confused, scattered: !enemyTowerOk };
+}
+
+/**
+ * Build the DISPLAYED prediction when the player's Tower is Confused: each entry independently has
+ * a `confuseFalseChance` to become a DECOY (target swapped to a random other part, status maybe
+ * faked). Every shown marker is flagged `uncertain`. The TRUE `entries` (used at resolve) are
+ * never changed — only the player's view is. Seeded by state.rng so it's stable across re-renders.
+ */
+function fuzzedDisplay(state, entries) {
+  const rng = () => (state.rng ? state.rng() : Math.random());
+  const falseChance = state.config.telegraph.confuseFalseChance ?? 0.5;
+  const parts = Object.keys(state.player.components).filter((id) => isAlive(state.player.components[id]));
+  return entries.map((e) => {
+    if (rng() >= falseChance) return { component: e.component, status: e.status, uncertain: true }; // truthful but flagged
+    const others = parts.filter((id) => id !== e.component);
+    const component = others.length ? others[Math.floor(rng() * others.length)] : e.component;
+    let status = e.status;
+    if (rng() < 0.5) status = rng() < 0.5 ? FAKE_STATUS_POOL[Math.floor(rng() * FAKE_STATUS_POOL.length)] : undefined; // 50% fake/drop the status
+    return { component, status, uncertain: true };
+  });
 }
 
 /**

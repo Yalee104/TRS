@@ -166,7 +166,7 @@ Kept (not dropped): an effect only does something on appropriate targets, so cho
 | Effect | Valid / meaningful targets | What it does there |
 |---|---|---|
 | **Freeze** | any *functional* part (not Core) | ×0 firepower contribution **and** suspends the part's system for the duration: frozen **Tower** → suspends *both* Tower roles — an **enemy** Tower's aim scatters (~40% softer), **your** Tower goes **blind** (no telegraph preview); frozen **Engine** → no evasion. (Generator shield/brownout + Launch Pad TRS stay tied to destruction.) **Cancels with Burning** — applying one wipes both. |
-| **Confuse** | parts that aim/fire — **Weapon Storage, Tower** | ×0.5 firepower contribution; **on your own Tower it also jams your telegraph — you can't see incoming attacks/statuses** (no effect on an enemy Tower, which never telegraphs your attacks) |
+| **Confuse** | parts that aim/fire — **Weapon Storage, Tower** | ×0.5 firepower contribution; **on your own Tower it jams the sensors → the telegraph stays visible but UNRELIABLE**: each predicted strike has a ~50% chance (`telegraph.confuseFalseChance`) of being a **false alarm** (wrong part/status), shown faded with a "?". *(Distinct from Freeze, which blinds the telegraph entirely. No effect on an enemy Tower, which never telegraphs your attacks.)* |
 | **Drain** | best on **Generator & Core** (HP on any) | siphon HP to you (heals your Core); kill the Generator to drop the Core shield |
 | **Burning** | any part | flat DoT each round; **bypasses the Core shield**; best on high-HP (Core, Generator). **Cancels with Freeze.** |
 | **Shatter** | **any part** (v2) | brittle → the focus takes **+50%** from all your fire (no effect on a *shielded* Core until its shield drops); universal combo-enabler |
@@ -180,7 +180,7 @@ solve to succeed (`minChain`). **Stacks** = re-applying the same status to the s
 | Status (source) | Valid on | Min Chain | Stacks? | Full effect ( [scaled] grows with potency · [flat] fixed ) |
 |---|---|---|---|---|
 | **Freeze** ❄️ (Weapon) | any non-Core | **1** | **Refresh** (MAX), pool adds | ① pool +1.5×p [scaled] · ② part contributes **×0** firepower [flat]; frozen Tower → enemy aim scatters (−40%) / **your telegraph goes blind**; frozen Engine → no evasion [flat]; **on Focus +40%** [flat]; duration round(p/4), 1–3 [scaled]. **Cancels with Burning.** |
-| **Confuse** 🌀 (Tower) | Weapon, Tower | **1** | Refresh (MAX), pool adds | ① pool +1.0×p [scaled] · ② part ×0.5 (−50%) firepower [flat]; **on your own Tower → telegraph blinded (no incoming preview)** [flat]; duration round(p/4), 1–3 [scaled] |
+| **Confuse** 🌀 (Tower) | Weapon, Tower | **1** | Refresh (MAX), pool adds | ① pool +1.0×p [scaled] · ② part ×0.5 (−50%) firepower [flat]; **on your own Tower → telegraph turns UNRELIABLE (~50% false predictions)** [flat]; duration round(p/4), 1–3 [scaled] |
 | **Drain** 🩸 (Generator) | any part | **1** | **Heal per apply**, choke MAX, pool adds | ① pool +3.0×p [scaled] · ② heal +2.0×p to your Core, once [scaled]; part ×0.6 (−40%) firepower [flat]; duration round(p/5), 1–2 [scaled] |
 | **Burning** 🔥 (Launch Pad) | any part | **1** | **STACKS** — DoT adds (cap 24), duration extends (cap 6); pool adds | ① pool +1.0×p [scaled] · ② DoT 1.2×p/round, **bypasses Core shield** [scaled]; part ×0.85 (−15%) firepower [flat]; duration round(p/3), 1–4 [scaled]. **Cancels with Freeze.** |
 | **Shatter** 💥 (Engine) | **any part** | **1** | Refresh (MAX), pool adds | ① pool +2.0×p [scaled] · ② **on Focus +50%** [flat]; no firepower choke (×1.0); duration round(p/3), 1–3 [scaled]; enables Glass/Meltdown/Backfire/Collapse |
@@ -415,8 +415,10 @@ apply independently). Numbers live in `config → defense.combos`.
 your own attack-resolve). The enemy **declares its next attack at the start of your attack phase**;
 it resolves in the following defense-resolve. The **Tower/Sensors** decides who can see/aim:
 - **Your Tower alive** → you *see* the enemy's intended targets and pre-load the right defenses.
-  **Destroyed, Frozen/Stasis-Locked, or Confused** → you defend **blind** (no preview). *(Confuse on
-  your Tower jams its sensors specifically to deny this vision.)*
+  **Destroyed or Frozen/Stasis-Locked** → you defend **blind** (no preview). **Confused** → the
+  telegraph stays visible but **unreliable**: each predicted strike has a ~50% chance of being a
+  false alarm (`telegraph.confuseFalseChance`), shown faded with a "?". The **true** plan still
+  resolves as normal — only your *view* of it is jammed.
 - **Enemy Tower** is how the *enemy aims*. Destroy it → its precise archetype targeting breaks and
   its attacks **scatter to random parts** — the "blind their Tower" payoff.
 
@@ -625,7 +627,7 @@ combo/configs/  offensive-*.json  defensive-*.json
 (incl. `failCooldownMult`), `coreShield` {threshold, contributors:{part:%}}, `cascade`
 (brownout/evasion/TRS-congestion numbers), `potency` {stackCurve, chainMultiplier},
 `archetypes` (Saboteur/Brute/Hunter/Swarm/Disruptor — each {priority, spread, statusChance,
-status|statusPool, damageBudget}), `telegraph` {gated, mode: deterministic|variance},
+status|statusPool, damageBudget}), `telegraph` {gated, mode: deterministic|variance, confuseFalseChance},
 `attackTimeModel: cost|realtime`, `ui` (config-panel defaults incl. `enemies:[...]`, `maxEnemies`).
 The config panel (B.6) edits these live before Start.
 
