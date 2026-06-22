@@ -65,12 +65,23 @@ function readKnobs() {
     primaryLengthTarget: $('plt').value,
     chainChance: Math.max(0, Math.min(100, Number($('chainpct').value))) / 100,
     chainPlacement: $('chainplace').value,
+    burningDensity: $('burnon').checked ? Number($('burndens').value) : 0, // 🔥 status (generation hazard)
   };
 }
 
 function goOpts() {
   const on = $('go').checked;
   return { countdownMs: on ? Number($('goms').value) : 0, flashStart: $('flash').checked, countdownText: $('gotext').value || 'GO' };
+}
+
+// Runtime status modifiers from the Statuses panel (payload type = component skill).
+function readModifiers(skill) {
+  const m = {};
+  if ($('drainon').checked) m.decay = { type: skill, baseMs: Number($('drainbase').value) * 1000, stepMs: Number($('drainstep').value) * 1000 };
+  if ($('shatteron').checked) m.wander = { type: skill, chance: Number($('shatterchance').value) };
+  if ($('confon').checked) m.confusion = Number($('confchance').value);
+  if ($('freezeon').checked) m.slow = Number($('freezeslow').value);
+  return Object.keys(m).length ? m : null;
 }
 
 // The engine's input: the skill-node keys the path crossed, in order.
@@ -88,13 +99,17 @@ function buildGame() {
     ? { type: skill, min: minChainValue(), icon: metaOf(skill).icon, label: metaOf(skill).name }
     : null; // null/omitted = gate off (reaching goal solves)
   const timeLimitMs = $('touon').checked ? clamp(Number($('tousec').value) || 10, 2, 30) * 1000 : null;
+  const modifiers = readModifiers(skill);
+  const nt = catalogFromConfig(palette);
+  if ($('shatteron').checked && nt[skill]) nt[skill].anim = 'shake'; // shaky payloads warn they may move
   game = new GridPathPuzzle({
     mount: $('board'),
-    nodeTypes: catalogFromConfig(palette),
-    generate: { size, seed: Number($('seed').value), routePlan: palette.generation },
-    trapEntryMode: 'commitFail',
+    nodeTypes: nt,
+    // moveBudget = grid area → effectively unlimited (a path can't revisit cells).
+    generate: { size, seed: Number($('seed').value), routePlan: palette.generation, moveBudget: size * size },
+    trapEntryMode: 'failFast', // crossing a hazard fails immediately
     countdownMs, flashStart, countdownText,
-    objective, timeLimitMs, failText: 'FAIL',
+    objective, timeLimitMs, failText: 'FAIL', modifiers,
     onPathChange, onComplete, onFail, onTick, onObjectiveBlocked,
     onCountdownEnd: () => { $('status').textContent = ''; },
   });
@@ -191,7 +206,7 @@ function renderTrsInfo(info) {
 function onPathChange(info) {
   renderCombo(evaluate(skillSeqFromPath(info.path), palette), false);
   renderTrsInfo(info);
-  $('steps').textContent = `${info.steps} / ${info.budget.max ?? '∞'}`;
+  $('steps').textContent = `${info.steps} / ∞`; // budget set to grid area (effectively unlimited)
   const reach = $('reach');
   reach.textContent = info.canReachGoal ? 'yes' : 'no';
   reach.className = info.canReachGoal ? '' : 'warn';
@@ -237,7 +252,7 @@ function resetReadout() {
   $('reach').textContent = 'yes';
   $('reach').className = '';
   const st = game.getState();
-  $('steps').textContent = `0 / ${st.level.moveBudget ?? '∞'}`;
+  $('steps').textContent = '0 / ∞';
   $('combo-title').textContent = `Combo — ${phase === 'attack' ? 'Attack' : 'Defense'}: ${COMP_LABEL[component]} (${metaOf(skillOf()).name})`;
 }
 
@@ -308,10 +323,40 @@ function syncTouUI() {
 }
 $('touon').addEventListener('change', syncTouUI);
 
+// ---- statuses ---------------------------------------------------------------
+$('burndens').addEventListener('input', (e) => { $('burndensVal').textContent = Number(e.target.value).toFixed(2); });
+$('shatterchance').addEventListener('input', (e) => { $('shatterchanceVal').textContent = Number(e.target.value).toFixed(2); });
+$('confchance').addEventListener('input', (e) => { $('confchanceVal').textContent = Number(e.target.value).toFixed(2); });
+$('freezeslow').addEventListener('input', (e) => { $('freezeslowVal').textContent = Number(e.target.value).toFixed(2); });
+function syncStatusUI() {
+  $('burndens').disabled = !$('burnon').checked;
+  $('burnrow').classList.toggle('is-off', !$('burnon').checked);
+  const drain = $('drainon').checked;
+  $('drainbase').disabled = !drain; $('drainstep').disabled = !drain;
+  $('drainrow').classList.toggle('is-off', !drain);
+  $('shatterchance').disabled = !$('shatteron').checked;
+  $('shatterrow').classList.toggle('is-off', !$('shatteron').checked);
+  $('confchance').disabled = !$('confon').checked;
+  $('confrow').classList.toggle('is-off', !$('confon').checked);
+  $('freezeslow').disabled = !$('freezeon').checked;
+  $('freezerow').classList.toggle('is-off', !$('freezeon').checked);
+}
+// Freeze and Burning are mutually exclusive — enabling one disables the other.
+function statusToggle(which) {
+  if (which === 'freeze' && $('freezeon').checked) $('burnon').checked = false;
+  if (which === 'burn' && $('burnon').checked) $('freezeon').checked = false;
+  syncStatusUI();
+}
+$('burnon').addEventListener('change', () => statusToggle('burn'));
+$('freezeon').addEventListener('change', () => statusToggle('freeze'));
+$('drainon').addEventListener('change', syncStatusUI);
+$('shatteron').addEventListener('change', syncStatusUI);
+$('confon').addEventListener('change', syncStatusUI);
+
 // Re-apply generation knobs on the SAME seed when any change, so you can A/B a
 // single knob (e.g. Primary length) without the seed shifting underneath you.
 // (Regenerate is still the way to roll a fresh board.)
-['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec']
+['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec', 'burnon', 'burndens', 'drainon', 'drainbase', 'drainstep', 'shatteron', 'shatterchance', 'confon', 'confchance', 'freezeon', 'freezeslow']
   .forEach((id) => $(id).addEventListener('change', buildGame));
 
 // Print the current settings as a paste-ready snippet for presets/trs.js (the
@@ -370,4 +415,5 @@ $('sizeVal').textContent = String(DEFAULT_GRID_SIZE);
 renderComponents();
 syncObjUI();
 syncTouUI();
+syncStatusUI();
 buildGame();

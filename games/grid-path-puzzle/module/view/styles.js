@@ -34,6 +34,12 @@ const CSS = `
   white-space: nowrap; }
 .gpp-icon.gpp-pop, .gpp-label.gpp-pop { animation: gpp-pop .32s ease; }
 @keyframes gpp-pop { 0% { transform: scale(1); } 32% { transform: scale(1.5); } 100% { transform: scale(1); } }
+/* Looping "flame" flicker for the burning hazard icon (a few repeating frames). */
+.gpp-anim-flame { animation: gpp-flame .5s steps(3, end) infinite; transform-origin: center 75%; }
+@keyframes gpp-flame {
+  0%   { filter: brightness(1) drop-shadow(0 0 1px #ff7a18); transform: scale(1) translateY(0); }
+  50%  { filter: brightness(1.5) drop-shadow(0 0 5px #ff3b00); transform: scale(1.14) translateY(-4%); }
+  100% { filter: brightness(.95) drop-shadow(0 0 2px #ff5a00); transform: scale(1.02) translateY(0); } }
 
 /* Floating "+DMG" / "Freeze" / "-MULT" text that rises and fades on pass. */
 .gpp-float { position: absolute; transform: translate(-50%, -50%); z-index: 5;
@@ -63,6 +69,9 @@ const CSS = `
   stroke-linecap: round; opacity: .92; }
 .gpp-wrap[data-status="done"] .gpp-path   { stroke: #5ef08a; }
 .gpp-wrap[data-status="failed"] .gpp-path { stroke: #ff5a5a; }
+/* FREEZE: the icy preview line ahead of the slow solid fill. */
+.gpp-path-preview { fill: none; stroke: #7fd0ff; stroke-width: .16; opacity: .5;
+  stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: .3 .22; }
 
 /* Pre-start "GO" overlay (opt-in via the countdownMs option). */
 .gpp-countdown { position: absolute; inset: 0; z-index: 10; display: flex;
@@ -88,6 +97,32 @@ const CSS = `
 @keyframes gpp-startflash {
   0%, 100% { box-shadow: inset 0 0 0 3px #ffffff, 0 0 14px 3px rgba(255,255,255,.85); }
   50%      { box-shadow: inset 0 0 0 3px #ffd34d, 0 0 18px 5px rgba(255,211,77,.9); } }
+
+/* CONFUSED: the whole grid gently wobbles, the drawn path turns purple, + a badge. */
+.gpp-confused { animation: gpp-wobble 1.7s ease-in-out infinite; }
+@keyframes gpp-wobble {
+  0%, 100% { transform: rotate(-.7deg); }
+  50%      { transform: rotate(.7deg); } }
+.gpp-confused .gpp-path { stroke: #c58cff; }
+.gpp-confused-badge { position: absolute; top: 0; left: 0; transform: translateY(-55%); z-index: 8;
+  background: rgba(58,30,82,.94); border: 1px solid #6b4a8c; border-radius: 999px;
+  padding: calc(5cqi / var(--cols)) calc(11cqi / var(--cols)); color: #ecd9ff; white-space: nowrap;
+  font: 700 calc(22cqi / var(--cols)) system-ui, sans-serif; pointer-events: none; }
+
+/* DRAIN: a red "liquid" that drains out the bottom of the payload cell as its
+   timer runs out, while the icon throbs — then the payload vanishes. */
+.gpp-decay { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; pointer-events: none; z-index: 4;
+  background: linear-gradient(to top, rgba(255,55,55,.62), rgba(255,80,80,.18)); transform-origin: bottom; }
+.gpp-decay.gpp-decay-run { animation-name: gpp-decay; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes gpp-decay { from { transform: scaleY(1); } to { transform: scaleY(0); } }
+.gpp-icon.gpp-draining, .gpp-label.gpp-draining { animation: gpp-throb .5s ease-in-out infinite; }
+@keyframes gpp-throb { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.22); opacity: .5; } }
+/* SHATTER: payloads that might move get a little shake so the player is warned. */
+.gpp-anim-shake { animation: gpp-shake .4s ease-in-out infinite; }
+@keyframes gpp-shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25%      { transform: translateX(-9%) rotate(-5deg); }
+  75%      { transform: translateX(9%) rotate(5deg); } }
 
 /* Objective gate (opt-in via the objective option): a "collect N" badge + a
    locked GOAL until the minimum payloads are chained. */

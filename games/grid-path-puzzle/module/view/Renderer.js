@@ -45,6 +45,10 @@ export class Renderer {
     this.svg = document.createElementNS(SVGNS, 'svg');
     this.svg.setAttribute('class', 'gpp-svg');
     this.svg.setAttribute('preserveAspectRatio', 'none');
+    // FREEZE: an icy "preview" line under the solid path (where the cursor dragged).
+    this.polyPreview = document.createElementNS(SVGNS, 'polyline');
+    this.polyPreview.setAttribute('class', 'gpp-path-preview');
+    this.svg.appendChild(this.polyPreview);
     this.poly = document.createElementNS(SVGNS, 'polyline');
     this.poly.setAttribute('class', 'gpp-path');
     this.svg.appendChild(this.poly);
@@ -166,6 +170,67 @@ export class Renderer {
     this.startEl?.classList.toggle('gpp-start-flash', !!on);
   }
 
+  /** CONFUSED indicator: wobble the grid + purple path + a 🌀 badge. */
+  setConfused(on) {
+    this.wrap?.classList.toggle('gpp-confused', !!on);
+    if (on && !this._confusedBadge && this.wrap) {
+      this._confusedBadge = document.createElement('div');
+      this._confusedBadge.className = 'gpp-confused-badge';
+      this._confusedBadge.textContent = '🌀 CONFUSED';
+      this.wrap.appendChild(this._confusedBadge);
+    } else if (!on && this._confusedBadge) {
+      this._confusedBadge.remove();
+      this._confusedBadge = null;
+    }
+  }
+
+  // ---- live cell mutation (drain removes / shatter moves a node) ----------
+  /** Repaint ONE cell to a new node type (background + glyph). */
+  updateCell(x, y, typeKey) {
+    const el = this.cellEls[y]?.[x];
+    if (!el) return;
+    const def = this.nodeTypes[typeKey] || {};
+    el.style.background = def.color || '#333';
+    el.classList.toggle('gpp-blocker', def.passable === false);
+    el.querySelector('.gpp-icon, .gpp-label')?.remove();
+    const glyph = def.icon || def.label;
+    if (glyph) {
+      const span = document.createElement('span');
+      span.className = def.icon ? 'gpp-icon' : 'gpp-label';
+      if (def.icon && glyphCount(glyph) > 1) span.classList.add('gpp-icon-multi');
+      if (def.anim) span.classList.add(`gpp-anim-${def.anim}`);
+      span.textContent = glyph;
+      el.appendChild(span);
+    }
+  }
+
+  /** A shrinking ring on a payload that's about to drain (duration = its timer). */
+  // `totalMs` = the full timer; `elapsed` fast-forwards the depletion (used when a
+  // payload's timer is relocated by shatter, so it resumes mid-way instead of resetting).
+  startDecay(x, y, totalMs, elapsed = 0) {
+    const el = this.cellEls[y]?.[x];
+    if (!el) return;
+    let bar = el.querySelector('.gpp-decay');
+    if (!bar) { bar = document.createElement('div'); bar.className = 'gpp-decay'; el.appendChild(bar); }
+    bar.style.animationDuration = `${totalMs}ms`;
+    bar.style.animationDelay = `${-elapsed}ms`;
+    bar.classList.remove('gpp-decay-run');
+    void bar.offsetWidth; // restart the depletion animation
+    bar.classList.add('gpp-decay-run');
+    el.querySelector('.gpp-icon, .gpp-label')?.classList.add('gpp-draining'); // throb the icon
+  }
+
+  clearDecay(x, y) {
+    const el = this.cellEls[y]?.[x];
+    el?.querySelector('.gpp-decay')?.remove();
+    el?.querySelector('.gpp-icon, .gpp-label')?.classList.remove('gpp-draining');
+  }
+
+  /** FREEZE: draw the icy preview polyline (where the cursor has dragged). */
+  setPreview(path) {
+    this.polyPreview?.setAttribute('points', (path || []).map((c) => `${c.x + 0.5},${c.y + 0.5}`).join(' '));
+  }
+
   /** Repaint the whole board for a (new) level. */
   setLevel(level) {
     this.level = level;
@@ -201,6 +266,7 @@ export class Renderer {
           span.className = def.icon ? 'gpp-icon' : 'gpp-label';
           // Multi-glyph icons (e.g. '💥💥💥') get a class that shrinks them to fit.
           if (def.icon && glyphCount(glyph) > 1) span.classList.add('gpp-icon-multi');
+          if (def.anim) span.classList.add(`gpp-anim-${def.anim}`); // looping icon animation
           span.textContent = glyph;
           cell.appendChild(span);
         }
@@ -212,6 +278,7 @@ export class Renderer {
     }
 
     this.svg.setAttribute('viewBox', `0 0 ${level.cols} ${level.rows}`);
+    this.polyPreview?.setAttribute('points', ''); // clear any icy freeze preview
     this.update([], { status: 'idle' });
   }
 

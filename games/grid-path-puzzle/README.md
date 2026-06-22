@@ -26,6 +26,7 @@ const game = new GridPathPuzzle({
   countdownText: 'GO',                        // optional: the overlay label
   objective: null,                            // optional: { type, min, icon?, label? } — win gate; null = off
   failText: null,                             // optional: big centred banner shown on any fail; null = off
+  modifiers: null,                            // optional runtime status modifiers (see below); null = off
 });
 
 game.on('complete', (r) => console.log(r.runState));   // reached goal (+ objective met, if any)
@@ -68,6 +69,22 @@ node-type `type` (counted as a **total**, adjacency-independent) before reaching
 `start()`, excluding the GO pause) exceeds it. `failText` (default off) additionally shows a big centred
 banner with that text on **any** fail (timeout or trap), reusing the GO overlay in a red "fail" style.
 Both default off, so existing hosts are unaffected.
+
+### Runtime status modifiers (opt-in)
+
+`modifiers` layers generic, gameplay-altering effects on a puzzle (the TRS playground maps its statuses
+onto them). All default off; the random ones use a seeded RNG (`level.seed`, or inject `options.rng`):
+
+- `slow: 0..1` — **freeze**: the cursor drags an instant *icy preview* while the solid path (which all
+  gameplay reads) catches up at `16 * slow` cells/sec; `endDrag` resolves once the solid reaches the end.
+- `confusion: 0..1` — per-step chance to veer to a random **safe** (non-hazard) legal neighbour.
+- `decay: { type, baseMs, stepMs }` — **drain**: each node of `type` vanishes on a timer (closest to
+  START first, `+stepMs` each); crossing one first secures it. Fires `decay`.
+- `wander: { type, chance }` — **shatter**: per-step chance to move one un-crossed `type` node to a
+  random empty neighbour. Fires `shatter`.
+
+Burning (a second `failsOnPass` hazard at its own generation density) is set up via the routePlan /
+node catalog, not `modifiers`. Burning and freeze are best kept mutually exclusive.
 
 ## Defining node types (your power-ups & obstacles)
 

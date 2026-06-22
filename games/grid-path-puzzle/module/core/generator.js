@@ -317,6 +317,8 @@ function normalizePlan(rp) {
     safeLengthMode: rp.safeLengthMode ?? 'shortest',
     trapDensity: clamp(rp.trapDensity ?? 0.15, 0, 0.6),
     blockerDensity: clamp(rp.blockerDensity ?? 0.18, 0, 0.6),
+    burningType: rp.burningType ?? null,
+    burningDensity: clamp(rp.burningDensity ?? 0, 0, 1),
     channeling: rp.channeling ?? 'soft',
     lateGap: { min: rp.lateGap?.min ?? 1, max: rp.lateGap?.max ?? 2 },
     endpointMode: rp.endpointMode ?? 'edgeRandom',
@@ -498,13 +500,21 @@ function shuffleCopy(arr, rng) {
 // ("channeling") so detours feel risky. Never touches a route cell.
 function paintHazards(cells, eligible, plan, nodeTypes, rng, onPrimary) {
   const blockerKey = Object.entries(nodeTypes).find(([, d]) => d.passable === false)?.[0];
-  const trapKey = Object.entries(nodeTypes).find(([, d]) => d.failsOnPass)?.[0];
+  // Optional second hazard ("burning") named by the plan; the generic trap is the
+  // first OTHER failsOnPass type, so the two never collide.
+  const burnKey = plan.burningDensity > 0 && plan.burningType && nodeTypes[plan.burningType] ? plan.burningType : null;
+  const trapKey = Object.entries(nodeTypes).find(([k, d]) => d.failsOnPass && k !== burnKey)?.[0];
   const adjacentToPrimary = (x, y) => neighbors4(x, y).some((n) => onPrimary.has(cellKey(n.x, n.y)));
   for (const c of eligible) {
     const boost = plan.channeling === 'strong' && adjacentToPrimary(c.x, c.y) ? 1.6 : 1;
     const r = rng();
-    if (blockerKey && r < plan.blockerDensity * boost) cells[c.y][c.x] = blockerKey;
-    else if (trapKey && r < (plan.blockerDensity + plan.trapDensity) * boost) cells[c.y][c.x] = trapKey;
+    // Cumulative density bands over one roll: blocker, then trap, then burning.
+    const blockerBand = plan.blockerDensity * boost;
+    const trapBand = blockerBand + plan.trapDensity * boost;
+    const burnBand = trapBand + (plan.burningDensity || 0) * boost;
+    if (blockerKey && r < blockerBand) cells[c.y][c.x] = blockerKey;
+    else if (trapKey && r < trapBand) cells[c.y][c.x] = trapKey;
+    else if (burnKey && r < burnBand) cells[c.y][c.x] = burnKey;
     // else: stays filler
   }
 }
@@ -540,7 +550,7 @@ function relaxPlan(plan, attempt) {
   const p = normalizePlan(plan);
   const step = Math.floor(attempt / 5);
   if (step >= 1) p.primaryLengthTarget = p.primaryLengthTarget === 'long' ? 'medium' : 'shortest';
-  if (step >= 2) { p.blockerDensity *= 0.5; p.trapDensity *= 0.5; }
+  if (step >= 2) { p.blockerDensity *= 0.5; p.trapDensity *= 0.5; p.burningDensity *= 0.5; }
   if (step >= 3) p.place = p.place.map((x) => (x.cluster ? { ...x, cluster: false } : x));
   if (step >= 4) p.place = p.place.filter((x) => x.placement !== 'offRoute' && x.placement !== 'anywhere');
   if (step >= 5) p.alternateRoutes = 0;
