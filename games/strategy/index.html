@@ -121,9 +121,9 @@
          width by the vertical room left between the two boards: the square then fits the
          height too and scales down on short windows. clamp() keeps a visible floor, and
          the overlay scrolls if a very short window still can't fit it. */
-      /* padding-top gives the confused 🌀 badge (top-left) room to poke up above the
-         grid; padding-bottom gives the objective badge (bottom-center) room below it. */
-      .trs-panel { position: relative; width: 100%; max-width: clamp(220px, calc(100vh - 470px), 560px); padding-top: 16px; padding-bottom: 26px; }
+      /* padding-top gives the top badges (confused 🌀 top-left + objective top-centre)
+         room to poke up above the grid; the ghost timer is centred so needs no room. */
+      .trs-panel { position: relative; width: 100%; max-width: clamp(220px, calc(100vh - 470px), 560px); padding-top: 20px; padding-bottom: 8px; }
 
       /* "Ghost" solve-timer: a big centred watermark OVER the grid, so it's in your
          field of view while you focus on routing. EXPERIMENT KNOBS:
@@ -144,10 +144,9 @@
         0%, 100% { transform: translate(-50%, -50%) scale(1); }
         50%      { transform: translate(-50%, -50%) scale(1.08); } }
 
-      /* Module-visual overrides (scoped to our mount): pin the objective badge to
-         bottom-center, and drop the redundant "Need X more" popup — the badge pips +
-         the 🔒N count on the goal cell already show what's left to chain. */
-      #puzzle-overlay .gpp-objective { top: auto; bottom: 0; transform: translate(-50%, 55%); }
+      /* Module-visual override (scoped to our mount): drop the redundant "Need X more"
+         popup — the badge pips + the 🔒N count on the goal cell already show what's left
+         to chain. The objective badge keeps the module's default top-centre position. */
       #puzzle-overlay .gpp-obj-need { display: none !important; }
 
       /* info bar */

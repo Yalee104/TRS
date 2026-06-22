@@ -67,7 +67,7 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     const remain = Math.max(0, ms);
     timerEl.textContent = `${(remain / 1000).toFixed(1)}s`;
     timerEl.classList.add('tick');                       // reveal the ghost timer (first tick = after the GO pause)
-    timerEl.classList.toggle('urgent', remain <= 5000);
+    timerEl.classList.toggle('urgent', remain <= 3000);
   }
 
   function canOpen(state, componentId, isAttack) {
