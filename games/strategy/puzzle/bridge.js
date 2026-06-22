@@ -50,8 +50,11 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     timerEl.className = 'trs-timer';
     const host = document.createElement('div');
     host.className = 'trs-host';
-    panel.appendChild(timerEl);
+    // host (grid) first, then the timer BELOW it — the grid's top edge carries the
+    // module's objective + confused badges (they poke up above it), so the timer
+    // sits under the board to avoid colliding with them.
     panel.appendChild(host);
+    panel.appendChild(timerEl);
     overlayEl.appendChild(panel);
     overlayEl.style.display = 'flex';
     return { host, panel, timerEl };
