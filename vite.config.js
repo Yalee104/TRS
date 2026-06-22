@@ -9,8 +9,8 @@
 //  In dev (`npm run dev`) you don't even need this list — you navigate to the
 //  page's URL directly, e.g.:
 //     http://localhost:5173/                         (the menu)
-//     http://localhost:5173/games/fighting/          (the fighting game)
 //     http://localhost:5173/games/grid-path-puzzle/  (the puzzle demo)
+//     http://localhost:5173/games/strategy/          (the strategy game)
 // =============================================================================
 
 import { resolve } from 'node:path';
@@ -22,7 +22,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         menu: resolve(__dirname, 'index.html'),
-        fighting: resolve(__dirname, 'games/fighting/index.html'),
         puzzle: resolve(__dirname, 'games/grid-path-puzzle/index.html'),
         shmup: resolve(__dirname, 'games/shmup/index.html'),
         strategy: resolve(__dirname, 'games/strategy/index.html'),

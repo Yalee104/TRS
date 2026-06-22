@@ -1,10 +1,9 @@
 {
   "name": "trs-fighting-demo",
   "version": "0.1.0",
-  "description": "A heavily-commented 2D arcade fighting game built to teach the rich-HTML-animation workflow (Phaser 3 + Yuka + a from-scratch sprite atlas).",
+  "description": "A learning repo of TRS (Tactical Routing System) mini-games: the grid-path puzzle module + playground, the Hack & Blast shmup, and the TRS Command strategy game.",
   "type": "module",
   "scripts": {
-    "build:sprites": "node games/fighting/tools/build-spritesheet.mjs",
     "test:puzzle": "node games/grid-path-puzzle/tests/run.mjs",
     "test:shmup": "node games/shmup/tests/run.mjs",
     "test:strategy": "node games/strategy/tests/run.mjs",
@@ -12,12 +11,7 @@
     "build": "vite build",
     "preview": "vite preview"
   },
-  "dependencies": {
-    "phaser": "^3.80.1",
-    "yuka": "^0.7.8"
-  },
   "devDependencies": {
-    "pngjs": "^7.0.0",
     "vite": "^5.4.0"
   }
 }
