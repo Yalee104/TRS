@@ -10,6 +10,11 @@
 
 ## Context
 
+> **Note on `games/shmup/` references below:** the Hack & Blast shmup that this design was
+> modelled on now lives on the **`hack-and-blast`** branch (it was removed from `main`). The
+> `games/shmup/...` paths in this doc describe that reference implementation on the branch; the
+> strategy game's own files are the source of truth on `main`.
+
 `Hack & Blast` (the shmup) proved the **grid-path puzzle** ("TRS — Tactical Routing System")
 works as an embedded verb: mount a puzzle → draw a route → `ComboEngine.evaluate()` returns a
 combo result → a host "bridge" maps it onto game state. This second game makes TRS the *only*

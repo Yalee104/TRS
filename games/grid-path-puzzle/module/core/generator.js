@@ -2,9 +2,9 @@
 //  core/generator.js  —  procedural level generation (PURE JS, ZERO DEPS)
 // =============================================================================
 //
-//  IMPORTANT: there is NO AI and NO external library here, and this is NOT Yuka.
-//  (Yuka, in the fighting game, drives an agent's behavior every frame at
-//  runtime. This is a ONE-TIME layout computation.) It's classic procedural
+//  IMPORTANT: there is NO AI and NO external library here. Unlike a runtime AI
+//  agent (which steers a character's behaviour every frame), this is a ONE-TIME
+//  layout computation done up front. It's classic procedural
 //  content generation built from three textbook pieces:
 //
 //    1. mulberry32  — a tiny seeded pseudo-random number generator, so the same

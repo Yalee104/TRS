@@ -1,5 +1,5 @@
 {
-  "name": "trs-fighting-demo",
+  "name": "trs-mini-games",
   "version": "0.1.0",
   "description": "A learning repo of TRS (Tactical Routing System) mini-games: the grid-path puzzle module + playground and the TRS Command strategy game. (The Hack & Blast shmup lives on the 'hack-and-blast' branch.)",
   "type": "module",

@@ -1,4 +1,4 @@
-// Minimal test harness — no framework (matches the puzzle/shmup tests).
+// Minimal test harness — no framework (matches the puzzle module's tests).
 let passed = 0;
 let failed = 0;
 export function assert(cond, msg) {

@@ -41,7 +41,8 @@ view/   render (boards) · configPanel (left rail) · infoBar (bottom)
 tests/  run.mjs · strategy.test.mjs
 ```
 The `grid-path-puzzle/module` + `combo/ComboEngine` are **imported, never modified** — all
-strategy logic (statuses, firepower, cascade, AI) is host-side, mirroring `games/shmup/`.
+strategy logic (statuses, firepower, cascade, AI) is host-side. (The same host-side reuse
+pattern is used by the Hack & Blast shmup, preserved on the `hack-and-blast` branch.)
 
 ## scope
 In: one battle vs **up to 4 enemies**, the full build→resolve loop, single-Focus attacks, the five

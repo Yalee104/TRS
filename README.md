@@ -1,9 +1,9 @@
 # TRS — Mini-Game Playground (a learning repo)
 
-A personal learning playground for the workflow behind **rich HTML animation**.
-Each mini-game is a self-contained, heavily-commented artifact that teaches a
-different slice of game/animation development. One repo, one Vite project, a
-menu page that links to each game.
+A personal learning playground for the **Tactical Routing System (TRS)** — a reusable
+grid-path puzzle module and the games built on top of it. Each piece is a
+self-contained, heavily-commented artifact. One repo, one Vite project, a menu page
+that links to each game.
 
 ## Run it
 
@@ -13,35 +13,27 @@ npm run dev        # open the printed http://localhost:5173 — the menu links t
 ```
 
 - `npm run build` — production build of all pages
-- `npm run build:sprites` — regenerate the fighting game's sprite atlas
 - `npm run test:puzzle` — headless logic tests for the puzzle module
+- `npm run test:strategy` — headless logic tests for the strategy game
 
 ## The games
 
-### 🥊 `games/fighting/` — Arcade Fighter (Phaser 3 + Yuka)
-A 1-v-1 fighting game vs. a Yuka-driven AI. Teaches the **sprite/atlas pipeline**,
-**animation state machines**, the **game loop**, and **enemy AI** (state machine +
-steering). Controls: **← →** move · **↑** jump · **A** punch · **S** kick ·
-**D** block · **H** hitboxes · **R** reset. Live-tinker via `window.__game`.
-
-| File | Teaches |
-|---|---|
-| `games/fighting/tools/build-spritesheet.mjs` | the asset pipeline (sprite sheet from scratch) |
-| `games/fighting/scenes/FightScene.js` | the game loop (`preload → create → update`) |
-| `games/fighting/fighter/states.js` + `Fighter.js` | animation state machine, frame data, hit/hurtboxes |
-| `games/fighting/ai/EnemyBrain.js` | enemy AI with Yuka (FSM + steering) |
-
 ### 🧩 `games/grid-path-puzzle/` — Grid Path Puzzle (DOM/CSS + SVG)
-A reusable, **zero-dependency**, framework-agnostic module: drag a path from
-START to GOAL weighing risk vs. reward. Configurable grid size (4×4–15×15) and
-developer-defined node types. The demo adds a **data-driven combo system** with an
-**Offensive/Defensive mode toggle** (skills combine by order — Freeze/Confuse/Drain
-+ Chain/Multihack, the Beam; Shield/Cleanse/Overclock + Prolong/Amplify, the
-Fortress) and a **route-first "designer" generator**. Teaches a **DOM/SVG renderer**,
-a **drag-to-draw interaction**, **pure rules/effects**, **procedural generation with
-a solvability guarantee**, and a **generic config-driven engine**. See
-`games/grid-path-puzzle/README.md` + `COMBO_DESIGN_*.md`. Live-tinker via
-`window.__puzzle` / `window.__combo`.
+A reusable, **zero-dependency**, framework-agnostic module: drag a path from START to
+GOAL weighing risk vs. reward. Configurable grid size (4×4–15×15) and developer-defined
+node types. The playground adds a **data-driven combo system** with an Offensive/Defensive
+mode toggle, runtime **status modifiers** (freeze/confuse/drain/shatter + a burning hazard),
+an **objective gate**, a pre-start **GO** pause, and a **route-first "designer" generator**.
+Teaches a DOM/SVG renderer, drag-to-draw interaction, pure rules/effects, procedural
+generation with a solvability guarantee, and a generic config-driven engine. See
+`games/grid-path-puzzle/README.md` + `COMBO_DESIGN_*.md`. Live-tinker via `window.__puzzle`.
+
+### 🛰️ `games/strategy/` — TRS Command (DOM · turn-based strategy)
+Two component-built aircraft duel in alternating **build → resolve** phases. Solve a
+component's TRS route to queue attacks/defenses; enemy statuses are *felt* as routing
+friction (freeze slows the cursor, drain decays your icons, etc.); condition feeds
+firepower; a cascade rewards kills. All tuning lives in `games/strategy/config/game.json`.
+See `games/strategy/DESIGN.md`. Live-tinker via `window.__strategy`.
 
 ## Layout
 
@@ -50,10 +42,12 @@ TRS/
   index.html            # the menu
   vite.config.js        # multi-page entry points
   games/
-    fighting/           # Phaser game
-    grid-path-puzzle/    # reusable DOM/SVG module + demo + tests
+    grid-path-puzzle/   # reusable DOM/SVG module + playground + tests + shared TRS preset
+    strategy/           # turn-based strategy game on the puzzle
 ```
 
-Built with [Vite](https://vitejs.dev). The fighting game uses
-[Phaser 3](https://phaser.io) + [Yuka](https://mugen87.github.io/yuka/); the
-puzzle module uses no libraries at all.
+Built with [Vite](https://vitejs.dev); no runtime dependencies (the puzzle module and
+strategy game use no libraries).
+
+> **Other branches:** the Canvas 2D **Hack & Blast** shmup lives on the `hack-and-blast`
+> branch (it also embeds the puzzle); the Phaser/Yuka **Arcade Fighter** was retired.

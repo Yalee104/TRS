@@ -5,8 +5,8 @@
 //  Rendering = DOM for structure (one <div> per cell, laid out with CSS grid)
 //  + SVG for the smooth path line (one <polyline> through cell centers). The
 //  renderer is "dumb": it only paints what it's told. All game logic lives in
-//  the facade/core. That separation is the lesson — same idea as the fighting
-//  game's state-machine-vs-renderer split.
+//  the facade/core. That separation is the lesson — the same logic-vs-renderer
+//  split any clean game architecture uses.
 // =============================================================================
 
 import { injectStyles } from './styles.js';
