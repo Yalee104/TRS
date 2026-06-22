@@ -30,10 +30,8 @@ jobs:
       - run: npm install
       # --base=/TRS/ so assets resolve under the project-repo subpath on Pages.
       - run: npm run build -- --base=/TRS/
-      # Make the bare https://<user>.github.io/TRS/ URL open Hack & Blast directly.
-      # Only the built dist/index.html is overwritten; the source dev menu is untouched.
-      - run: |
-          echo '<!doctype html><meta http-equiv="refresh" content="0; url=./games/shmup/">' > dist/index.html
+      # The bare https://<user>.github.io/TRS/ URL serves the built menu (index.html),
+      # which links to the remaining games.
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }
 

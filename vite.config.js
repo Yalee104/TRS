@@ -23,7 +23,6 @@ export default defineConfig({
       input: {
         menu: resolve(__dirname, 'index.html'),
         puzzle: resolve(__dirname, 'games/grid-path-puzzle/index.html'),
-        shmup: resolve(__dirname, 'games/shmup/index.html'),
         strategy: resolve(__dirname, 'games/strategy/index.html'),
       },
     },
