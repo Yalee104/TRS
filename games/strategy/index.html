@@ -121,11 +121,18 @@
          width by the vertical room left between the two boards: the square then fits the
          height too and scales down on short windows. clamp() keeps a visible floor, and
          the overlay scrolls if a very short window still can't fit it. */
-      /* padding-top reserves headroom for the module badges (objective + confused)
-         that poke up above the grid's top edge. The timer now sits BELOW the board. */
-      .trs-panel { width: 100%; max-width: clamp(220px, calc(100vh - 470px), 560px); padding-top: 22px; }
-      .trs-timer { font-size: 40px; font-weight: 800; text-align: center; margin-top: 14px; color: #e6c84a; }
+      /* Timer sits on TOP; the objective badge is re-pinned bottom-center (below).
+         padding-top gives the confused 🌀 badge (top-left) room to poke up above the
+         grid; padding-bottom gives the objective badge room to poke down below it. */
+      .trs-panel { width: 100%; max-width: clamp(220px, calc(100vh - 470px), 560px); padding-top: 16px; padding-bottom: 26px; }
+      .trs-timer { font-size: 40px; font-weight: 800; text-align: center; margin-bottom: 10px; color: #e6c84a; }
       .trs-timer.urgent { color: #ff5566; }
+
+      /* Module-visual overrides (scoped to our mount): pin the objective badge to
+         bottom-center, and drop the redundant "Need X more" popup — the badge pips +
+         the 🔒N count on the goal cell already show what's left to chain. */
+      #puzzle-overlay .gpp-objective { top: auto; bottom: 0; transform: translate(-50%, 55%); }
+      #puzzle-overlay .gpp-obj-need { display: none !important; }
 
       /* info bar */
       .en { color: #ff7a8a; font-weight: 700; }
