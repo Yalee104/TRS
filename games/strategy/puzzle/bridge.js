@@ -66,6 +66,7 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     if (!timerEl) return;
     const remain = Math.max(0, ms);
     timerEl.textContent = `${(remain / 1000).toFixed(1)}s`;
+    timerEl.classList.add('tick');                       // reveal the ghost timer (first tick = after the GO pause)
     timerEl.classList.toggle('urgent', remain <= 5000);
   }
 
@@ -141,7 +142,8 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     });
     state.activePuzzle = { component: componentId, mode: isAttack ? 'attack' : 'defense', instance, overlay: ov };
 
-    showTime(ov.timerEl, timeLimitMs);
+    // Don't paint the timer before the first tick — that keeps it hidden during the
+    // GO countdown so it doesn't sit behind the centred "GO" overlay.
     if (typeof instance.on === 'function') instance.on('tick', (t) => showTime(ov.timerEl, t.remainingMs));
     if (typeof instance.start === 'function') instance.start();
     return true;
