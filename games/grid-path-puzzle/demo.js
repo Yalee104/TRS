@@ -1,99 +1,168 @@
 // =============================================================================
-//  demo.js  —  a host that USES the grid-path-puzzle module + ComboEngine
+//  demo.js  —  the TRS Puzzle Playground (a host that USES the puzzle module)
 // =============================================================================
 //
-//  This is the "embedding game" side. It:
-//   1. Loads an Offensive OR Defensive config (pure JSON data).
-//   2. Builds the module's nodeTypes catalog FROM that config, and asks the
-//      module to generate a board with the config's route-first generation plan.
-//   3. Reads the module's ordered path on every change, runs the generic
-//      ComboEngine over the skill sequence, and renders a live combo readout.
+//  Reproduces the exact puzzle the TRS strategy game would build for a given
+//  {phase, component, Launch-Pad health} plus live generation knobs, so puzzles
+//  can be verified before they ship to the strategy game. It uses the shared
+//  preset `presets/trs.js` (the same palette/genPlan strategy will adopt) and
+//  exercises the module's new GO-pause / START-flash options.
 //
-//  Nothing in module/ knows about combos — it just emits the path; the engine
-//  (combo/) is generic and driven entirely by the chosen config.
+//  Nothing in module/ knows about TRS — it just emits the path; the generic
+//  ComboEngine (combo/) scores it from the chosen palette.
 // =============================================================================
 
 import { GridPathPuzzle } from './module/GridPathPuzzle.js';
 import { evaluate } from './combo/ComboEngine.js';
 import { effectBadges } from './combo/effects.js';
-import OFFENSIVE from './combo/configs/offensive.json';
-import DEFENSIVE from './combo/configs/defensive.json';
+import {
+  buildPalette, catalogFromConfig, LAUNCHPAD_MODS, DEFAULT_GRID_SIZE,
+  ATTACK_EFFECT, DEFENSE_VERB, OFFENSE_META, DEFENSE_META, MIN_CHAIN,
+} from './presets/trs.js';
 
-const CONFIGS = { offensive: OFFENSIVE, defensive: DEFENSIVE };
 const $ = (id) => document.getElementById(id);
 const round = (n) => Math.round(n * 100) / 100;
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
-// Hand-authored levels (one per mode) — for fixed/custom maps. The intended
-// combo runs along the top row, then down the right column (a clean solvable
-// path); hazards sit off it. These showcase each mode's signature combo.
-const AUTHORED = {
-  offensive: {
-    grid: [
-      ['start', 'freeze', 'freeze', 'freeze', 'chain', 'multihack'],
-      ['normal', 'trap', 'blocker', 'trap', 'normal', 'normal'],
-      ['confuse', 'normal', 'drain', 'blocker', 'trap', 'normal'],
-      ['normal', 'blocker', 'normal', 'normal', 'normal', 'normal'],
-      ['normal', 'trap', 'normal', 'blocker', 'trap', 'normal'],
-      ['normal', 'normal', 'normal', 'normal', 'normal', 'goal'],
-    ],
-    start: { x: 0, y: 0 }, goal: { x: 5, y: 5 }, moveBudget: 16,
-  },
-  defensive: {
-    grid: [
-      ['start', 'shield', 'cleanse', 'overclock', 'prolong', 'amplify'],
-      ['normal', 'trap', 'blocker', 'normal', 'blocker', 'normal'],
-      ['repair', 'normal', 'normal', 'normal', 'trap', 'normal'],
-      ['normal', 'blocker', 'trap', 'normal', 'normal', 'normal'],
-      ['normal', 'normal', 'normal', 'blocker', 'trap', 'normal'],
-      ['normal', 'repair', 'normal', 'normal', 'normal', 'goal'],
-    ],
-    start: { x: 0, y: 0 }, goal: { x: 5, y: 5 }, moveBudget: 16,
-  },
-};
+// Effective "min chain" for the objective gate: the knob, clamped to the
+// payload-count min so it can never exceed it (and is always achievable).
+function minChainValue() {
+  const cmin = Number($('cmin').value) || 1;
+  return clamp(Number($('minchain').value) || 1, 1, cmin);
+}
 
-let mode = 'offensive';
-let config = CONFIGS[mode];
+// Keep the Min-chain field itself within [1, payload-count min] — the rule is it
+// cannot exceed the payload min — and cap the spinner's max accordingly.
+function clampMinChainInput() {
+  const cmin = Number($('cmin').value) || 1;
+  const el = $('minchain');
+  el.max = cmin;
+  el.value = clamp(Number(el.value) || 1, 1, cmin);
+}
+
+const COMPONENTS = ['weapon', 'generator', 'tower', 'engine', 'launchpad'];
+const COMP_LABEL = { weapon: 'Weapon', generator: 'Generator', tower: 'Tower', engine: 'Engine', launchpad: 'Launch Pad' };
+
+let phase = 'attack';
+let component = 'weapon';
+let palette = null;  // current palette config (from presets/trs.js)
 let game = null;
+let lastSeed = null; // seed used by the last build (so Regenerate can tell it changed)
 
-// Build the module's nodeTypes from a config: the base cells + the skills +
-// any power-ups. Extra config fields (class, value, tiers…) are ignored by the
-// module and consumed by the engine.
-function catalogFromConfig(cfg) {
-  const nt = { ...cfg.base };
-  for (const [k, d] of Object.entries(cfg.skills)) nt[k] = { role: 'normal', passable: true, ...d };
-  if (cfg.powerups) for (const [k, d] of Object.entries(cfg.powerups)) nt[k] = { role: 'normal', passable: true, ...d };
-  return nt;
+// ---- palette / build --------------------------------------------------------
+const skillOf = () => (phase === 'attack' ? ATTACK_EFFECT[component] : DEFENSE_VERB[component]);
+const metaOf = (skill) => (phase === 'attack' ? OFFENSE_META[skill] : DEFENSE_META[skill]);
+
+function readKnobs() {
+  return {
+    cluster: $('cluster').checked,
+    count: { min: Number($('cmin').value), max: Number($('cmax').value) },
+    placement: $('placement').value,
+    trapDensity: Number($('trap').value),
+    blockerDensity: Number($('block').value),
+    alternateRoutes: Number($('alt').value),
+    channeling: $('channel').value,
+    primaryLengthTarget: $('plt').value,
+    chainChance: Math.max(0, Math.min(100, Number($('chainpct').value))) / 100,
+    chainPlacement: $('chainplace').value,
+    burningDensity: $('burnon').checked ? Number($('burndens').value) : 0, // 🔥 status (generation hazard)
+  };
+}
+
+function goOpts() {
+  const on = $('go').checked;
+  return { countdownMs: on ? Number($('goms').value) : 0, flashStart: $('flash').checked, countdownText: $('gotext').value || 'GO' };
+}
+
+// Runtime status modifiers from the Statuses panel (payload type = component skill).
+function readModifiers(skill) {
+  const m = {};
+  if ($('drainon').checked) m.decay = { type: skill, baseMs: Number($('drainbase').value) * 1000, stepMs: Number($('drainstep').value) * 1000 };
+  if ($('shatteron').checked) m.wander = { type: skill, chance: Number($('shatterchance').value) };
+  if ($('confon').checked) m.confusion = Number($('confchance').value);
+  if ($('freezeon').checked) m.slow = Number($('freezeslow').value);
+  return Object.keys(m).length ? m : null;
 }
 
 // The engine's input: the skill-node keys the path crossed, in order.
-const skillSeqFromPath = (pathDesc) => pathDesc.map((c) => c.typeKey).filter((k) => config.skills[k]);
-
-function currentSize() { return Number($('size').value); }
-function currentSeed() { return Number($('seed').value); }
+const skillSeqFromPath = (pathDesc) => pathDesc.map((c) => c.typeKey).filter((k) => palette.skills[k]);
 
 function buildGame() {
   if (game) game.destroy();
-  config = CONFIGS[mode];
-  const nodeTypes = catalogFromConfig(config);
+  clampMinChainInput(); // keep Min chain <= payload-count min
+  const preset = $('lpmod').value;
+  palette = buildPalette({ phase, component, preset, knobs: readKnobs() });
+  const size = Math.max(4, Number($('size').value) + (LAUNCHPAD_MODS[preset]?.sizeDelta || 0));
+  const { countdownMs, flashStart, countdownText } = goOpts();
+  const skill = skillOf();
+  const objective = $('objon').checked
+    ? { type: skill, min: minChainValue(), icon: metaOf(skill).icon, label: metaOf(skill).name }
+    : null; // null/omitted = gate off (reaching goal solves)
+  const timeLimitMs = $('touon').checked ? clamp(Number($('tousec').value) || 10, 2, 30) * 1000 : null;
+  const modifiers = readModifiers(skill);
+  const nt = catalogFromConfig(palette);
+  if ($('shatteron').checked && nt[skill]) nt[skill].anim = 'shake'; // shaky payloads warn they may move
   game = new GridPathPuzzle({
     mount: $('board'),
-    nodeTypes,
-    generate: { size: currentSize(), seed: currentSeed(), routePlan: config.generation },
-    trapEntryMode: 'commitFail',
-    onPathChange: onPathChange,
-    onComplete: onComplete,
-    onFail: onFail,
-    onTick: onTick,
+    nodeTypes: nt,
+    // moveBudget = grid area → effectively unlimited (a path can't revisit cells).
+    generate: { size, seed: Number($('seed').value), routePlan: palette.generation, moveBudget: size * size },
+    trapEntryMode: 'failFast', // crossing a hazard fails immediately
+    countdownMs, flashStart, countdownText,
+    objective, timeLimitMs, failText: 'FAIL', modifiers,
+    onPathChange, onComplete, onFail, onTick, onObjectiveBlocked,
+    onCountdownEnd: () => { $('status').textContent = ''; },
   });
+  game.start(); // kick the GO pause (or start immediately if countdownMs is 0)
   window.__puzzle = game;
+  lastSeed = Number($('seed').value);
+  const pr = game.level.primaryRoute, sr = game.level.safeRoute;
+  $('routelen').textContent = pr ? `${pr.length}${sr ? ` · safe ${sr.length}` : ''}` : '—';
   renderLegend();
   resetReadout();
+  updateSolveWarn();
+  renderRouteOverlay();
 }
 
+// Debug overlay: outline the generator's intended primary (reward) + safe routes
+// on the board so the effect of Primary length / Placement is actually visible.
+// (The routes are level metadata the module exposes; it never draws them itself.)
+function renderRouteOverlay() {
+  const board = $('board');
+  board.querySelectorAll('.pg-primary, .pg-safe').forEach((c) => c.classList.remove('pg-primary', 'pg-safe'));
+  if (!$('showroute').checked || !game?.level) return;
+  const mark = (route, cls) => (route || []).forEach((p) => {
+    board.querySelector(`.gpp-cell[data-x="${p.x}"][data-y="${p.y}"]`)?.classList.add(cls);
+  });
+  mark(game.level.safeRoute, 'pg-safe');
+  mark(game.level.primaryRoute, 'pg-primary');
+}
+
+// Regenerate: rebuild from the current knobs. If the seed is unchanged since the
+// last build, roll a fresh one first so you actually get a NEW board (otherwise
+// it would just replay the same layout, like Reset).
 function regenerate() {
-  config = CONFIGS[mode];
-  game.loadLevel({ size: currentSize(), seed: currentSeed(), routePlan: config.generation });
-  resetReadout();
+  if (Number($('seed').value) === lastSeed) {
+    $('seed').value = Math.floor(Math.random() * 100000);
+  }
+  buildGame();
+}
+
+// Warn when the requirement can't be guaranteed: the active min-chain (the gate,
+// or the skill's inherent MIN_CHAIN) must be <= the payload-count MIN, since min
+// is the worst-case number of payloads the generator places.
+function updateSolveWarn() {
+  const el = $('solvewarn');
+  const skill = skillOf();
+  const gate = $('objon').checked ? (Number($('minchain').value) || 1) : 0;
+  const need = Math.max(MIN_CHAIN[skill] || 1, gate);
+  const min = Number($('cmin').value);
+  if (need > min) {
+    el.style.display = '';
+    el.textContent = `⚠ ${metaOf(skill).name} needs ${need} chained to solve, but payload min is ${min} — raise the payload min or lower Min chain.`;
+  } else {
+    el.style.display = 'none';
+  }
 }
 
 // ---- combo readout ----------------------------------------------------------
@@ -106,29 +175,38 @@ function renderCombo(result, isFinal) {
   let html = '';
   if (result.special) {
     html += `<div class="banner beam">⚡ ${result.special.name}</div>`;
-    const applied = (result.special.applies || []).map((k) => config.skills[k]?.icon || k).join(' ');
-    html += `<div class="combo-sub">applies ${applied} to <b>all</b> for ${result.special.durationSec}s</div>`;
-  } else if (result.label && mode === 'defensive') {
+  } else if (result.label && phase === 'defense') {
     html += `<div class="banner fortress">🏰 ${result.label}</div>`;
   }
   for (const it of result.items) {
-    const sk = config.skills[it.skill] || {};
+    const sk = palette.skills[it.skill] || {};
     const badges = effectBadges(it.effects).map((b) => `<span class="badge ${b.fxClass}">${b.label}</span>`).join('');
     const gv = it.gameValue != null ? `${round(it.gameValue)} ${it.unit || ''}` : '';
     const dur = it.durationSec != null ? ` · ${round(it.durationSec)}s` : '';
-    const tgt = it.targets === 'all' ? ' · 🎯 all' : '';
     html += `<div class="combo-item"><span class="ci-icon">${sk.icon || ''}</span>`
       + `<span class="ci-tier">${it.tier}</span>`
-      + `<span class="ci-val">${gv}${dur}${tgt}</span> ${badges}</div>`;
+      + `<span class="ci-val">${gv}${dur}</span> ${badges}</div>`;
   }
   panel.innerHTML = html;
   if (isFinal) { panel.classList.remove('fx'); void panel.offsetWidth; panel.classList.add('fx'); }
 }
 
+// "potency" the route would yield, the resolved skill, and the min-chain check.
+function renderTrsInfo(info) {
+  const skill = skillOf();
+  const need = $('objon').checked ? minChainValue() : (MIN_CHAIN[skill] || 1);
+  const seq = info ? skillSeqFromPath(info.path) : [];
+  const chained = seq.filter((k) => k === skill).length;
+  const value = info ? (evaluate(seq, palette).items?.[0]?.value ?? 0) : 0;
+  $('trsinfo').innerHTML = `<span>Skill <b>${metaOf(skill).icon} ${skill}</b></span>`
+    + `<span>Chained <b>${chained}/${need}</b> ${chained >= need ? '✅ solve' : '⛔ short'}</span>`
+    + `<span>Potency <b>${round(value)}</b></span>`;
+}
+
 function onPathChange(info) {
-  renderCombo(evaluate(skillSeqFromPath(info.path), config), false);
-  window.__combo = evaluate(skillSeqFromPath(info.path), config);
-  $('steps').textContent = `${info.steps} / ${info.budget.max ?? '∞'}`;
+  renderCombo(evaluate(skillSeqFromPath(info.path), palette), false);
+  renderTrsInfo(info);
+  $('steps').textContent = `${info.steps} / ∞`; // budget set to grid area (effectively unlimited)
   const reach = $('reach');
   reach.textContent = info.canReachGoal ? 'yes' : 'no';
   reach.className = info.canReachGoal ? '' : 'warn';
@@ -137,13 +215,12 @@ function onPathChange(info) {
 }
 
 function onComplete(result) {
-  const combo = evaluate(skillSeqFromPath(result.path), config);
-  renderCombo(combo, true); // isFinal → FX flourish
+  const combo = evaluate(skillSeqFromPath(result.path), palette);
+  renderCombo(combo, true);
   const el = $('status');
   el.className = 'win';
-  el.textContent = combo.special ? `✅ ${combo.special.name} unleashed!`
-    : combo.label && mode === 'defensive' ? `✅ ${combo.label} raised!`
-    : `✅ Combo executed: ${combo.items[0]?.tier ?? '—'}`;
+  el.textContent = `✅ Solved: ${combo.items[0]?.tier ?? '—'} (potency ${round(combo.items[0]?.value ?? 0)})`;
+  $('solved').textContent = `${(result.time.elapsedMs / 1000).toFixed(1)}s`;
 }
 
 function onFail(info) {
@@ -151,6 +228,12 @@ function onFail(info) {
   el.className = 'lose';
   el.textContent = info.reason === 'timeout' ? '⏱ Time up — failed!'
     : info.reason === 'trap' ? '💥 Hit a hazard — failed!' : '❌ Failed.';
+}
+
+function onObjectiveBlocked(info) {
+  const el = $('status');
+  el.className = 'warn';
+  el.textContent = `🔒 Locked — chain ${info.missing} more ${metaOf(skillOf()).icon} to solve`;
 }
 
 function onTick(info) {
@@ -161,42 +244,176 @@ function onTick(info) {
 
 function resetReadout() {
   renderCombo(null, false);
+  renderTrsInfo(null);
   $('status').textContent = '';
   $('status').className = '';
   $('time').textContent = '—';
+  $('solved').textContent = '—';
   $('reach').textContent = 'yes';
   $('reach').className = '';
   const st = game.getState();
-  $('steps').textContent = `0 / ${st.level.moveBudget ?? '∞'}`;
-  $('combo-title').textContent = `Combo — ${config.title}`;
+  $('steps').textContent = '0 / ∞';
+  $('combo-title').textContent = `Combo — ${phase === 'attack' ? 'Attack' : 'Defense'}: ${COMP_LABEL[component]} (${metaOf(skillOf()).name})`;
 }
 
 function renderLegend() {
-  const cfg = config;
   const entries = [
-    ...Object.entries(cfg.base).filter(([k]) => k !== 'normal'),
-    ...Object.entries(cfg.skills),
-    ...Object.entries(cfg.powerups || {}),
+    ...Object.entries(palette.base).filter(([k]) => k !== 'normal'),
+    ...Object.entries(palette.skills),
   ];
   $('legend').innerHTML = entries
     .map(([k, d]) => `<span><i class="sw" style="background:${d.color || '#333'}"></i>${d.icon ? d.icon + ' ' : ''}${d.label || k}</span>`)
     .join('');
 }
 
+// ---- component selector -----------------------------------------------------
+function renderComponents() {
+  $('components').innerHTML = COMPONENTS.map((c) => {
+    const skill = phase === 'attack' ? ATTACK_EFFECT[c] : DEFENSE_VERB[c];
+    const meta = phase === 'attack' ? OFFENSE_META[skill] : DEFENSE_META[skill];
+    return `<button data-comp="${c}" class="${c === component ? 'active' : ''}">${COMP_LABEL[c]}`
+      + `<br><span style="font-size:11px;color:#9aa0aa">${meta.icon} ${meta.name}</span></button>`;
+  }).join('');
+}
+
 // ---- controls ---------------------------------------------------------------
-function setMode(next) {
-  mode = next;
-  $('mode-offensive').classList.toggle('active', mode === 'offensive');
-  $('mode-defensive').classList.toggle('active', mode === 'defensive');
+function setPhase(next) {
+  phase = next;
+  $('phase-attack').classList.toggle('active', phase === 'attack');
+  $('phase-defense').classList.toggle('active', phase === 'defense');
+  $('chainrows').style.display = phase === 'attack' ? '' : 'none'; // chain is attack-only
+  renderComponents();
   buildGame();
 }
-$('mode-offensive').addEventListener('click', () => setMode('offensive'));
-$('mode-defensive').addEventListener('click', () => setMode('defensive'));
-$('size').addEventListener('input', (e) => { $('sizeVal').textContent = e.target.value; $('sizeVal2').textContent = e.target.value; });
-$('generate').addEventListener('click', regenerate);
-$('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); regenerate(); });
-$('authored').addEventListener('click', () => { game.loadLevel(AUTHORED[mode]); resetReadout(); });
-$('reset').addEventListener('click', () => { game.reset(); resetReadout(); });
-$('execute').addEventListener('click', () => game.execute());
+$('phase-attack').addEventListener('click', () => setPhase('attack'));
+$('phase-defense').addEventListener('click', () => setPhase('defense'));
+$('components').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-comp]');
+  if (!b) return;
+  component = b.dataset.comp;
+  renderComponents();
+  buildGame();
+});
 
+$('size').addEventListener('input', (e) => { $('sizeVal').textContent = e.target.value; });
+$('trap').addEventListener('input', (e) => { $('trapVal').textContent = Number(e.target.value).toFixed(2); });
+$('block').addEventListener('input', (e) => { $('blockVal').textContent = Number(e.target.value).toFixed(2); });
+$('placement').addEventListener('change', () => {
+  const off = $('placement').value === 'offRoute' || $('placement').value === 'anywhere';
+  $('placehint').style.display = off ? '' : 'none';
+});
+
+$('showroute').addEventListener('change', renderRouteOverlay);
+
+// Enable/grey the Min-chain knob with its toggle. Enabling defaults the value to
+// the payload-count min (and the field is capped there).
+function syncObjUI() {
+  const on = $('objon').checked;
+  if (on) $('minchain').value = Number($('cmin').value) || 1;
+  $('minchain').disabled = !on;
+  $('minchainrow').classList.toggle('is-off', !on);
+}
+$('objon').addEventListener('change', syncObjUI);
+
+// Enable/grey the Timeout (seconds) field with its toggle.
+function syncTouUI() {
+  const on = $('touon').checked;
+  $('tousec').disabled = !on;
+  $('tourow').classList.toggle('is-off', !on);
+}
+$('touon').addEventListener('change', syncTouUI);
+
+// ---- statuses ---------------------------------------------------------------
+$('burndens').addEventListener('input', (e) => { $('burndensVal').textContent = Number(e.target.value).toFixed(2); });
+$('shatterchance').addEventListener('input', (e) => { $('shatterchanceVal').textContent = Number(e.target.value).toFixed(2); });
+$('confchance').addEventListener('input', (e) => { $('confchanceVal').textContent = Number(e.target.value).toFixed(2); });
+$('freezeslow').addEventListener('input', (e) => { $('freezeslowVal').textContent = Number(e.target.value).toFixed(2); });
+function syncStatusUI() {
+  $('burndens').disabled = !$('burnon').checked;
+  $('burnrow').classList.toggle('is-off', !$('burnon').checked);
+  const drain = $('drainon').checked;
+  $('drainbase').disabled = !drain; $('drainstep').disabled = !drain;
+  $('drainrow').classList.toggle('is-off', !drain);
+  $('shatterchance').disabled = !$('shatteron').checked;
+  $('shatterrow').classList.toggle('is-off', !$('shatteron').checked);
+  $('confchance').disabled = !$('confon').checked;
+  $('confrow').classList.toggle('is-off', !$('confon').checked);
+  $('freezeslow').disabled = !$('freezeon').checked;
+  $('freezerow').classList.toggle('is-off', !$('freezeon').checked);
+}
+// Freeze and Burning are mutually exclusive — enabling one disables the other.
+function statusToggle(which) {
+  if (which === 'freeze' && $('freezeon').checked) $('burnon').checked = false;
+  if (which === 'burn' && $('burnon').checked) $('freezeon').checked = false;
+  syncStatusUI();
+}
+$('burnon').addEventListener('change', () => statusToggle('burn'));
+$('freezeon').addEventListener('change', () => statusToggle('freeze'));
+$('drainon').addEventListener('change', syncStatusUI);
+$('shatteron').addEventListener('change', syncStatusUI);
+$('confon').addEventListener('change', syncStatusUI);
+
+// Re-apply generation knobs on the SAME seed when any change, so you can A/B a
+// single knob (e.g. Primary length) without the seed shifting underneath you.
+// (Regenerate is still the way to roll a fresh board.)
+['lpmod', 'cluster', 'size', 'cmin', 'cmax', 'placement', 'trap', 'block', 'alt', 'channel', 'plt', 'chainpct', 'chainplace', 'objon', 'minchain', 'touon', 'tousec', 'burnon', 'burndens', 'drainon', 'drainbase', 'drainstep', 'shatteron', 'shatterchance', 'confon', 'confchance', 'freezeon', 'freezeslow']
+  .forEach((id) => $(id).addEventListener('change', buildGame));
+
+// Print the current settings as a paste-ready snippet for presets/trs.js (the
+// playground never writes files — this is the bridge to "baking" tuned defaults).
+function exportConfig() {
+  const k = readKnobs();
+  const preset = $('lpmod').value;
+  const go = goOpts();
+  const q = (v) => (typeof v === 'string' ? `'${v}'` : v);
+  const text = [
+    '// TRS Puzzle Playground — current config',
+    `// phase: ${phase} · component: ${component} (${skillOf()}) · Launch Pad: ${preset} · size ${$('size').value} · seed ${$('seed').value}`,
+    "// To ship as the DEFAULT difficulty, set these in genPlan()'s defaults in",
+    '//   games/grid-path-puzzle/presets/trs.js',
+    'const knobs = {',
+    `  cluster: ${k.cluster},`,
+    `  count: { min: ${k.count.min}, max: ${k.count.max} },`,
+    `  placement: ${q(k.placement)},`,
+    `  trapDensity: ${k.trapDensity},`,
+    `  blockerDensity: ${k.blockerDensity},`,
+    `  alternateRoutes: ${k.alternateRoutes},`,
+    `  channeling: ${q(k.channeling)},`,
+    `  primaryLengthTarget: ${q(k.primaryLengthTarget)},`,
+    `  chainChance: ${k.chainChance}, // attack only`,
+    `  chainPlacement: ${q(k.chainPlacement)},`,
+    '};',
+    '// presentation (module options — set where the puzzle is constructed, e.g. strategy bridge.js):',
+    `//   countdownMs: ${go.countdownMs}, flashStart: ${go.flashStart}, countdownText: ${q(go.countdownText)}`,
+  ].join('\n');
+
+  const ta = $('exportout');
+  ta.style.display = '';
+  ta.value = text;
+  ta.focus();
+  ta.select();
+  const msg = $('exportmsg');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => { msg.textContent = '✅ copied to clipboard'; },
+      () => { msg.textContent = 'select the text above and copy (Ctrl/Cmd+C)'; },
+    );
+  } else {
+    msg.textContent = 'select the text above and copy (Ctrl/Cmd+C)';
+  }
+}
+
+$('export').addEventListener('click', exportConfig);
+$('generate').addEventListener('click', regenerate);
+$('random').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 100000); buildGame(); });
+$('reset').addEventListener('click', () => { game.reset(); game.start(); resetReadout(); }); // re-arm + replay GO
+
+// Initialise the grid-size control from the preset's recommended default.
+$('size').value = DEFAULT_GRID_SIZE;
+$('sizeVal').textContent = String(DEFAULT_GRID_SIZE);
+
+renderComponents();
+syncObjUI();
+syncTouUI();
+syncStatusUI();
 buildGame();

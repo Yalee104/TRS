@@ -12,7 +12,7 @@ import { dirname, resolve } from 'node:path';
 import { test, assert } from './harness.mjs';
 
 import { createState, PHASES } from '../core/state.js';
-import { isEffectValidOn } from '../core/components.js';
+import { isEffectValidOn, ATTACK_EFFECT, DEFENSE_VERB } from '../core/components.js';
 import { startAttackBuild, commitAttack, startDefenseBuild, commitDefense } from '../core/phases.js';
 import { combatCondition, firepowerMult, totalFirepower } from '../core/firepower.js';
 import { systemState } from '../core/cascade.js';
@@ -22,7 +22,8 @@ import { makePendingDefense, finalizeDefenseTarget, resolveDefense } from '../co
 import { planAttack, currentBudget } from '../combat/enemyAI.js';
 import { resolveChain, OFFENSE_COMBOS, pairKey } from '../combat/combos.js';
 import { offensivePalette, defensivePalette, catalogFromConfig } from '../puzzle/palettes.js';
-import { createBridge } from '../puzzle/bridge.js';
+import { createBridge, statusFriction } from '../puzzle/bridge.js';
+import { ATTACK_EFFECT as PRESET_ATTACK_EFFECT, DEFENSE_VERB as PRESET_DEFENSE_VERB } from '../../grid-path-puzzle/presets/trs.js';
 import { evaluate } from '../../grid-path-puzzle/combo/ComboEngine.js';
 import { generate } from '../../grid-path-puzzle/module/core/generator.js';
 
@@ -563,20 +564,80 @@ test('bridge: a failed puzzle spends fail cost and cools the component down', ()
   assert(s.activePuzzle === null, 'puzzle torn down on fail');
 });
 
-test('Min Chain: an under-chained solve fails (Cleanse needs 3 icons)', () => {
+test('Min Chain: the bridge wires the module objective gate (Cleanse needs 3 icons)', () => {
+  // Min-chain enforcement moved from a post-commit bridge check to the module's
+  // OBJECTIVE GATE — so the bridge's job is to CONFIGURE the gate; the module then
+  // blocks the goal until met (covered by the module's own objective.test.mjs).
   assert(CONFIG.defense.cleanse.minChain === 3, 'Cleanse minChain is 3 (non-scaled)');
-  const under = fresh(); startDefenseBuild(under);
-  const b1 = createBridge({ getState: () => under, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
-  b1.open('tower'); // Cleanse
-  under.activePuzzle.instance.fireComplete([{ typeKey: 'cleanse' }, { typeKey: 'cleanse' }]); // only 2
-  assert(!under.pendingDefense, 'under-chained → no pending defense');
-  assert(under.cooldowns.tower > 0, 'under-chained solve cools down like a fail');
+  const s = fresh(); startDefenseBuild(s);
+  const b = createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+  b.open('tower'); // Cleanse
+  const obj = s.activePuzzle.instance.opts.objective;
+  assert(obj && obj.type === 'cleanse' && obj.min === 3, `gate set for cleanse min 3, got ${JSON.stringify(obj)}`);
 
-  const ok = fresh(); startDefenseBuild(ok);
-  const b2 = createBridge({ getState: () => ok, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
-  b2.open('tower');
-  ok.activePuzzle.instance.fireComplete([{ typeKey: 'cleanse' }, { typeKey: 'cleanse' }, { typeKey: 'cleanse' }]); // 3
-  assert(ok.pendingDefense && ok.pendingDefense.verb === 'cleanse', 'meeting Min Chain succeeds');
+  // A gate-passed completion (the module only fires onComplete once met) queues.
+  s.activePuzzle.instance.fireComplete([{ typeKey: 'cleanse' }, { typeKey: 'cleanse' }, { typeKey: 'cleanse' }]);
+  assert(s.pendingDefense && s.pendingDefense.verb === 'cleanse', 'meeting Min Chain queues the defense');
+
+  // A scaled effect (Freeze) gates at min 1.
+  const a = fresh();
+  const ba = createBridge({ getState: () => a, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+  ba.open('weapon');
+  assert(a.activePuzzle.instance.opts.objective.min === 1, 'freeze gate min 1');
+});
+
+test('bridge passes the GO countdown + failFast + fail banner from config', () => {
+  const s = fresh();
+  const b = createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+  b.open('weapon');
+  const o = s.activePuzzle.instance.opts;
+  assert(o.countdownMs === CONFIG.puzzle.countdown.ms, 'GO countdown wired');
+  assert(o.flashStart === CONFIG.puzzle.countdown.flashStart, 'flashStart wired');
+  assert(o.trapEntryMode === 'failFast', 'failFast hazards wired');
+  assert(o.failText === 'FAIL', 'fail banner wired');
+});
+
+// --- status → route friction (the reflect-back) ------------------------------
+test('statusFriction maps overlapping statuses to combined modifiers + burning flag', () => {
+  const mods = CONFIG.puzzle.modifiers;
+  // a clean part → no modifiers, no burning
+  const clean = statusFriction({ statuses: {} }, 'freeze', mods);
+  assert(clean.modifiers === null && clean.burningOn === false, 'clean part → no friction');
+
+  // overlap: confused + drained + shattered on one part → all three modifiers at once
+  const part = { statuses: { confuse: { turns: 2 }, drain: { turns: 1 }, shatter: { turns: 1 } } };
+  const f = statusFriction(part, 'shield', mods);
+  assert(f.modifiers.confusion === mods.confuseChance, 'confuse → confusion');
+  assert(f.modifiers.decay && f.modifiers.decay.type === 'shield', 'drain → decay on the payload icon');
+  assert(f.modifiers.wander && f.modifiers.wander.type === 'shield', 'shatter → wander on the payload icon');
+  assert(f.modifiers.slow === undefined, 'no freeze → no slow');
+  assert(f.burningOn === false, 'no burning here');
+
+  // freeze → slow; burning → flag (never co-occur, host cancels them)
+  const frozen = statusFriction({ statuses: { freeze: { turns: 2 } } }, 'freeze', mods);
+  assert(frozen.modifiers.slow === mods.freezeSlow, 'freeze → slow');
+  const burning = statusFriction({ statuses: { burning: { turns: 2, dot: 4 } } }, 'burning', mods);
+  assert(burning.modifiers === null && burning.burningOn === true, 'burning → generation flag, no runtime modifier');
+});
+
+test('a Burning component solves on a board seeded with the firehazard density', () => {
+  const s = fresh();
+  applyStatus(s.player.components.launchpad, 'burning', { turns: 2, dot: 4 }); // launchpad = burning payload
+  const b = createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+  b.open('launchpad');
+  const plan = s.activePuzzle.instance.opts.generate.routePlan;
+  assert(plan.burningType === 'firehazard', 'firehazard hazard type set');
+  assert(plan.burningDensity === CONFIG.puzzle.modifiers.burningDensity, 'burning density seeded from config');
+  // a NON-burning component gets density 0 (no regression)
+  const s2 = fresh();
+  const b2 = createBridge({ getState: () => s2, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+  b2.open('weapon');
+  assert(s2.activePuzzle.instance.opts.generate.routePlan.burningDensity === 0, 'clean part → no fire hazards');
+});
+
+test('ATTACK_EFFECT / DEFENSE_VERB stay in sync with the shared preset', () => {
+  assert(JSON.stringify(ATTACK_EFFECT) === JSON.stringify(PRESET_ATTACK_EFFECT), 'ATTACK_EFFECT matches preset');
+  assert(JSON.stringify(DEFENSE_VERB) === JSON.stringify(PRESET_DEFENSE_VERB), 'DEFENSE_VERB matches preset');
 });
 
 // --- real generator + ComboEngine (the half FakePuzzle skips) ----------------

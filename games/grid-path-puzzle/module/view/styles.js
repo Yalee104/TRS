@@ -34,6 +34,12 @@ const CSS = `
   white-space: nowrap; }
 .gpp-icon.gpp-pop, .gpp-label.gpp-pop { animation: gpp-pop .32s ease; }
 @keyframes gpp-pop { 0% { transform: scale(1); } 32% { transform: scale(1.5); } 100% { transform: scale(1); } }
+/* Looping "flame" flicker for the burning hazard icon (a few repeating frames). */
+.gpp-anim-flame { animation: gpp-flame .5s steps(3, end) infinite; transform-origin: center 75%; }
+@keyframes gpp-flame {
+  0%   { filter: brightness(1) drop-shadow(0 0 1px #ff7a18); transform: scale(1) translateY(0); }
+  50%  { filter: brightness(1.5) drop-shadow(0 0 5px #ff3b00); transform: scale(1.14) translateY(-4%); }
+  100% { filter: brightness(.95) drop-shadow(0 0 2px #ff5a00); transform: scale(1.02) translateY(0); } }
 
 /* Floating "+DMG" / "Freeze" / "-MULT" text that rises and fades on pass. */
 .gpp-float { position: absolute; transform: translate(-50%, -50%); z-index: 5;
@@ -63,6 +69,96 @@ const CSS = `
   stroke-linecap: round; opacity: .92; }
 .gpp-wrap[data-status="done"] .gpp-path   { stroke: #5ef08a; }
 .gpp-wrap[data-status="failed"] .gpp-path { stroke: #ff5a5a; }
+/* FREEZE: the icy preview line ahead of the slow solid fill. */
+.gpp-path-preview { fill: none; stroke: #7fd0ff; stroke-width: .16; opacity: .5;
+  stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: .3 .22; }
+
+/* Pre-start "GO" overlay (opt-in via the countdownMs option). */
+.gpp-countdown { position: absolute; inset: 0; z-index: 10; display: flex;
+  align-items: center; justify-content: center; pointer-events: none;
+  font: 800 calc(46cqi) system-ui, sans-serif; color: #fff; letter-spacing: .02em;
+  text-shadow: 0 3px 22px rgba(0,0,0,.7), 0 0 8px rgba(0,0,0,.5); }
+.gpp-countdown[hidden] { display: none; }
+.gpp-countdown.gpp-go { animation: gpp-go .85s ease-out; }
+@keyframes gpp-go {
+  0%   { opacity: 0; transform: scale(.4); }
+  35%  { opacity: 1; transform: scale(1.18); }
+  80%  { opacity: 1; transform: scale(1); }
+  100% { opacity: .92; transform: scale(1); } }
+/* Big "FAIL" banner (opt-in via the failText option) — reuses the overlay. */
+.gpp-countdown.gpp-fail-banner { color: #ff5a5a; animation: gpp-failpop .5s ease-out;
+  text-shadow: 0 3px 22px rgba(0,0,0,.8), 0 0 16px rgba(255,60,60,.55); }
+@keyframes gpp-failpop {
+  0%   { opacity: 0; transform: scale(.5) rotate(-5deg); }
+  45%  { opacity: 1; transform: scale(1.15) rotate(2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); } }
+/* START cell flashing during the pre-start pause (opt-in via flashStart). */
+.gpp-start-flash { animation: gpp-startflash .5s steps(1,end) infinite; z-index: 3; }
+@keyframes gpp-startflash {
+  0%, 100% { box-shadow: inset 0 0 0 3px #ffffff, 0 0 14px 3px rgba(255,255,255,.85); }
+  50%      { box-shadow: inset 0 0 0 3px #ffd34d, 0 0 18px 5px rgba(255,211,77,.9); } }
+
+/* CONFUSED: the whole grid gently wobbles, the drawn path turns purple, + a badge. */
+.gpp-confused { animation: gpp-wobble 1.7s ease-in-out infinite; }
+@keyframes gpp-wobble {
+  0%, 100% { transform: rotate(-.7deg); }
+  50%      { transform: rotate(.7deg); } }
+.gpp-confused .gpp-path { stroke: #c58cff; }
+.gpp-confused-badge { position: absolute; top: 0; left: 0; transform: translateY(-55%); z-index: 8;
+  background: rgba(58,30,82,.94); border: 1px solid #6b4a8c; border-radius: 999px;
+  padding: calc(5cqi / var(--cols)) calc(11cqi / var(--cols)); color: #ecd9ff; white-space: nowrap;
+  font: 700 calc(22cqi / var(--cols)) system-ui, sans-serif; pointer-events: none; }
+
+/* DRAIN: a red "liquid" that drains out the bottom of the payload cell as its
+   timer runs out, while the icon throbs — then the payload vanishes. */
+.gpp-decay { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; pointer-events: none; z-index: 4;
+  background: linear-gradient(to top, rgba(255,55,55,.62), rgba(255,80,80,.18)); transform-origin: bottom; }
+.gpp-decay.gpp-decay-run { animation-name: gpp-decay; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes gpp-decay { from { transform: scaleY(1); } to { transform: scaleY(0); } }
+.gpp-icon.gpp-draining, .gpp-label.gpp-draining { animation: gpp-throb .5s ease-in-out infinite; }
+@keyframes gpp-throb { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.22); opacity: .5; } }
+/* SHATTER: payloads that might move get a little shake so the player is warned. */
+.gpp-anim-shake { animation: gpp-shake .4s ease-in-out infinite; }
+@keyframes gpp-shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25%      { transform: translateX(-9%) rotate(-5deg); }
+  75%      { transform: translateX(9%) rotate(5deg); } }
+
+/* Objective gate (opt-in via the objective option): a "collect N" badge + a
+   locked GOAL until the minimum payloads are chained. */
+.gpp-objective { position: absolute; top: 0; left: 50%; transform: translate(-50%, -55%);
+  z-index: 8; display: flex; align-items: center; gap: calc(10cqi / var(--cols));
+  padding: calc(6cqi / var(--cols)) calc(12cqi / var(--cols));
+  background: rgba(16,18,26,.92); border: 1px solid #3a4150; border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.5); white-space: nowrap; pointer-events: none; }
+.gpp-objective[hidden] { display: none; }
+.gpp-obj-icon { font-size: calc(34cqi / var(--cols)); line-height: 1; }
+.gpp-obj-pips { display: flex; gap: calc(5cqi / var(--cols)); }
+.gpp-obj-pip { width: calc(14cqi / var(--cols)); height: calc(14cqi / var(--cols));
+  border-radius: 50%; background: transparent; border: 2px solid #6b7280; box-sizing: border-box; }
+.gpp-obj-pip-filled { background: #ffd34d; border-color: #ffd34d; }
+.gpp-obj-num { font: 700 calc(24cqi / var(--cols)) system-ui, sans-serif; color: #cdd2da;
+  font-variant-numeric: tabular-nums; }
+.gpp-objective-met .gpp-obj-pip-filled { background: #5ef08a; border-color: #5ef08a; }
+.gpp-objective-met .gpp-obj-num { color: #5ef08a; }
+/* Locked goal: hide the flag glyph, show the lock + the required count. */
+.gpp-goal-locked .gpp-icon, .gpp-goal-locked .gpp-label { visibility: hidden; }
+.gpp-goal-lock { position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; font: 700 calc(34cqi / var(--cols)) system-ui, sans-serif;
+  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none; }
+.gpp-goal-lock[hidden] { display: none; }
+/* "Need X more" prompt shown when the player hits the locked goal. */
+.gpp-obj-need { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%);
+  z-index: 9; padding: calc(6cqi / var(--cols)) calc(12cqi / var(--cols)); border-radius: 8px;
+  background: rgba(180,40,40,.92); color: #fff; font: 700 calc(30cqi / var(--cols)) system-ui, sans-serif;
+  white-space: nowrap; pointer-events: none; }
+.gpp-obj-need[hidden] { display: none; }
+.gpp-obj-need.gpp-obj-need-show { animation: gpp-obj-need 1.1s ease-out; }
+@keyframes gpp-obj-need {
+  0%   { opacity: 0; transform: translate(-50%, 30%); }
+  20%  { opacity: 1; transform: translate(-50%, 0); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; } }
 `;
 
 let refCount = 0;

@@ -21,12 +21,70 @@ const game = new GridPathPuzzle({
   moveBudget: null,                           // optional: max cells in the path
   timeLimitMs: null,                          // optional: countdown; expiry => fail
   trapEntryMode: 'commitFail',                // 'commitFail' | 'block'
+  countdownMs: 0,                             // optional: pre-start "GO" pause (ms); 0 = off
+  flashStart: false,                          // optional: flash the START cell during that pause
+  countdownText: 'GO',                        // optional: the overlay label
+  objective: null,                            // optional: { type, min, icon?, label? } — win gate; null = off
+  failText: null,                             // optional: big centred banner shown on any fail; null = off
+  modifiers: null,                            // optional runtime status modifiers (see below); null = off
 });
 
-game.on('complete', (r) => console.log(r.runState));   // reached goal
+game.on('complete', (r) => console.log(r.runState));   // reached goal (+ objective met, if any)
 game.on('fail',     (f) => console.log(f.reason));     // 'trap' | 'timeout'
 game.on('pathChange', (i) => updateHud(i.previewRunState));
+game.on('countdownStart', () => {});                   // "GO" pause began (if countdownMs > 0)
+game.on('ready',          () => {});                   // pause ended → grid interactive + timer running
+game.on('objectiveProgress', (i) => {});               // { type, have, need, met } on every path change
+game.on('objectiveBlocked',  (i) => {});               // hit the goal while short: { type, have, need, missing }
+game.start();                                          // kick the timer (or the GO pause if countdownMs > 0)
 ```
+
+### Pre-start "GO" pause (opt-in)
+
+With `countdownMs > 0`, calling `start()` first shows a centred **"GO"** overlay for that
+duration with the grid **non-interactive** and the **timer not running**; when it elapses the grid
+becomes interactive, the timer begins, and a `ready` event (option `onCountdownEnd`) fires. `flashStart`
+pulses the START cell during the pause. The pause time is excluded from `elapsedMs`. All three options
+default OFF, so existing hosts (which call `start()` immediately) are unaffected — `status` adds a
+transient `'ready'` step only when `countdownMs > 0`.
+
+### Objective gate — "chain N before the goal opens" (opt-in)
+
+Pass `objective: { type, min, icon?, label? }` to require the path to cross at least `min` cells of
+node-type `type` (counted as a **total**, adjacency-independent) before reaching GOAL counts as a win:
+
+- Reaching the goal while **short does NOT commit and does NOT fail** — it's *blocked*: the path stays
+  drawn, an `objectiveBlocked` event fires, and a brief "Need X more" prompt shows. The player reroutes
+  to collect more, then finishes. `objectiveProgress` (`{ type, have, need, met }`) fires on every path
+  change (including backtracks, which can re-lock).
+- The renderer shows a **badge** (the `icon` + `min` pips that fill and turn green when met) and a
+  **locked GOAL** (🔒 + the number) until met. `icon` defaults to `nodeTypes[type].icon`.
+- `getState().objective` exposes `{ type, min, have, met }` (or `null` when off).
+- Default OFF (`null`/omitted, or `min <= 0`), so existing hosts are byte-identical. The module stays
+  generic — it only counts crossings of a node-type key; it has no notion of "payloads" or combos.
+
+### Timeout + fail banner
+
+`timeLimitMs` (already supported) fails the run with `reason: 'timeout'` when the timer (which runs from
+`start()`, excluding the GO pause) exceeds it. `failText` (default off) additionally shows a big centred
+banner with that text on **any** fail (timeout or trap), reusing the GO overlay in a red "fail" style.
+Both default off, so existing hosts are unaffected.
+
+### Runtime status modifiers (opt-in)
+
+`modifiers` layers generic, gameplay-altering effects on a puzzle (the TRS playground maps its statuses
+onto them). All default off; the random ones use a seeded RNG (`level.seed`, or inject `options.rng`):
+
+- `slow: 0..1` — **freeze**: the cursor drags an instant *icy preview* while the solid path (which all
+  gameplay reads) catches up at `16 * slow` cells/sec; `endDrag` resolves once the solid reaches the end.
+- `confusion: 0..1` — per-step chance to veer to a random **safe** (non-hazard) legal neighbour.
+- `decay: { type, baseMs, stepMs }` — **drain**: each node of `type` vanishes on a timer (closest to
+  START first, `+stepMs` each); crossing one first secures it. Fires `decay`.
+- `wander: { type, chance }` — **shatter**: per-step chance to move one un-crossed `type` node to a
+  random empty neighbour. Fires `shatter`.
+
+Burning (a second `failsOnPass` hazard at its own generation density) is set up via the routePlan /
+node catalog, not `modifiers`. Burning and freeze are best kept mutually exclusive.
 
 ## Defining node types (your power-ups & obstacles)
 

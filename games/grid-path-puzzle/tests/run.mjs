@@ -14,5 +14,14 @@ await import('./comboEngine.test.mjs');
 console.log('\ngeneratorRouteFirst.test.mjs');
 await import('./generatorRouteFirst.test.mjs');
 
+console.log('\nlifecycle.test.mjs');
+await import('./lifecycle.test.mjs');
+
+console.log('\nobjective.test.mjs');
+await import('./objective.test.mjs');
+
+console.log('\nstatus.test.mjs');
+await import('./status.test.mjs');
+
 const { summary } = await import('./harness.mjs');
 summary();

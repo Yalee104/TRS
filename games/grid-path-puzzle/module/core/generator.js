@@ -99,6 +99,7 @@ function lPath(start, goal) {
 //                   (and avoids stepping onto the goal early) so the route is long.
 function carveSpine({ cols, rows, start, goal, rng, difficulty, maxLen, forbidden = null, targetLen = null }) {
   const isForbidden = (n) => (forbidden ? forbidden.has(cellKey(n.x, n.y)) : false);
+  let best = null; // longest reaching path seen (fallback when no attempt hits targetLen)
   for (let attempt = 0; attempt < 12; attempt++) {
     const path = [start];
     const visited = new Set([cellKey(start.x, start.y)]);
@@ -117,9 +118,10 @@ function carveSpine({ cols, rows, start, goal, rng, difficulty, maxLen, forbidde
         const nonGoal = cands.filter((c) => !sameCell(c, goal));
         if (nonGoal.length) cands = nonGoal;
       }
-      // Lower difficulty => greedy/straight; higher => meander. While under the
-      // length target we force heavy meander.
-      const eff = wantLonger ? Math.max(difficulty, 0.85) : difficulty;
+      // Lower difficulty => greedy/straight; higher => meander. (While under the
+      // target we already steer away from the goal above; the meander rate itself
+      // is the mode's `difficulty`, so 'short' can stay genuinely greedy.)
+      const eff = difficulty;
       let choice;
       if (rng() > eff) {
         let best = Infinity;
@@ -137,12 +139,14 @@ function carveSpine({ cols, rows, start, goal, rng, difficulty, maxLen, forbidde
       visited.add(cellKey(choice.x, choice.y));
       current = choice;
     }
-    const longEnough = targetLen == null || path.length >= Math.min(targetLen, manhattan(start, goal) + 1);
-    if (reached && path.length <= maxLen && longEnough) return path;
+    if (reached && path.length <= maxLen) {
+      if (targetLen == null || path.length >= targetLen) return path; // meets the length target
+      if (!best || path.length > best.length) best = path;            // keep the longest near-miss
+    }
   }
-  // Fallback: the L-path if unconstrained; otherwise the shortest route avoiding
-  // forbidden cells (so a forced second route still resolves when possible).
-  if (!forbidden) return lPath(start, goal);
+  // Fallback: the longest reaching path we found (closest to the target); the
+  // L-path if we never reached; for a forbidden walk, a distinct shortest route.
+  if (!forbidden) return best || lPath(start, goal);
   return bfsGridPath(cols, rows, start, goal, forbidden) || lPath(start, goal);
 }
 
@@ -313,6 +317,8 @@ function normalizePlan(rp) {
     safeLengthMode: rp.safeLengthMode ?? 'shortest',
     trapDensity: clamp(rp.trapDensity ?? 0.15, 0, 0.6),
     blockerDensity: clamp(rp.blockerDensity ?? 0.18, 0, 0.6),
+    burningType: rp.burningType ?? null,
+    burningDensity: clamp(rp.burningDensity ?? 0, 0, 1),
     channeling: rp.channeling ?? 'soft',
     lateGap: { min: rp.lateGap?.min ?? 1, max: rp.lateGap?.max ?? 2 },
     endpointMode: rp.endpointMode ?? 'edgeRandom',
@@ -327,8 +333,8 @@ function tryBuildRouteLevel({ cols, rows, nodeTypes, cats, plan, rng, opts }) {
   const { start, goal } = pickEndpoints(cols, rows, plan.endpointMode, rng);
 
   // 2) the long primary route (the intended high-combo path)
-  const targetLen = primaryTarget(plan.primaryLengthTarget, start, goal, cols, rows);
-  const primary = carveSpine({ cols, rows, start, goal, rng, difficulty: 0.85, maxLen: cols * rows, targetLen });
+  const { targetLen, difficulty } = primarySpineParams(plan.primaryLengthTarget, start, goal, cols, rows);
+  const primary = carveSpine({ cols, rows, start, goal, rng, difficulty, maxLen: cols * rows, targetLen });
   if (primary.length < 3) return null;
   const onPrimary = new Set(primary.map((c) => cellKey(c.x, c.y)));
 
@@ -407,6 +413,9 @@ function tryBuildRouteLevel({ cols, rows, nodeTypes, cats, plan, rng, opts }) {
 function resolvePlace(place, rng) {
   const usedByGroup = {};
   return place.map((p) => {
+    // Optional probabilistic inclusion: `chance` in [0,1). Rolled with the seeded
+    // rng so it's reproducible. Entries without `chance` never consume rng here.
+    if (p.chance != null && rng() >= p.chance) return null;
     let type = p.type;
     if (type && typeof type === 'object' && Array.isArray(type.oneOf)) {
       let pool = type.oneOf.slice();
@@ -422,7 +431,7 @@ function resolvePlace(place, rng) {
     let count = p.count;
     if (count && count.min != null && count.max != null) count = { exact: randInt(rng, count.min, count.max) };
     return { ...p, type, count };
-  });
+  }).filter(Boolean);
 }
 
 // Assign valuable node types to primary-route interior cells per the (resolved)
@@ -453,7 +462,8 @@ function planRouteSlots(interior, place, lateGap, rng) {
   const clustered = routeNodes.filter((p) => p.cluster);
   const nonClustered = shuffleCopy(routeNodes.filter((p) => !p.cluster), rng);
   const clusteredTotal = clustered.reduce((s, p) => s + countOf(p), 0);
-  const leadNeed = clusteredTotal + nonClustered.length;
+  const nonClusteredTotal = nonClustered.reduce((s, p) => s + countOf(p), 0);
+  const leadNeed = clusteredTotal + nonClusteredTotal;
   const slack = Math.max(0, leadEnd - leadNeed);
 
   // clustered run starts at a random offset within the slack (position variety)
@@ -464,13 +474,17 @@ function planRouteSlots(interior, place, lateGap, rng) {
       assignments.set(cellKey(c.x, c.y), p.type);
     }
   }
-  if (nonClustered.length) {
-    const span = Math.max(1, Math.floor((leadEnd - cursor) / nonClustered.length));
+  // Non-clustered payloads spread out across the remaining lead span — one cell
+  // per UNIT (honoring each entry's count), not one cell per entry.
+  if (nonClusteredTotal > 0) {
+    const span = Math.max(1, Math.floor((leadEnd - cursor) / nonClusteredTotal));
     let pos = cursor;
     for (const p of nonClustered) {
-      const c = interior[Math.min(pos, leadEnd - 1)];
-      assignments.set(cellKey(c.x, c.y), p.type);
-      pos += span;
+      for (let i = 0; i < countOf(p); i++) {
+        const c = interior[Math.min(pos, leadEnd - 1)];
+        assignments.set(cellKey(c.x, c.y), p.type);
+        pos += span;
+      }
     }
   }
   return { ok: true, assignments, offRoute };
@@ -486,13 +500,21 @@ function shuffleCopy(arr, rng) {
 // ("channeling") so detours feel risky. Never touches a route cell.
 function paintHazards(cells, eligible, plan, nodeTypes, rng, onPrimary) {
   const blockerKey = Object.entries(nodeTypes).find(([, d]) => d.passable === false)?.[0];
-  const trapKey = Object.entries(nodeTypes).find(([, d]) => d.failsOnPass)?.[0];
+  // Optional second hazard ("burning") named by the plan; the generic trap is the
+  // first OTHER failsOnPass type, so the two never collide.
+  const burnKey = plan.burningDensity > 0 && plan.burningType && nodeTypes[plan.burningType] ? plan.burningType : null;
+  const trapKey = Object.entries(nodeTypes).find(([k, d]) => d.failsOnPass && k !== burnKey)?.[0];
   const adjacentToPrimary = (x, y) => neighbors4(x, y).some((n) => onPrimary.has(cellKey(n.x, n.y)));
   for (const c of eligible) {
     const boost = plan.channeling === 'strong' && adjacentToPrimary(c.x, c.y) ? 1.6 : 1;
     const r = rng();
-    if (blockerKey && r < plan.blockerDensity * boost) cells[c.y][c.x] = blockerKey;
-    else if (trapKey && r < (plan.blockerDensity + plan.trapDensity) * boost) cells[c.y][c.x] = trapKey;
+    // Cumulative density bands over one roll: blocker, then trap, then burning.
+    const blockerBand = plan.blockerDensity * boost;
+    const trapBand = blockerBand + plan.trapDensity * boost;
+    const burnBand = trapBand + (plan.burningDensity || 0) * boost;
+    if (blockerKey && r < blockerBand) cells[c.y][c.x] = blockerKey;
+    else if (trapKey && r < trapBand) cells[c.y][c.x] = trapKey;
+    else if (burnKey && r < burnBand) cells[c.y][c.x] = burnKey;
     // else: stays filler
   }
 }
@@ -528,7 +550,7 @@ function relaxPlan(plan, attempt) {
   const p = normalizePlan(plan);
   const step = Math.floor(attempt / 5);
   if (step >= 1) p.primaryLengthTarget = p.primaryLengthTarget === 'long' ? 'medium' : 'shortest';
-  if (step >= 2) { p.blockerDensity *= 0.5; p.trapDensity *= 0.5; }
+  if (step >= 2) { p.blockerDensity *= 0.5; p.trapDensity *= 0.5; p.burningDensity *= 0.5; }
   if (step >= 3) p.place = p.place.map((x) => (x.cluster ? { ...x, cluster: false } : x));
   if (step >= 4) p.place = p.place.filter((x) => x.placement !== 'offRoute' && x.placement !== 'anywhere');
   if (step >= 5) p.alternateRoutes = 0;
@@ -544,12 +566,16 @@ function shuffle(arr, rng) {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 }
-function primaryTarget(mode, start, goal, cols, rows) {
+// Targets for the primary spine: a preferred length AND a meander `difficulty`
+// (higher => wanderier => longer). Driving BOTH off the mode is what makes the
+// long/medium/short choice actually visible — with a fixed difficulty the walk
+// meanders the same regardless of the length target.
+function primarySpineParams(mode, start, goal, cols, rows) {
   const min = manhattan(start, goal) + 1;
-  if (typeof mode === 'number') return clamp(mode, min, cols * rows);
-  if (mode === 'long') return Math.min(Math.round(min * 1.6), Math.floor(cols * rows * 0.5));
-  if (mode === 'medium') return Math.min(Math.round(min * 1.3), Math.floor(cols * rows * 0.45));
-  return min; // 'shortest'
+  if (typeof mode === 'number') return { targetLen: clamp(mode, min, cols * rows), difficulty: 0.85 };
+  if (mode === 'long')   return { targetLen: Math.min(Math.round(min * 1.7), Math.floor(cols * rows * 0.6)),  difficulty: 0.92 };
+  if (mode === 'medium') return { targetLen: Math.min(Math.round(min * 1.3), Math.floor(cols * rows * 0.45)), difficulty: 0.5 };
+  return { targetLen: min, difficulty: 0.12 }; // 'short' => hug the shortest path
 }
 function pickEndpoints(cols, rows, mode, rng) {
   const minSep = Math.ceil((cols + rows) / 2);
