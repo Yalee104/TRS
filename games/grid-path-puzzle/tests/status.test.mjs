@@ -18,10 +18,10 @@ test('burning: placed off-route at its density, board still solvable', () => {
     const { pal, nt } = build({ burningDensity: 0.7 });
     const lvl = generate({ size: 8, nodeTypes: nt, seed, routePlan: pal.generation });
     assert(findAnyPath(lvl, nt, lvl.moveBudget) !== null, `solvable seed ${seed}`);
-    if ((tally(lvl).burning || 0) > 0) withBurn++;
+    if ((tally(lvl).firehazard || 0) > 0) withBurn++;
     // routes carry no hazards
-    for (const c of lvl.primaryRoute || []) assert(lvl.cells[c.y][c.x] !== 'burning', 'no burning on primary route');
-    for (const c of lvl.safeRoute || []) assert(lvl.cells[c.y][c.x] !== 'burning', 'no burning on safe route');
+    for (const c of lvl.primaryRoute || []) assert(lvl.cells[c.y][c.x] !== 'firehazard', 'no burning on primary route');
+    for (const c of lvl.safeRoute || []) assert(lvl.cells[c.y][c.x] !== 'firehazard', 'no burning on safe route');
   }
   assert(withBurn >= 8, `most boards carry burning at density 0.7 (got ${withBurn}/10)`);
 });
@@ -33,7 +33,7 @@ test('burning: trap and burning coexist as distinct hazards', () => {
     const lvl = generate({ size: 9, nodeTypes: nt, seed, routePlan: pal.generation });
     const t = tally(lvl);
     if ((t.trap || 0) > 0) sawTrap = true;
-    if ((t.burning || 0) > 0) sawBurn = true;
+    if ((t.firehazard || 0) > 0) sawBurn = true;
   }
   assert(sawTrap && sawBurn, `both trap and burning appear (trap=${sawTrap} burn=${sawBurn})`);
 });
@@ -42,7 +42,7 @@ test('burning: density 0 (off) places none', () => {
   for (let seed = 0; seed < 8; seed++) {
     const { pal, nt } = build({ burningDensity: 0 });
     const lvl = generate({ size: 8, nodeTypes: nt, seed, routePlan: pal.generation });
-    assert((tally(lvl).burning || 0) === 0, `no burning when density 0 (seed ${seed})`);
+    assert((tally(lvl).firehazard || 0) === 0, `no burning when density 0 (seed ${seed})`);
   }
 });
 
@@ -165,11 +165,11 @@ test('freeze: dragging extends the icy preview, not the solid path', () => {
 });
 
 test('freeze: the solid fills along the preview at the frozen rate', () => {
-  const g = makeD({ modifiers: { slow: 0.5 } }); // 16*0.5 = 8 cps => 125 ms/cell
+  const g = makeD({ modifiers: { slow: 0.5 } }); // 6*0.5 = 3 cps => ~333 ms/cell
   g.start();
   g.tryBegin({ x: 0, y: 0 });
   g.tryMoveTo({ x: 3, y: 0 });
-  g.state.elapsedMs = 130; g._advanceFreeze();
+  g.state.elapsedMs = 400; g._advanceFreeze();
   assert(g.state.path.length === 2, `filled ~1 cell (got ${g.state.path.length})`);
   g.state.elapsedMs = 1000; g._advanceFreeze();
   assert(g.state.path.length === 4, `filled to the preview end (got ${g.state.path.length})`);
@@ -207,4 +207,32 @@ test('freeze: backtracking the preview trims a solid that ran ahead', () => {
   g.tryMoveTo({ x: 1, y: 0 }); // backtrack the preview
   assert(g._previewPath.length === 2, 'preview trimmed to START,(1,0)');
   assert(g.state.path.length === 2, 'solid trimmed to match the shorter preview');
+});
+
+test('failFast: crossing a hazard fails immediately (no release needed)', () => {
+  const NTH = { ...NT2, fz: { role: 'normal', passable: true, icon: '🔥', failsOnPass: true } };
+  const GF = [
+    ['start', 'fz', 'goal', 'normal', 'normal'],
+    ['normal', 'normal', 'normal', 'normal', 'normal'],
+    ['normal', 'normal', 'normal', 'normal', 'normal'],
+    ['normal', 'normal', 'normal', 'normal', 'normal'],
+    ['normal', 'normal', 'normal', 'normal', 'normal'],
+  ];
+  let failed = null;
+  const g = new GridPathPuzzle({ mount: mkEl(), nodeTypes: NTH, level: { grid: GF.map((r) => r.slice()) }, countdownMs: 0, trapEntryMode: 'failFast', onFail: (i) => { failed = i; } });
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 1, y: 0 }); // step onto the hazard — no endDrag
+  assert(g.state.status === 'failed', 'failed immediately on crossing the hazard');
+  assert(failed && failed.reason === 'trap', 'onFail fired with reason "trap"');
+});
+
+test('reset restores drained payloads (pristine board)', () => {
+  const g = makeD({ modifiers: { decay: { type: 'p', baseMs: 1000, stepMs: 0 } } });
+  g.start();
+  g.state.elapsedMs = 2000; g._tickDecay(); // all 3 expire at 1000 → all drain
+  let after = 0; for (const row of g.level.cells) for (const k of row) if (k === 'p') after++;
+  assert(after === 0, `payloads drained (got ${after})`);
+  g.reset();
+  let restored = 0; for (const row of g.level.cells) for (const k of row) if (k === 'p') restored++;
+  assert(restored === 3, `reset restored all 3 payloads (got ${restored})`);
 });

@@ -109,14 +109,20 @@ const CSS = `
   padding: calc(5cqi / var(--cols)) calc(11cqi / var(--cols)); color: #ecd9ff; white-space: nowrap;
   font: 700 calc(22cqi / var(--cols)) system-ui, sans-serif; pointer-events: none; }
 
-/* DRAIN: a ring on a payload that shrinks as its timer runs out, then it vanishes. */
-.gpp-decay { position: absolute; inset: 14%; border-radius: 50%; box-sizing: border-box;
-  border: 2px solid rgba(255,90,90,.9); pointer-events: none; z-index: 4; }
+/* DRAIN: a red "liquid" that drains out the bottom of the payload cell as its
+   timer runs out, while the icon throbs — then the payload vanishes. */
+.gpp-decay { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; pointer-events: none; z-index: 4;
+  background: linear-gradient(to top, rgba(255,55,55,.62), rgba(255,80,80,.18)); transform-origin: bottom; }
 .gpp-decay.gpp-decay-run { animation-name: gpp-decay; animation-timing-function: linear; animation-fill-mode: forwards; }
-@keyframes gpp-decay {
-  0%   { transform: scale(1);   opacity: .9; }
-  80%  { transform: scale(.25); opacity: .9; }
-  100% { transform: scale(.1);  opacity: .2; } }
+@keyframes gpp-decay { from { transform: scaleY(1); } to { transform: scaleY(0); } }
+.gpp-icon.gpp-draining, .gpp-label.gpp-draining { animation: gpp-throb .5s ease-in-out infinite; }
+@keyframes gpp-throb { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.22); opacity: .5; } }
+/* SHATTER: payloads that might move get a little shake so the player is warned. */
+.gpp-anim-shake { animation: gpp-shake .4s ease-in-out infinite; }
+@keyframes gpp-shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25%      { transform: translateX(-9%) rotate(-5deg); }
+  75%      { transform: translateX(9%) rotate(5deg); } }
 
 /* Objective gate (opt-in via the objective option): a "collect N" badge + a
    locked GOAL until the minimum payloads are chained. */

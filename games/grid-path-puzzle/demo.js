@@ -100,11 +100,14 @@ function buildGame() {
     : null; // null/omitted = gate off (reaching goal solves)
   const timeLimitMs = $('touon').checked ? clamp(Number($('tousec').value) || 10, 2, 30) * 1000 : null;
   const modifiers = readModifiers(skill);
+  const nt = catalogFromConfig(palette);
+  if ($('shatteron').checked && nt[skill]) nt[skill].anim = 'shake'; // shaky payloads warn they may move
   game = new GridPathPuzzle({
     mount: $('board'),
-    nodeTypes: catalogFromConfig(palette),
-    generate: { size, seed: Number($('seed').value), routePlan: palette.generation },
-    trapEntryMode: 'commitFail',
+    nodeTypes: nt,
+    // moveBudget = grid area → effectively unlimited (a path can't revisit cells).
+    generate: { size, seed: Number($('seed').value), routePlan: palette.generation, moveBudget: size * size },
+    trapEntryMode: 'failFast', // crossing a hazard fails immediately
     countdownMs, flashStart, countdownText,
     objective, timeLimitMs, failText: 'FAIL', modifiers,
     onPathChange, onComplete, onFail, onTick, onObjectiveBlocked,
@@ -203,7 +206,7 @@ function renderTrsInfo(info) {
 function onPathChange(info) {
   renderCombo(evaluate(skillSeqFromPath(info.path), palette), false);
   renderTrsInfo(info);
-  $('steps').textContent = `${info.steps} / ${info.budget.max ?? '∞'}`;
+  $('steps').textContent = `${info.steps} / ∞`; // budget set to grid area (effectively unlimited)
   const reach = $('reach');
   reach.textContent = info.canReachGoal ? 'yes' : 'no';
   reach.className = info.canReachGoal ? '' : 'warn';
@@ -249,7 +252,7 @@ function resetReadout() {
   $('reach').textContent = 'yes';
   $('reach').className = '';
   const st = game.getState();
-  $('steps').textContent = `0 / ${st.level.moveBudget ?? '∞'}`;
+  $('steps').textContent = '0 / ∞';
   $('combo-title').textContent = `Combo — ${phase === 'attack' ? 'Attack' : 'Defense'}: ${COMP_LABEL[component]} (${metaOf(skillOf()).name})`;
 }
 

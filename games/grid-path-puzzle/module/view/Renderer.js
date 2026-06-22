@@ -208,16 +208,19 @@ export class Renderer {
   startDecay(x, y, ms) {
     const el = this.cellEls[y]?.[x];
     if (!el) return;
-    let ring = el.querySelector('.gpp-decay');
-    if (!ring) { ring = document.createElement('div'); ring.className = 'gpp-decay'; el.appendChild(ring); }
-    ring.style.animationDuration = `${ms}ms`;
-    ring.classList.remove('gpp-decay-run');
-    void ring.offsetWidth; // restart the countdown animation
-    ring.classList.add('gpp-decay-run');
+    let bar = el.querySelector('.gpp-decay');
+    if (!bar) { bar = document.createElement('div'); bar.className = 'gpp-decay'; el.appendChild(bar); }
+    bar.style.animationDuration = `${ms}ms`;
+    bar.classList.remove('gpp-decay-run');
+    void bar.offsetWidth; // restart the depletion animation
+    bar.classList.add('gpp-decay-run');
+    el.querySelector('.gpp-icon, .gpp-label')?.classList.add('gpp-draining'); // throb the icon
   }
 
   clearDecay(x, y) {
-    this.cellEls[y]?.[x]?.querySelector('.gpp-decay')?.remove();
+    const el = this.cellEls[y]?.[x];
+    el?.querySelector('.gpp-decay')?.remove();
+    el?.querySelector('.gpp-icon, .gpp-label')?.classList.remove('gpp-draining');
   }
 
   /** FREEZE: draw the icy preview polyline (where the cursor has dragged). */

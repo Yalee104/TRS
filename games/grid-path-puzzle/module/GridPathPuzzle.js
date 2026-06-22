@@ -29,8 +29,9 @@ import { KeyboardController } from './input/KeyboardController.js';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
-// FREEZE: base fill speed (cells/sec) that the `slow` factor scales (0.75 = 75%).
-const FREEZE_BASE_CPS = 16;
+// FREEZE: base fill speed (cells/sec) that the `slow` factor scales (so slow=0.75
+// ≈ 4.5 cells/sec — clearly behind a normal drag; slow=0.5 ≈ 3, slow=0.3 ≈ 1.8).
+const FREEZE_BASE_CPS = 6;
 
 export class GridPathPuzzle {
   constructor(options = {}) {
@@ -65,6 +66,9 @@ export class GridPathPuzzle {
 
     // Build the first level from options.level (authored) or options.generate.
     this.level = this._resolveLevel(options.level ?? options.generate ?? null);
+    // Pristine copy of the board so reset() can undo in-place mutations (drain
+    // removes payloads, shatter moves them).
+    this._pristineCells = this.level.cells.map((r) => r.slice());
     this.state = createGameState(this.level, this.options.initialRunState);
 
     // Runtime status modifiers (drain/shatter/confused/freeze). A seeded RNG keeps
@@ -124,6 +128,7 @@ export class GridPathPuzzle {
     this._clearDecay();
     this._clearFreeze();
     this.level = this._resolveLevel(source);
+    this._pristineCells = this.level.cells.map((r) => r.slice());
     this.state = createGameState(this.level, this.options.initialRunState);
     this.renderer.setLevel(this.level);
     this._applyObjective();
@@ -137,9 +142,13 @@ export class GridPathPuzzle {
     this._clearDecay();
     this._clearFreeze();
     this._stopTimer();
+    // Restore the original board (drain/shatter mutate level.cells in place) and
+    // fully repaint so removed payloads come back and animations re-trigger.
+    this.level.cells = this._pristineCells.map((r) => r.slice());
     this.state = createGameState(this.level, this.options.initialRunState);
-    this.renderer.update([], { status: 'idle' });
-    if (this._objective) this.renderer?.updateObjective(0, this._objective.min, false);
+    this.renderer.setLevel(this.level);
+    this._applyObjective();
+    this._applyModifierVisuals();
     return this;
   }
 
@@ -370,7 +379,12 @@ export class GridPathPuzzle {
         this.state.path.push(next);
         this._maybeWander();
         const def = this.nodeTypes[this.level.cells[next.y][next.x]];
-        if (def.failsOnPass) { this.state.pendingFail = true; this._afterChange(); break; }
+        if (def.failsOnPass) {
+          this.state.pendingFail = true;
+          this._afterChange();
+          if (this.options.trapEntryMode === 'failFast') { this._fail('trap'); return; }
+          break;
+        }
         this._afterChange();
       }
     }
@@ -570,10 +584,11 @@ export class GridPathPuzzle {
       const def = this.nodeTypes[this.level.cells[step.y][step.x]];
       if (def.failsOnPass) {
         if (this.options.trapEntryMode === 'block') break; // refuse to enter the trap
-        // commitFail: step in, flag failure, and stop drawing further.
+        // step in, flag failure, and stop drawing further.
         this.state.path.push(step);
         this.state.pendingFail = true;
         finish();
+        if (this.options.trapEntryMode === 'failFast') this._fail('trap'); // fail the moment you cross
         return;
       }
       this.state.path.push(step);
