@@ -15,10 +15,14 @@ works as an embedded verb: mount a puzzle → draw a route → `ComboEngine.eval
 combo result → a host "bridge" maps it onto game state. This second game makes TRS the *only*
 verb but wraps it in a **deliberate, turn-programmed strategy loop** instead of arcade action.
 
-Everything here is **buildable on the unchanged module**: the engine emits the base effects
-(`freeze/confuse/drain` + `shatter/blast`; `shield/cleanse/overclock/repair`); the status
-*interactions*, firepower model, phases, cascade, and AI are **host-side logic** — exactly the
-layer the shmup keeps in `games/shmup/effects/` and `puzzle/bridge.js`.
+The combat model — status *interactions*, firepower, phases, cascade, AI — is **host-side logic**
+(exactly the layer the shmup keeps in `games/shmup/effects/` and `puzzle/bridge.js`), built on the
+base effects the engine emits (`freeze/confuse/drain` + `shatter/blast`;
+`shield/cleanse/overclock/repair`). The strategy game also **consumes the grid-path module's optional
+features** — runtime `modifiers`, the `objective` gate, a GO countdown, a fail banner, `failFast`
+hazards, and the `firehazard` generation node — to turn those statuses into *routing friction*
+(§3.8). It does this **without modifying the module**: strategy mounts it verbatim and shares one
+generation preset (`grid-path-puzzle/presets/trs.js`).
 
 ---
 
@@ -175,7 +179,9 @@ Kept (not dropped): an effect only does something on appropriate targets, so cho
 Each solved status feeds **two channels**: ① the shared **firepower pool** (`dmgPerPotency × potency`,
 detonated on the single Focus, always counts even if the status is consumed by a combo) and ② a
 **lingering** debuff on the part. **Min Chain** = minimum payload icons that must be chained for the
-solve to succeed (`minChain`). **Stacks** = re-applying the same status to the same part.
+solve to succeed (`minChain`), now enforced by the module's **objective gate** — reaching the goal
+short is *blocked* with a "Need X more" prompt, not failed (§3.8). **Stacks** = re-applying the same
+status to the same part.
 
 | Status (source) | Valid on | Min Chain | Stacks? | Full effect ( [scaled] grows with potency · [flat] fixed ) |
 |---|---|---|---|---|
@@ -307,9 +313,9 @@ combos read the whole chain, and `break`s you place this phase opt out.
 - **Self-stack *combos* stay parked** — same-status pairs (Shield², Freeze²) don't form a new combo;
   re-applying instead follows the **stacking policy** (§3.5 / §4 reference tables): only **Burning**
   accumulates (DoT + duration, capped); other statuses **refresh** (MAX) but the **firepower pool
-  always adds**; defensive verbs are **additive**. **Min Chain** gates each solve (1 scaled / 3
-  non-scaled). *(C5 stacking policy resolved 2026-06-20; the per-potency **numbers** are still a
-  deferred playtest pass.)*
+  always adds**; defensive verbs are **additive**. **Min Chain** gates each solve via the module
+  **objective gate** (1 scaled / 3 non-scaled — block-not-fail, §3.8). *(C5 stacking policy resolved
+  2026-06-20; the per-potency **numbers** are still a deferred playtest pass.)*
 - Tuning knobs: **persistence lifespan** and **Bastion cap %** stay in config in case a part gets
   too hard to kill. *(C7)*
 
@@ -317,6 +323,56 @@ combos read the whole chain, and `break`s you place this phase opt out.
 Cards **separate two rows**: **Active** statuses (already on the part) and the **Queued** chain for
 this phase (with `break` markers and an "＋ break" button). Combos are surfaced in the event log as
 they fire.
+
+---
+
+## 3.8 Statuses as route friction — the puzzle-module reflect-back ✅ implemented
+
+> Statuses don't just change the damage math (§3.5/§6) — they are now **felt while you solve a
+> route**. When you open the TRS for one of YOUR components, any **enemy status sitting on that
+> component** is translated into the grid-path module's runtime modifiers, so a debuff makes the
+> *routing itself* harder. This is the headline reflect-back of the puzzle-module upgrades; it
+> applies in **both** attack and defense build (you solve your own component in either). All of it is
+> config-gated in `config/game.json#puzzle.modifiers` so the feel is tunable.
+
+| Status on your component | Felt as (module mechanic) | What you experience while solving |
+|---|---|---|
+| **Freeze** ❄️ | `modifiers.slow` | the cursor drags an icy *preview*; the solid path catches up slowly (`6 × freezeSlow` cells/sec) — freeze genuinely costs clock time |
+| **Confuse** 🌀 | `modifiers.confusion` | per-step chance to veer to a random **safe** neighbour — the route wobbles |
+| **Drain** 🩸 | `modifiers.decay` | your **payload icons vanish on a timer** (closest to START first); cross one to secure it before it drains |
+| **Shatter** 💥 | `modifiers.wander` | un-crossed payload icons **shake and jump** to random empty neighbours |
+| **Burning** 🔥 | `burningDensity` (generation) | the board is seeded with off-route **🔥 firehazard** cells (a second hazard); with `failFast`, crossing one **fails the run immediately** |
+
+- **Overlap is supported and intended:** a part can be confused **+** drained **+** shattered at once,
+  so a single solve can carry several modifiers together. Only **freeze + burning never co-occur** —
+  the host cancels them on apply (steam), matching the module's freeze⊻burning rule.
+- **`decay`/`wander` act on the icons you're chaining** (`payloadType` = the component's own
+  effect/verb), so an enemy's Drain on your Weapon makes *your* freeze icons evaporate mid-route.
+- **Double-pressure is deliberate:** a frozen offense part already contributes ×0 firepower at
+  resolve (§6) **and** now drags the cursor at build — two different moments. The per-status knobs
+  (`freezeSlow`, `confuseChance`, `drain.{baseMs,stepMs}`, `shatterChance`, `burningDensity`) let
+  playtest soften it. Watch that `drain.baseMs` stays high enough that the Min-Chain gate (below)
+  remains reachable while icons decay.
+
+### Min Chain is now an OBJECTIVE GATE, not a post-commit fail ✅
+The module enforces **Min Chain** (§3.5/§4: 1 for scaled effects, 3 for Cleanse/Overclock) with a
+**live objective gate**: reaching the goal while short is **blocked, not failed** — the path stays
+drawn and a "Need X more" prompt shows, so you reroute and finish. The bridge configures
+`objective: { type: payloadType, min: minChain }`; the old post-commit "you solved but under-chained,
+so it fails + cools down" punishment is **gone**. (Don't run both — the gate replaces it.)
+
+### Pre-start GO pause + fail banner ✅
+A short **GO countdown** (`puzzle.countdown`) holds input until you're ready; its pause time is
+**excluded from the solve clock**, which matters under the `realtime` credit model (the credit must
+not drain during the pause). Any fail (hazard / timeout) shows a centred **FAIL banner**
+(`puzzle.failText`).
+
+### Generation = one shared source of truth ✅
+The per-component palettes + route plans now come from the package preset
+`grid-path-puzzle/presets/trs.js` (the same code the standalone playground uses, so the two can't
+drift); `puzzle/palettes.js` is a thin adapter. Strategy keeps its **HP-gradient Launch Pad** model
+(§7) by feeding the preset its `trsMods`; generation feel is driven by `config/game.json#puzzle.gen`
+knobs. **Constraint:** `puzzle.gen.count.min ≥ 3` so Cleanse/Overclock (Min Chain 3) stay solvable.
 
 ---
 
@@ -532,16 +588,38 @@ Component HP carries between battles within a run (Rest heals); death loses the 
 ---
 
 ## 9. How it reuses existing code (build reference, not in scope here)
-- **Verbatim:** `games/grid-path-puzzle/module/GridPathPuzzle.js` (mount/`generate`/`timeLimitMs`/
-  `onComplete`/`onFail`) + `combo/ComboEngine.js` (`evaluate(skillSeq, config)`).
-- **Retuned copies:** `offensive.json` + `defensive.json` under `games/strategy/combo/configs/`,
-  one palette per component (Table A) for the "both matter" grid.
+- **Verbatim module:** `games/grid-path-puzzle/module/GridPathPuzzle.js` + `combo/ComboEngine.js`.
+  The strategy bridge passes the module's optional options — `modifiers`, `objective`, `countdownMs`/
+  `flashStart`/`countdownText`, `failText`, `trapEntryMode:'failFast'`, and (via the route plan) the
+  `firehazard` `burningType`/`burningDensity` — none of which require touching the module.
+- **Shared generation preset:** `games/grid-path-puzzle/presets/trs.js` is the single source of
+  truth for the per-component palettes + route plans (the playground uses the same file). Strategy's
+  `puzzle/palettes.js` is a thin re-export adapter; `ATTACK_EFFECT`/`DEFENSE_VERB` stay authoritative
+  in `core/components.js` and a test asserts they match the preset's mirror.
 - **New host (`games/strategy/`):** state = 2 aircraft × 6 components; a **bridge** like the
   shmup's `puzzle/bridge.js` that **queues** actions during build and **applies them at resolve**;
   a **handler registry** (mirrors `games/shmup/effects/handlers.js`) implementing the status
   matrix, firepower formula, and cascade; the phase/credit/resolve loop; enemy AI; map + trophy
   persistence; renderer for the two boards.
 - **Register:** add `strategy:` entry to `vite.config.js` + a menu tile in root `index.html`.
+
+### Implementation & config reference (§3.8 reflect-back)
+- **`puzzle/bridge.js`**
+  - `statusFriction(component, payloadType, mods)` — pure, exported, unit-tested. Reads the
+    component's live statuses and returns `{ modifiers | null, burningOn }`: freeze→`slow`,
+    confuse→`confusion`, drain→`decay{type,baseMs,stepMs}`, shatter→`wander{type,chance}`; `burningOn`
+    drives the generation `burningDensity`. Overlapping statuses combine; freeze+burning can't co-occur.
+  - `open()` assembles `knobs` (`config.puzzle.gen` + per-solve `burningDensity`), the `modifiers`,
+    the `objective` (`{type: payloadType, min: minChain}`), and the GO/failText options, then mounts
+    the puzzle. `finish()` no longer does a post-commit Min-Chain check (the gate owns it).
+- **`config/game.json#puzzle`** — the tuning surface (all live-editable, no code changes):
+  - `gen` `{cluster, count:{min,max}, placement, trapDensity, blockerDensity, channeling,
+    primaryLengthTarget, alternateRoutes, chainPlacement, chainChance}` → preset genPlan knobs.
+  - `modifiers` `{freezeSlow, confuseChance, drain:{baseMs,stepMs}, shatterChance, burningDensity}`
+    → the per-status route-friction strengths.
+  - `countdown` `{ms, flashStart, text}`, `failText`, `trapEntryMode:'failFast'`.
+- **Per-effect `minChain`** lives in `effects.<status>.minChain` / `defense.<verb>.minChain` (matches
+  the preset's `MIN_CHAIN`); it seeds the objective gate's `min`.
 
 ---
 
@@ -594,10 +672,13 @@ v2 pass; built on branch `TRS-Strategy-Design-V2`).
   Multihack/Beam; Spike; extra archetypes.
 
 ## B.2 Reuse (do not modify the module)
-- **Verbatim:** `grid-path-puzzle/module/GridPathPuzzle.js`, `combo/ComboEngine.js`.
-- **Copy & retune:** `offensive.json`/`defensive.json` → `games/strategy/combo/configs/`, one
-  per-component palette (Table A / B.0). Pattern mirrors `games/shmup/puzzle/bridge.js` +
-  `effects/handlers.js` + `config/game.json`.
+- **Verbatim:** `grid-path-puzzle/module/GridPathPuzzle.js`, `combo/ComboEngine.js` — the bridge only
+  *passes* the module's optional features (`modifiers`/`objective`/`countdown`/`failText`/`failFast`/
+  `firehazard`); the module itself is never edited (§3.8, §9).
+- **Shared preset, not copies:** the per-component palettes + route plans come from
+  `grid-path-puzzle/presets/trs.js` (one source of truth with the playground); `puzzle/palettes.js`
+  re-exports it. Pattern mirrors `games/shmup/puzzle/bridge.js` + `effects/handlers.js` +
+  `config/game.json`.
 
 ## B.3 File map (`games/strategy/`)
 ```

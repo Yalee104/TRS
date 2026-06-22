@@ -9,9 +9,33 @@
   },
 
   "puzzle": {
+    "_comment": "TRS routing puzzle. `size` is the base grid (Launch Pad cascade adds its sizeDelta). `gen` knobs feed the shared preset's genPlan (grid-path-puzzle/presets/trs.js); `modifiers` tune how an ENEMY STATUS on YOUR component is FELT while you solve that component's route (the reflect-back of the puzzle-module status effects). `countdown` is the pre-start GO pause (excluded from the solve clock). `trapEntryMode:failFast` = crossing a hazard fails the run immediately.",
     "size": 6,
     "timeLimitMs": 10000,
-    "trapEntryMode": "commitFail"
+    "trapEntryMode": "failFast",
+    "failText": "FAIL",
+    "countdown": { "ms": 800, "flashStart": true, "text": "GO" },
+    "gen": {
+      "_comment": "Generation knobs passed to the preset genPlan. count.min MUST stay >= the highest min-chain (3, for Cleanse/Overclock) or those verbs become unsolvable — the preset dropped the legacy +1 singleton.",
+      "cluster": false,
+      "count": { "min": 3, "max": 5 },
+      "placement": "onPrimaryRoute",
+      "trapDensity": 0,
+      "blockerDensity": 0.4,
+      "channeling": "strong",
+      "primaryLengthTarget": "long",
+      "alternateRoutes": 1,
+      "chainPlacement": "lateOnRoute",
+      "chainChance": 1
+    },
+    "modifiers": {
+      "_comment": "Per-status route friction. freeze->slow cursor (cells/sec = 6*freezeSlow); confuse->per-step veer chance; drain->payload icons decay (baseMs start, +stepMs each further icon); shatter->per-step chance to wander an un-crossed icon; burning->firehazard generation density. freeze+burning never co-occur (host cancels them).",
+      "freezeSlow": 0.5,
+      "confuseChance": 0.35,
+      "drain": { "baseMs": 3000, "stepMs": 250 },
+      "shatterChance": 0.35,
+      "burningDensity": 0.5
+    }
   },
 
   "potency": {

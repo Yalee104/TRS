@@ -121,9 +121,33 @@
          width by the vertical room left between the two boards: the square then fits the
          height too and scales down on short windows. clamp() keeps a visible floor, and
          the overlay scrolls if a very short window still can't fit it. */
-      .trs-panel { width: 100%; max-width: clamp(220px, calc(100vh - 470px), 560px); }
-      .trs-timer { font-size: 30px; font-weight: 800; text-align: center; margin-bottom: 10px; color: #e6c84a; }
-      .trs-timer.urgent { color: #ff5566; }
+      /* padding-top gives the top badges (confused 🌀 top-left + objective top-centre)
+         room to poke up above the grid; the ghost timer is centred so needs no room. */
+      .trs-panel { position: relative; width: 100%; max-width: clamp(220px, calc(100vh - 470px), 560px); padding-top: 20px; padding-bottom: 8px; }
+
+      /* "Ghost" solve-timer: a big centred watermark OVER the grid, so it's in your
+         field of view while you focus on routing. EXPERIMENT KNOBS:
+           - size:    --tsz  (font-size)
+           - calm:    --tcalm opacity (when you still have time)
+           - urgent:  --turg  opacity (kicks in at <=5s, set by bridge's showTime)
+         pointer-events:none = it never blocks the drag. Hidden until ticking starts
+         (the 'tick' class is added on the first tick) so it doesn't fight the GO/FAIL
+         centre overlays. */
+      .trs-timer { --tsz: clamp(44px, 14vh, 96px); --tcalm: .28; --turg: .6;
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        z-index: 6; pointer-events: none; opacity: 0; visibility: hidden;
+        font-size: var(--tsz); font-weight: 800; text-align: center; color: #e6c84a; letter-spacing: .01em;
+        text-shadow: 0 2px 16px rgba(0,0,0,.85), 0 0 6px rgba(0,0,0,.6); }
+      .trs-timer.tick { visibility: visible; opacity: var(--tcalm); }
+      .trs-timer.urgent { color: #ff5566; opacity: var(--turg); animation: trs-timer-pulse .7s ease-in-out infinite; }
+      @keyframes trs-timer-pulse {
+        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+        50%      { transform: translate(-50%, -50%) scale(1.08); } }
+
+      /* Module-visual override (scoped to our mount): drop the redundant "Need X more"
+         popup — the badge pips + the 🔒N count on the goal cell already show what's left
+         to chain. The objective badge keeps the module's default top-centre position. */
+      #puzzle-overlay .gpp-obj-need { display: none !important; }
 
       /* info bar */
       .en { color: #ff7a8a; font-weight: 700; }
