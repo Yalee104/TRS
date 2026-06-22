@@ -226,6 +226,17 @@ test('failFast: crossing a hazard fails immediately (no release needed)', () => 
   assert(failed && failed.reason === 'trap', 'onFail fired with reason "trap"');
 });
 
+test('drain+shatter: a moved payload keeps its decay timer at the new cell', () => {
+  const g = new GridPathPuzzle({ mount: mkEl(), nodeTypes: NT2, level: { grid: GRID2.map((r) => r.slice()) }, countdownMs: 0, rng: () => 0, modifiers: { decay: { type: 'p', baseMs: 1000, stepMs: 0 }, wander: { type: 'p', chance: 1 } } });
+  g.start();
+  g.tryBegin({ x: 0, y: 0 });
+  g.tryMoveTo({ x: 0, y: 1 }); // a step → shatter moves payload (1,0) → (1,1)
+  assert(g.level.cells[1][1] === 'p', 'payload moved to (1,1)');
+  assert(g._decayTimers.get('1,1') && !g._decayTimers.has('1,0'), 'decay timer re-keyed to the new cell');
+  g.state.elapsedMs = 2000; g._tickDecay();
+  assert(g.level.cells[1][1] !== 'p', 'the moved payload drains at its NEW location');
+});
+
 test('reset restores drained payloads (pristine board)', () => {
   const g = makeD({ modifiers: { decay: { type: 'p', baseMs: 1000, stepMs: 0 } } });
   g.start();

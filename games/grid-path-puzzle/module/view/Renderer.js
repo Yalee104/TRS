@@ -205,12 +205,15 @@ export class Renderer {
   }
 
   /** A shrinking ring on a payload that's about to drain (duration = its timer). */
-  startDecay(x, y, ms) {
+  // `totalMs` = the full timer; `elapsed` fast-forwards the depletion (used when a
+  // payload's timer is relocated by shatter, so it resumes mid-way instead of resetting).
+  startDecay(x, y, totalMs, elapsed = 0) {
     const el = this.cellEls[y]?.[x];
     if (!el) return;
     let bar = el.querySelector('.gpp-decay');
     if (!bar) { bar = document.createElement('div'); bar.className = 'gpp-decay'; el.appendChild(bar); }
-    bar.style.animationDuration = `${ms}ms`;
+    bar.style.animationDuration = `${totalMs}ms`;
+    bar.style.animationDelay = `${-elapsed}ms`;
     bar.classList.remove('gpp-decay-run');
     void bar.offsetWidth; // restart the depletion animation
     bar.classList.add('gpp-decay-run');

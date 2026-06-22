@@ -329,6 +329,16 @@ export class GridPathPuzzle {
     this.level.cells[dest.y][dest.x] = w.type;
     this.renderer?.updateCell(p.x, p.y, this._fillKey);
     this.renderer?.updateCell(dest.x, dest.y, w.type);
+    // DRAIN+SHATTER: a moved payload carries its decay timer (and its visual) along,
+    // re-keyed to the new cell — so it still counts down and vanishes at the new spot.
+    const t = this._decayTimers?.get(`${p.x},${p.y}`);
+    if (t && !t.done) {
+      this._decayTimers.delete(`${p.x},${p.y}`);
+      t.x = dest.x; t.y = dest.y;
+      this._decayTimers.set(`${dest.x},${dest.y}`, t);
+      this.renderer?.clearDecay(p.x, p.y);
+      this.renderer?.startDecay(dest.x, dest.y, t.expiry, this.state.elapsedMs);
+    }
     this._fire('onShatter', 'shatter', { from: { x: p.x, y: p.y }, to: dest, type: w.type });
   }
 
