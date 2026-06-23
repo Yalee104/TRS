@@ -249,10 +249,10 @@ for later). Every combo's numbers live in `config/game.json → effects.synergy.
 - *Example:* a part burning 6/rnd with 3 rounds left (18 pending) gets Drained → **18 now + ~9 heal**.
 - *On:* any part.
 
-**Feedback Cascade** (Confused + Drained) — *reworked: it now KEEPS the Drain and truly cascades.*
-- *Does:* keeps the **full Drain** on the part (siphon into your pool + Core **heal** + firepower **choke**), then **arcs `feedback.chainFrac` of the drain damage to the same part on _every_ other living enemy**, healing you **`feedback.healFrac`** of each arc. Confuse is spent as the splash enabler. In 1v1 (no other enemy) it's just a Drain — never a wasted pick.
-- *Example:* a Drained+Confused part vs 3 enemies → full drain (heal ~10) + **~7.5 to each of the other two** + heal a share of each arc.
-- *On:* Any part (the arc needs ≥2 enemies).
+**Feedback Cascade** (Confused + Drained) — *reworked: it hits the target AND cascades.*
+- *Does:* deals **`feedback.chainFrac` of the drain damage as direct HP to the TARGET part itself AND to the same part on _every_ other living enemy**, healing you **`feedback.healFrac`** of each hit; it also keeps Drain's Core **heal** + firepower **choke** on the target. Confuse is spent as the cascade enabler. In 1v1 it still hits the one part — never a wasted pick.
+- *Example:* a Drained+Confused part vs 3 enemies → **~7.5 to it + ~7.5 to each of the other two** + drain heal + a heal share of each hit.
+- *On:* Any part (extra reach with ≥2 enemies; works solo).
 
 > **Single-status bonuses still apply when alone:** Shatter alone **+`shatterAmp`** (50%), Freeze alone
 > **+`frozenBrittle`** (40%) on the focus.
