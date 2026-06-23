@@ -217,26 +217,27 @@ function applyOffenseCombo(state, enemy, comp, c, isFocus) {
       break;
     }
     case 'Feedback Cascade': {
-      // Keep the FULL Drain on the target (heal your Core + re-apply the firepower choke),
-      // then ARC chainFrac of the drain damage to the SAME part on EVERY other living enemy,
-      // healing you healFrac of each arc. Confuse is spent as the splash enabler.
+      // Drain the TARGET part for a direct chunk and cascade the SAME chunk to that part on
+      // every other living enemy; heal healFrac of each hit. Also keep Drain's Core heal +
+      // firepower choke on the target. Confuse is spent as the cascade enabler.
       const dr = get('drain');
       const p = dr?.potency || 0;
       const fk = K.feedback || {};
       out.healed += p * (eff.drain?.healPerPotency || 0);
       applyStatus(comp, 'drain', { turns: statusTurns(p, eff.drain?.turns), potency: p, dot: 0 }, state.config);
       const arc = p * (eff.drain?.dmgPerPotency || 0) * (fk.chainFrac || 0);
-      let hits = 0;
       if (arc > 0) {
+        const parts = [{ owner: enemy, c: comp }]; // the target part is hit too — then every other enemy
         for (const other of state.enemies) {
           if (other === enemy || !isAlive(other.components.core)) continue;
           const oc = other.components[comp.id];
-          if (!oc || !isAlive(oc)) continue;
-          oc.hp -= arc; hits += 1; out.healed += arc * (fk.healFrac || 0);
-          logEvent(state, `Feedback Cascade: ${at} arcs ${Math.round(arc)} → ${other.label}·${oc.name}${isAlive(oc) ? '' : ' — DESTROYED'}.`);
+          if (oc && isAlive(oc)) parts.push({ owner: other, c: oc });
+        }
+        for (const { owner, c: tc } of parts) {
+          tc.hp -= arc; out.healed += arc * (fk.healFrac || 0);
+          logEvent(state, `Feedback Cascade: ${owner.label}·${tc.name} −${Math.round(arc)} HP${isAlive(tc) ? '' : ' — DESTROYED'}.`);
         }
       }
-      if (!hits) logEvent(state, `Feedback Cascade: ${at} — Drain siphons (no other enemy to arc to).`);
       break;
     }
     default:
