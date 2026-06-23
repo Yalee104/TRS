@@ -13,10 +13,18 @@
 import { COMPONENT_IDS, ATTACK_EFFECT, DEFENSE_VERB, isAlive, isEffectValidOn } from '../core/components.js';
 import { PHASES } from '../core/state.js';
 import { coreShieldUp } from '../core/cascade.js';
+import { OFFENSE_COMBOS, resolveChain } from '../combat/combos.js';
 
 const STATUS_ICON = { freeze: '❄️', confuse: '🌀', drain: '🩸', burning: '🔥', shatter: '💥' };
 const COMBO_ICON = { meltdown: '🌋', stasisLock: '🔒', wildfire: '♨️' };
 const DEF_ICON = { shield: '🛡️', repair: '🔧', cleanse: '🧹', harden: '🪨', overclock: '⚡' };
+// Base-status order the resolve uses to build the chain (mirror of BASE_OFFENSE).
+const BASE_OFFENSE_ORDER = ['freeze', 'confuse', 'drain', 'burning', 'shatter'];
+// Icons for the 8 offensive combos (kept in sync with view/comboInfo.js).
+const OFFENSE_COMBO_ICON = {
+  Glass: '🪟', 'Stasis Lock': '🔒', Meltdown: '🌋', Backfire: '💢',
+  Collapse: '🏚️', Wildfire: '♨️', Vaporize: '💨', 'Feedback Cascade': '🔗',
+};
 const parseEid = (ds) => (ds.eid != null && ds.eid !== '' ? Number(ds.eid) : null);
 
 /**
@@ -44,6 +52,28 @@ function queuedFor(state, side, id, eid) {
   return state.queue.filter((x) => (side === 'enemy'
     ? (x.target && x.target.eid === eid && x.target.component === id)
     : (x.target === id)));
+}
+
+/**
+ * Live combo PREVIEW for an enemy component during attack build. Mirrors the resolve
+ * chain (statuses.js): active base statuses (live) + this phase's queued statuses/breaks,
+ * then `resolveChain` to find which combos WOULD form now — so the combo icon updates as
+ * each status is queued instead of only appearing after the resolve. Focus is chosen at
+ * resolve, so focus-only combos (Glass) are previewed too and flagged in the tooltip.
+ */
+function comboPreview(state, id, eid) {
+  const comp = state.enemies[eid].components[id];
+  const active = BASE_OFFENSE_ORDER
+    .filter((k) => comp.statuses[k] && comp.statuses[k].turns > 0)
+    .map((k) => ({ key: k, fresh: false }));
+  const queued = queuedFor(state, 'enemy', id, eid).map((x) => (x.brk ? { brk: true } : { key: x.effect, fresh: true }));
+  const chain = [...active, ...queued];
+  if (chain.length < 2) return '';
+  const { combos } = resolveChain(chain, OFFENSE_COMBOS); // allow all — the focus is decided at resolve
+  return combos.map((cb) => {
+    const fo = cb.def.focusOnly ? ' · focus only' : '';
+    return `<span class="combo-prev" title="${cb.def.name} — ${cb.a.key}+${cb.b.key}${fo} (forms at resolve)">${OFFENSE_COMBO_ICON[cb.def.name] || '✦'}</span>`;
+  }).join('');
 }
 
 function enemyHtml(state) {
@@ -127,6 +157,7 @@ function cardHtml(state, side, id, eid) {
   // QUEUED chain this phase (statuses on enemy / verbs on you), in order, with break markers
   let queued = '';
   let breakBtn = '';
+  let comboPrev = '';
   const buildSide = (side === 'enemy' && state.phase === PHASES.ATTACK_BUILD)
     || (side === 'player' && state.phase === PHASES.DEFENSE_BUILD);
   if (buildSide && !dead) {
@@ -137,6 +168,8 @@ function cardHtml(state, side, id, eid) {
     if (q.length && !q[q.length - 1].brk) {
       breakBtn = `<span class="breakbtn" data-side="${side}" data-id="${id}"${side === 'enemy' ? ` data-eid="${eid}"` : ''} title="insert a break so the next pair won't combo">⊘</span>`;
     }
+    // live combo preview (enemy/attack only) — the combo icon updates as you queue
+    if (side === 'enemy') comboPrev = comboPreview(state, id, eid);
   }
 
   const cd = (side === 'player' && state.cooldowns?.[id] > 0)
@@ -164,7 +197,7 @@ function cardHtml(state, side, id, eid) {
   }
 
   const role = roleHint(side, id, state);
-  const queuedRow = (queued || breakBtn) ? `<div class="queued">${queued}${breakBtn}</div>` : '';
+  const queuedRow = (queued || breakBtn) ? `<div class="queued">${queued}${breakBtn}${comboPrev ? `<span class="combo-arrow">→</span>${comboPrev}` : ''}</div>` : '';
   return `
     <div class="${classes.join(' ')}" data-comp data-side="${side}" data-id="${id}"${side === 'enemy' ? ` data-eid="${eid}"` : ''}>
       <div class="cn">${c.name}</div>

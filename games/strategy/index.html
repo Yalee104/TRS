@@ -113,6 +113,11 @@
       .breakbtn { font-size: 11px; cursor: pointer; color: #ff8a3d; border: 1px solid #ff8a3d66;
         border-radius: 4px; padding: 0 4px; margin-left: 2px; user-select: none; }
       .breakbtn:hover { background: #ff8a3d22; }
+      /* live combo preview: the combo icon(s) that WOULD form from active+queued statuses */
+      .queued .combo-arrow { font-size: 10px; color: #8a90a0; margin: 0 1px; }
+      .combo-prev { font-size: 11px; border: 1px solid #e6c84a; border-radius: 4px; padding: 0 3px;
+        background: #e6c84a1f; box-shadow: 0 0 6px #e6c84a66; animation: combo-pop .2s ease-out; }
+      @keyframes combo-pop { from { transform: scale(.6); } to { transform: scale(1); } }
       .role { font-size: 10px; color: #7f8696; margin-top: 4px; font-style: italic; }
       .cd { font-size: 9px; color: #ff8a3d; }
 
