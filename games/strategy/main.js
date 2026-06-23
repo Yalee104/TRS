@@ -42,7 +42,7 @@ const controlsEl = document.getElementById('controls');
 
 const bridge = createBridge({ getState, overlayEl, onChange: () => draw() });
 const renderer = createRenderer(centerEl, { enemy: enemyEl, player: playerEl }, onComponentClick, onBreak);
-createTooltip(centerEl, getState);
+const tooltip = createTooltip(centerEl, getState);
 const comboPanel = createComboPanel(document.getElementById('combo-panel'), getState);
 const infobar = createInfoBar(infoEl);
 const panel = createConfigPanel(leftEl, { onStart, onRestart, defaults: config.ui, archetypes: config.archetypes });
@@ -132,6 +132,11 @@ function draw() {
   infobar(app.state);
   comboPanel(app.state);
   renderControls();
+  // While a puzzle is open: hide the boards (full-column puzzle) and dismiss the hover
+  // dossier (on touch it lingers after the tap and would block the puzzle).
+  const puzzleOpen = !!app.state.activePuzzle;
+  centerEl.classList.toggle('puzzle-open', puzzleOpen);
+  if (puzzleOpen) tooltip.hide();
 }
 
 draw(); // initial paint (config screen)

@@ -104,6 +104,7 @@ export function createTooltip(rootEl, getState) {
   }
 
   rootEl.addEventListener('mousemove', (e) => {
+    if (getState().activePuzzle) { el.style.display = 'none'; return; } // don't cover the open puzzle
     const card = e.target.closest('[data-comp]');
     if (!card) { el.style.display = 'none'; return; }
     const eid = card.dataset.eid != null && card.dataset.eid !== '' ? Number(card.dataset.eid) : null;
