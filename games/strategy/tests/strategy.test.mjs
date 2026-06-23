@@ -328,14 +328,18 @@ test('v2 combos resolve via the chain (Backfire/Vaporize/Stasis/Collapse)', () =
   assert(gg.hp === 0, 'Collapse executed a low shattered+drained part');
 });
 
-test('Feedback Cascade chains drain to the same part on an adjacent enemy', () => {
-  const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'brute'] });
+test('Feedback Cascade keeps the Drain + arcs to every other living enemy', () => {
+  const s = createState(CONFIG, { seed: 7, enemies: ['saboteur', 'brute', 'brute'] });
   startAttackBuild(s);
   attack(s, 'tower', 5, 'weapon', 0); attack(s, 'generator', 5, 'weapon', 0); // confuse + drain → enemy 0 weapon
-  const before = s.enemies[1].components.weapon.hp;
-  resolveOffenseChains(s, 0, 'core');
-  const chain = 5 * CONFIG.effects.drain.dmgPerPotency * CONFIG.effects.synergy.combos.feedback.chainFrac;
-  assert(near(s.enemies[1].components.weapon.hp, before - chain, 0.001), 'drain chained to enemy 1');
+  const b1 = s.enemies[1].components.weapon.hp;
+  const b2 = s.enemies[2].components.weapon.hp;
+  const r = resolveOffenseChains(s, 0, 'core');
+  const arc = 5 * CONFIG.effects.drain.dmgPerPotency * CONFIG.effects.synergy.combos.feedback.chainFrac;
+  assert(near(s.enemies[1].components.weapon.hp, b1 - arc, 0.001), 'arced to enemy 1');
+  assert(near(s.enemies[2].components.weapon.hp, b2 - arc, 0.001), 'arced to ALL other enemies (enemy 2)');
+  assert(s.enemies[0].components.weapon.statuses.drain, 'target KEEPS the Drain choke');
+  assert(r.healed > 0, 'Feedback heals (drain heal + cascade heal)');
 });
 
 test('a healthy enemy Engine dodges part of your focus-fire; destroying it lands full damage', () => {

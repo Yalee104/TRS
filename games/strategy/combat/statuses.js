@@ -102,15 +102,6 @@ export function attackSynergyMult(focus, config) {
   return m;
 }
 
-/** The next living enemy after `eid` (cyclic), or null — used by Feedback Cascade. */
-function nextAliveEnemy(state, eid) {
-  for (let i = 1; i < state.enemies.length; i++) {
-    const e = state.enemies[(eid + i) % state.enemies.length];
-    if (isAlive(e.components.core)) return e;
-  }
-  return null;
-}
-
 /** Build a chain entry from a queued attack action. */
 function queuedEntry(a, config) {
   const ec = config.effects[a.effect] || {};
@@ -226,9 +217,26 @@ function applyOffenseCombo(state, enemy, comp, c, isFocus) {
       break;
     }
     case 'Feedback Cascade': {
-      const dr = get('drain'); const chain = (dr?.potency || 0) * (eff.drain?.dmgPerPotency || 0) * (K.feedback?.chainFrac || 0);
-      const other = nextAliveEnemy(state, enemy.eid); const oc = other && other.components[comp.id];
-      if (chain > 0 && oc && isAlive(oc)) { oc.hp -= chain; logEvent(state, `Feedback Cascade: ${at} → ${other.label}·${oc.name} −${Math.round(chain)} HP${isAlive(oc) ? '' : ' — DESTROYED'}.`); }
+      // Keep the FULL Drain on the target (heal your Core + re-apply the firepower choke),
+      // then ARC chainFrac of the drain damage to the SAME part on EVERY other living enemy,
+      // healing you healFrac of each arc. Confuse is spent as the splash enabler.
+      const dr = get('drain');
+      const p = dr?.potency || 0;
+      const fk = K.feedback || {};
+      out.healed += p * (eff.drain?.healPerPotency || 0);
+      applyStatus(comp, 'drain', { turns: statusTurns(p, eff.drain?.turns), potency: p, dot: 0 }, state.config);
+      const arc = p * (eff.drain?.dmgPerPotency || 0) * (fk.chainFrac || 0);
+      let hits = 0;
+      if (arc > 0) {
+        for (const other of state.enemies) {
+          if (other === enemy || !isAlive(other.components.core)) continue;
+          const oc = other.components[comp.id];
+          if (!oc || !isAlive(oc)) continue;
+          oc.hp -= arc; hits += 1; out.healed += arc * (fk.healFrac || 0);
+          logEvent(state, `Feedback Cascade: ${at} arcs ${Math.round(arc)} → ${other.label}·${oc.name}${isAlive(oc) ? '' : ' — DESTROYED'}.`);
+        }
+      }
+      if (!hits) logEvent(state, `Feedback Cascade: ${at} — Drain siphons (no other enemy to arc to).`);
       break;
     }
     default:

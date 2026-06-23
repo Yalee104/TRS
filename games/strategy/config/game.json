@@ -91,7 +91,7 @@
         "collapse":   { "hpThreshold": 0.2 },
         "wildfire":   { "spreadFrac": 0.5 },
         "vaporize":   { "healFrac": 0.5 },
-        "feedback":   { "chainFrac": 0.5 }
+        "feedback":   { "chainFrac": 0.5, "healFrac": 0.5 }
       }
     }
   },
