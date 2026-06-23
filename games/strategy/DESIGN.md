@@ -88,12 +88,11 @@ defense turn, alternating.
 
 ## 3. Attack phase — detail
 
-### 3.1 The 120s credit — two selectable time-modes ✅ (decide by playtest)
-A config flag `attackTimeModel`:
-- **`cost`** — each queued action deducts a fixed chunk (~20). Phase = a *decision budget*
-  (~6 actions). Calmer, chess-like.
-- **`realtime`** — the **seconds you spend drawing the route** are deducted from the 120.
-  Fast routing → more actions. Tenser, rewards mastery.
+### 3.1 The 120s credit — time model ✅ DECIDED: realtime
+The phase credit drains by the **seconds you spend drawing the route** (`phase.attackTimeModel:
+"realtime"`): fast routing → more actions; tenser, rewards mastery. *(The engine still contains a
+`cost` mode — a fixed chunk per action — but it was cut from the config UI; the game ships realtime
+only.)*
 
 Both run on the same machinery; build both, choose the feel later.
 
@@ -485,8 +484,10 @@ it resolves in the following defense-resolve. The **Tower/Sensors** decides who 
 - **Enemy Tower** is how the *enemy aims*. Destroy it → its precise archetype targeting breaks and
   its attacks **scatter to random parts** — the "blind their Tower" payoff.
 
-Telegraph fidelity (exact vs fuzzy) and predictability (deterministic vs variance) are a
-**config/difficulty switch** set at game start, tuned by playtest (§7). 🔧
+The telegraph is **truthful** (it matches what resolves) and **Tower-gated** (`telegraph.gated`):
+you see it only while your Tower is up, and a **Confused** Tower jams the *view* with decoys
+(`telegraph.confuseFalseChance`). *(The earlier "deterministic ↔ variance" predictability switch was
+never wired and has been removed.)*
 
 ---
 
@@ -568,10 +569,9 @@ Tower's alive), and it lands in your defense-resolve.
 | **Disruptor** | status-heavy (freeze/drain/confuse) | debuff-chokes firepower (§6) | Cleanse-heavy defense |
 | **Boss** 🔧 v2 | switches policy at Core 66%/33% | multi-phase + telegraphed "ultimate" | adapt; drops a **Trophy** |
 
-**✅ Predictability is a config/difficulty switch** (set at game start, tuned by playtest):
-*deterministic* (archetype always follows policy; perfectly counterable puzzle) ↔ *telegraphed
-with variance* (you see the intent but targets/damage wobble so you can't always pre-load
-perfectly). Both run on the same AI; flip in `game.json`.
+> **Predictability:** the telegraph always reflects the true plan (deterministic). The earlier
+> "with variance" difficulty switch was never implemented and has been **removed**; unreliability now
+> comes only from a **Confused** Tower (decoy predictions) or a destroyed/frozen Tower (blind).
 
 ---
 
@@ -715,8 +715,8 @@ combo/configs/  offensive-*.json  defensive-*.json
 (incl. `failCooldownMult`), `coreShield` {threshold, contributors:{part:%}}, `cascade`
 (brownout/evasion/TRS-congestion numbers), `potency` {stackCurve, chainMultiplier},
 `archetypes` (Saboteur/Brute/Hunter/Swarm/Disruptor — each {priority, spread, statusChance,
-status|statusPool, damageBudget}), `telegraph` {gated, mode: deterministic|variance, confuseFalseChance},
-`attackTimeModel: cost|realtime`, `ui` (config-panel defaults incl. `enemies:[...]`, `maxEnemies`).
+status|statusPool, damageBudget}), `telegraph` {gated, confuseFalseChance},
+`phase.attackTimeModel` (fixed `realtime`), `ui` (config-panel defaults incl. `enemies:[...]`, `maxEnemies`).
 The config panel (B.6) edits these live before Start.
 
 ## B.6 Pre-game config panel (left rail)
@@ -725,9 +725,11 @@ editing files; pressing **Start Battle** locks them into the run's config:
 - **Enemy roster:** "＋ Add enemy" rows (up to **4**), each Saboteur · Brute · Hunter · Swarm ·
   Disruptor · Random; repeatable (duplicates auto-numbered).
 - **Phase length:** slider (default **15 s**), applies to both attack & defense credits.
-- **Attack time model:** `cost` (fixed per action) ↔ `realtime` (seconds-solving drain).
-- **Telegraph:** on/off + `deterministic` ↔ `variance`.
 - **(optional) component HP preset** + a **seed** field for reproducible TRS grids.
+- **Language:** a selector (English / 繁體中文) — see the i18n layer (`games/strategy/i18n/`).
+
+*(Removed: the Attack-time-model and Telegraph-predictability selectors — the game ships realtime,
+and the predictability switch was never wired.)*
 
 During the battle the same rail switches to a **status readout** (current phase, remaining credit,
 whose resolve, a short event log). All values default from `game.json#ui`; the panel just mutates a
