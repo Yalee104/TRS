@@ -27,6 +27,7 @@ import { createInfoBar } from './view/infoBar.js';
 import { createTooltip } from './view/tooltip.js';
 import { createComboPanel } from './view/comboInfo.js';
 import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, isEffectValidOn } from './core/components.js';
+import { t, onLocaleChange } from './i18n/index.js';
 
 const app = { state: createState(config), started: false };
 app.state.phase = PHASES.CONFIG;
@@ -47,6 +48,10 @@ const comboPanel = createComboPanel(document.getElementById('combo-panel'), getS
 const infobar = createInfoBar(infoEl);
 const panel = createConfigPanel(leftEl, { onStart, onRestart, defaults: config.ui, archetypes: config.archetypes });
 panel.showConfig();
+
+// Language change → re-render the whole UI (every view reads text at render time).
+document.title = t('ui.pageTitle');
+onLocaleChange(() => { document.title = t('ui.pageTitle'); panel.rebuild(); draw(); });
 
 function onComponentClick(side, id, eid) {
   const s = app.state;
@@ -106,12 +111,12 @@ function renderControls() {
   let html = '';
   if (app.started && !s.activePuzzle) {
     if (s.phase === PHASES.ATTACK_BUILD) {
-      if (s.pendingAction) html = '<span class="hint">↳ pick an enemy part to apply the status</span>';
-      else if (s.pickFocus) html = '<button id="cancel">✖ Cancel</button> <span class="hint">↳ click the enemy part to FOCUS firepower</span>';
-      else html = '<button id="resolve">▶ Resolve Attack</button>';
+      if (s.pendingAction) html = `<span class="hint">${t('ui.hintApply')}</span>`;
+      else if (s.pickFocus) html = `<button id="cancel">${t('ui.cancel')}</button> <span class="hint">${t('ui.hintFocus')}</span>`;
+      else html = `<button id="resolve">${t('ui.resolveAttack')}</button>`;
     } else if (s.phase === PHASES.DEFENSE_BUILD) {
-      if (s.pendingDefense) html = '<span class="hint">↳ pick one of your parts to protect</span>';
-      else html = '<button id="resolve">▶ Resolve Defense</button>';
+      if (s.pendingDefense) html = `<span class="hint">${t('ui.hintProtect')}</span>`;
+      else html = `<button id="resolve">${t('ui.resolveDefense')}</button>`;
     }
   }
   controlsEl.innerHTML = html;

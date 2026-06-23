@@ -18,6 +18,7 @@ import { systemState } from '../core/cascade.js';
 import { spendCredit } from '../core/phases.js';
 import { logEvent } from '../core/state.js';
 import { offensivePalette, defensivePalette, catalogFromConfig, OFFENSE_META, DEFENSE_META } from './palettes.js';
+import { t, effectLabel, verbLabel } from '../i18n/index.js';
 import { makePendingAttack } from '../combat/attack.js';
 import { makePendingDefense } from '../combat/defense.js';
 
@@ -114,8 +115,13 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
       : defensivePalette(componentId, trsMods, state.config.potency, knobs);
     const size = state.config.puzzle.size + (trsMods.sizeDelta || 0);
 
-    // Shatter makes the payload icons shake while they wander (playground recipe).
     const nt = catalogFromConfig(cfg);
+    // Localize the in-grid node labels host-side (the shared module is not modified).
+    if (nt.start) nt.start = { ...nt.start, label: t('puzzle.start') };
+    if (nt.goal) nt.goal = { ...nt.goal, label: t('puzzle.goal') };
+    if (nt.trap) nt.trap = { ...nt.trap, label: t('puzzle.trap') };
+    if (nt.firehazard) nt.firehazard = { ...nt.firehazard, label: t('puzzle.firehazard') };
+    // Shatter makes the payload icons shake while they wander (playground recipe).
     if (hasStatus(component, 'shatter')) nt[payloadType] = { ...nt[payloadType], anim: 'shake' };
 
     const meta = (isAttack ? OFFENSE_META : DEFENSE_META)[payloadType] || {};
@@ -133,9 +139,9 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
       trapEntryMode: state.config.puzzle.trapEntryMode || 'commitFail',
       countdownMs: cd.ms || 0,
       flashStart: !!cd.flashStart,
-      countdownText: cd.text || 'GO',
-      objective: { type: payloadType, min: minChain, icon: meta.icon, label: meta.name },
-      failText: state.config.puzzle.failText || null,
+      countdownText: t('puzzle.go'),
+      objective: { type: payloadType, min: minChain, icon: meta.icon, label: isAttack ? effectLabel(payloadType) : verbLabel(payloadType) },
+      failText: t('puzzle.fail'),
       modifiers,
       onComplete: (result) => finish(componentId, cfg, isAttack, result, true),
       onFail: () => finish(componentId, cfg, isAttack, null, false),

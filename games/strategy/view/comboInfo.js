@@ -5,10 +5,12 @@
 //  Shows the OFFENSIVE combo table during attack and the DEFENSIVE one during
 //  defense (hidden while the TRS puzzle is open). Each row = icon + name; hover a
 //  row to pop a detail card (recipe + what it does + example + where it applies).
-//  Pure presentation, driven off the current phase.
+//  All prose comes from the i18n catalog (keyed by combo id); this file holds only
+//  the structure (icon + recipe-by-key).
 // =============================================================================
 
 import { PHASES } from '../core/state.js';
+import { t, comboLabel, skillLabel } from '../i18n/index.js';
 
 const ING = {
   freeze: '❄️', confuse: '🌀', drain: '🩸', burning: '🔥', shatter: '💥',
@@ -16,34 +18,32 @@ const ING = {
 };
 
 const OFFENSE_INFO = [
-  { name: 'Glass', icon: '🪟', recipe: ['freeze', 'shatter'], does: 'Focus-fire ×2 on this part (consumes both).', example: 'A 30 firepower pool → 60.', on: 'Focus only · any non-Core part.' },
-  { name: 'Stasis Lock', icon: '🔒', recipe: ['freeze', 'confuse'], does: 'Disables the part (×0 firepower + system offline) for extra turns.', example: 'A frozen Tower stays blind/scattering ~2 turns longer.', on: 'Weapon, Tower.' },
-  { name: 'Meltdown', icon: '🌋', recipe: ['shatter', 'burning'], does: 'Each Burn tick also funnels ~50% straight into the enemy Core — bypasses its shield.', example: 'Burns 6/rnd → 6 to the part + 3 to the Core.', on: 'Any part.' },
-  { name: 'Backfire', icon: '💢', recipe: ['shatter', 'confuse'], does: 'The cracked, misfiring part takes a burst of self-damage (~20).', example: 'A Shattered+Confused Weapon recoils for 20.', on: 'Weapon, Tower.' },
-  { name: 'Collapse', icon: '🏚️', recipe: ['shatter', 'drain'], does: 'If the part is below ~20% HP, the drain destroys it outright.', example: 'A Shattered Generator at 18% HP → destroyed.', on: 'Any part.' },
-  { name: 'Wildfire', icon: '♨️', recipe: ['burning', 'confuse'], does: 'Burns the part and spreads Burning (½) to a neighbour.', example: 'A burning Weapon also lights the Engine.', on: 'Weapon, Tower.' },
-  { name: 'Vaporize', icon: '💨', recipe: ['burning', 'drain'], does: 'Detonates the remaining Burn instantly + heals you ~50% of it.', example: '18 pending burn → 18 now + ~9 heal.', on: 'Any part.' },
-  { name: 'Feedback Cascade', icon: '🔗', recipe: ['confuse', 'drain'], does: 'Chains ~50% of the drain to the same part on the next enemy.', example: 'Drain 15 → +7 to the next enemy’s same part.', on: 'Weapon, Tower · needs 2+ enemies.' },
+  { id: 'glass', icon: '🪟', recipe: ['freeze', 'shatter'] },
+  { id: 'stasisLock', icon: '🔒', recipe: ['freeze', 'confuse'] },
+  { id: 'meltdown', icon: '🌋', recipe: ['shatter', 'burning'] },
+  { id: 'backfire', icon: '💢', recipe: ['shatter', 'confuse'] },
+  { id: 'collapse', icon: '🏚️', recipe: ['shatter', 'drain'] },
+  { id: 'wildfire', icon: '♨️', recipe: ['burning', 'confuse'] },
+  { id: 'vaporize', icon: '💨', recipe: ['burning', 'drain'] },
+  { id: 'feedback', icon: '🔗', recipe: ['confuse', 'drain'] },
 ];
 
 const DEFENSE_INFO = [
-  { name: 'Sustain', icon: '🔁', recipe: ['shield', 'repair'], does: 'Your shield persists to the next defense resolve. Repair is consumed — no HP heal.', example: 'Leftover 15 shield carries over.', on: 'Any part.' },
-  { name: 'Purified Barrier', icon: '✨', recipe: ['shield', 'cleanse'], does: 'While the shield holds, the part is immune to incoming statuses this resolve.', example: 'An incoming freeze is warded off.', on: 'Any part.' },
-  { name: 'Bastion', icon: '🏰', recipe: ['shield', 'harden'], does: 'Caps total damage to the part at ~25% of its max HP this resolve.', example: '3 enemies for 90 → capped to ~25.', on: 'Any part.' },
-  { name: 'Reactive Plating', icon: '🪞', recipe: ['shield', 'overclock'], does: 'Reflects ~50% of absorbed damage at the attacker (lowest-HP part, Core-first if exposed).', example: 'Shield eats 40 → ~20 reflected.', on: 'Any part.' },
-  { name: 'Field Repair', icon: '🩹', recipe: ['repair', 'harden'], does: 'Heals now and again at your next defense resolve.', example: 'Repair 18 now + 18 next.', on: 'Any part.' },
-  { name: 'Deflect', icon: '🤺', recipe: ['cleanse', 'harden'], does: 'Dodges the first incoming hit entirely (no cleanse).', example: 'The first enemy strike whiffs.', on: 'Any part.' },
-  { name: 'Reboot', icon: '🔄', recipe: ['cleanse', 'overclock'], does: 'Cleanses ALL statuses on the part (no credit).', example: 'freeze + drain + confuse all stripped.', on: 'Any part.' },
+  { id: 'sustain', icon: '🔁', recipe: ['shield', 'repair'] },
+  { id: 'purifiedBarrier', icon: '✨', recipe: ['shield', 'cleanse'] },
+  { id: 'bastion', icon: '🏰', recipe: ['shield', 'harden'] },
+  { id: 'reactivePlating', icon: '🪞', recipe: ['shield', 'overclock'] },
+  { id: 'fieldRepair', icon: '🩹', recipe: ['repair', 'harden'] },
+  { id: 'deflect', icon: '🤺', recipe: ['cleanse', 'harden'] },
+  { id: 'reboot', icon: '🔄', recipe: ['cleanse', 'overclock'] },
 ];
 
-const OFF_FOOTER = '❄️+🔥 cancel each other · ❄️+🩸 no combo (open)';
-
 function tableFor(state) {
-  if (state.phase === PHASES.ATTACK_BUILD) return { side: 'off', title: '⚔️ Attack combos', rows: OFFENSE_INFO, footer: OFF_FOOTER };
-  if (state.phase === PHASES.DEFENSE_BUILD) return { side: 'def', title: '🛡️ Defense combos', rows: DEFENSE_INFO, footer: '' };
+  if (state.phase === PHASES.ATTACK_BUILD) return { side: 'off', title: t('ui.combos.attackTitle'), rows: OFFENSE_INFO, footer: t('ui.combos.footer') };
+  if (state.phase === PHASES.DEFENSE_BUILD) return { side: 'def', title: t('ui.combos.defenseTitle'), rows: DEFENSE_INFO, footer: '' };
   return null;
 }
-const lookup = (side, name) => (side === 'off' ? OFFENSE_INFO : DEFENSE_INFO).find((c) => c.name === name);
+const lookup = (side, id) => (side === 'off' ? OFFENSE_INFO : DEFENSE_INFO).find((c) => c.id === id);
 
 /**
  * @param panelEl  the docked #combo-panel element
@@ -77,21 +77,22 @@ export function createComboPanel(panelEl, getState) {
   panelEl.addEventListener('mouseleave', () => { pop.style.display = 'none'; });
 
   return (state) => {
-    const t = tableFor(state);
-    if (!t || state.activePuzzle) { panelEl.style.display = 'none'; pop.style.display = 'none'; return; }
+    const tbl = tableFor(state);
+    if (!tbl || state.activePuzzle) { panelEl.style.display = 'none'; pop.style.display = 'none'; return; }
     panelEl.style.display = '';
     panelEl.innerHTML = `
-      <div class="cp-title">${t.title} <span class="cp-hint">(hover for detail)</span></div>
-      ${t.rows.map((c) => `<div class="cp-row" data-combo="${c.name}" data-side="${t.side}"><span class="cp-ic">${c.icon}</span> ${c.name} <span class="cp-recipe">${c.recipe.map((k) => ING[k] || '').join('')}</span></div>`).join('')}
-      ${t.footer ? `<div class="cp-foot">${t.footer}</div>` : ''}`;
+      <div class="cp-title">${tbl.title} <span class="cp-hint">${t('ui.combos.hoverHint')}</span></div>
+      ${tbl.rows.map((c) => `<div class="cp-row" data-combo="${c.id}" data-side="${tbl.side}"><span class="cp-ic">${c.icon}</span> ${comboLabel(c.id)} <span class="cp-recipe">${c.recipe.map((k) => ING[k] || '').join('')}</span></div>`).join('')}
+      ${tbl.footer ? `<div class="cp-foot">${tbl.footer}</div>` : ''}`;
   };
 }
 
 function detailHtml(c) {
+  const recipe = c.recipe.map((k) => `${ING[k] || ''} ${skillLabel(k)}`).join(' + ');
   return `
-    <div class="tt-h"><b>${c.icon} ${c.name}</b></div>
-    <div class="tt-sys">Recipe: ${c.recipe.map((k) => `${ING[k] || ''} ${k}`).join(' + ')}</div>
-    <div class="tt-off"><b>Does:</b> ${c.does}</div>
-    <div class="tt-def"><b>e.g.</b> ${c.example}</div>
-    <div class="tt-dim">${c.on}</div>`;
+    <div class="tt-h"><b>${c.icon} ${comboLabel(c.id)}</b></div>
+    <div class="tt-sys">${t('ui.combos.recipe', { recipe })}</div>
+    <div class="tt-off"><b>${t('ui.combos.doesLabel')}</b> ${t(`combo.${c.id}.does`)}</div>
+    <div class="tt-def"><b>${t('ui.combos.egLabel')}</b> ${t(`combo.${c.id}.example`)}</div>
+    <div class="tt-dim">${t(`combo.${c.id}.on`)}</div>`;
 }

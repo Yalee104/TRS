@@ -47,8 +47,8 @@ function buildEnemies(config, roster, rng) {
   const seen = {};
   for (const e of enemies) {
     const base = config.archetypes[e.archetype]?.label || e.archetype;
-    if (counts[e.archetype] > 1) { seen[e.archetype] = (seen[e.archetype] || 0) + 1; e.label = `${base} ${seen[e.archetype]}`; }
-    else e.label = base;
+    if (counts[e.archetype] > 1) { seen[e.archetype] = (seen[e.archetype] || 0) + 1; e.num = seen[e.archetype]; e.label = `${base} ${e.num}`; }
+    else { e.num = null; e.label = base; }
   }
   return enemies;
 }
