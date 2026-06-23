@@ -56,7 +56,7 @@ function buildEnemies(config, roster, rng) {
 /**
  * @param config  the parsed game.json
  * @param ui      optional overrides from the config panel:
- *                { enemies:[archetype...], creditSeconds, attackTimeModel, telegraphMode, seed }
+ *                { enemies:[archetype...], creditSeconds, seed }  (attackTimeModel defaults to config.phase = realtime)
  */
 export function createState(config, ui = {}) {
   const u = { ...config.ui, ...ui };

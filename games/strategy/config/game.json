@@ -167,15 +167,13 @@
     }
   },
 
-  "telegraph": { "gated": true, "mode": "deterministic", "confuseFalseChance": 0.5 },
+  "telegraph": { "gated": true, "confuseFalseChance": 0.5 },
 
   "ui": {
     "enemies": ["saboteur"],
     "maxEnemies": 4,
     "archetype": "saboteur",
     "creditSeconds": 15,
-    "attackTimeModel": "realtime",
-    "telegraphMode": "deterministic",
     "seed": 0
   }
 }

@@ -2,8 +2,8 @@
 //  view/configPanel.js — the LEFT RAIL (DESIGN B.6)
 // =============================================================================
 //
-//  Before Start: a ROSTER of up to maxEnemies enemies, phase length, time model,
-//  telegraph mode, seed. After Start: a live status readout + Restart. A language
+//  Before Start: a ROSTER of up to maxEnemies enemies, phase length, seed.
+//  After Start: a live status readout + Restart. A language
 //  selector sits at the top (both modes). getUi() returns createState() overrides.
 //  rebuild() re-renders the whole rail in the current locale, preserving inputs.
 // =============================================================================
@@ -19,8 +19,6 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
   let vals = {
     enemies: (Array.isArray(defaults.enemies) && defaults.enemies.length) ? defaults.enemies.slice(0, maxEnemies) : [defaults.archetype || archList[0]],
     creditSeconds: defaults.creditSeconds || 15,
-    attackTimeModel: defaults.attackTimeModel || 'realtime',
-    telegraphMode: defaults.telegraphMode || 'deterministic',
     seed: defaults.seed || 0,
   };
 
@@ -49,8 +47,6 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
     return {
       enemies: rowSelects().map((r) => r.value),
       creditSeconds: Number($('#cfg-credit').value),
-      attackTimeModel: $('#cfg-time').value,
-      telegraphMode: $('#cfg-tel').value,
       seed: Number($('#cfg-seed').value) || 0,
     };
   }
@@ -71,18 +67,6 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
         <button id="cfg-add" class="addbtn">${t('ui.addEnemy')}</button>
         <label>${t('config.phaseLength')} <span id="cfg-credit-val"></span>
           <input id="cfg-credit" type="range" min="10" max="150" step="5" />
-        </label>
-        <label>${t('config.attackTimeModel')}
-          <select id="cfg-time">
-            <option value="cost">${t('config.timeCost')}</option>
-            <option value="realtime">${t('config.timeRealtime')}</option>
-          </select>
-        </label>
-        <label>${t('config.telegraph')}
-          <select id="cfg-tel">
-            <option value="deterministic">${t('config.telDeterministic')}</option>
-            <option value="variance">${t('config.telVariance')}</option>
-          </select>
         </label>
         <label>${t('config.seed')} <input id="cfg-seed" type="number" min="0" step="1" /></label>
         <button id="cfg-start">${t('ui.startBattle')}</button>
@@ -107,8 +91,6 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
 
     $('#cfg-credit').value = vals.creditSeconds;
     $('#cfg-credit-val').textContent = `${$('#cfg-credit').value}s`;
-    $('#cfg-time').value = vals.attackTimeModel;
-    $('#cfg-tel').value = vals.telegraphMode;
     $('#cfg-seed').value = vals.seed;
     $('#cfg-credit').addEventListener('input', () => { $('#cfg-credit-val').textContent = `${$('#cfg-credit').value}s`; });
 
@@ -130,13 +112,11 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
       [PHASES.WON]: t('config.phase.won'), [PHASES.LOST]: t('config.phase.lost'),
     }[state.phase] || state.phase;
     const enemyList = state.enemies.map((e) => `${enemyLabel(e)}${e.components.core.hp <= 0 ? ' ☠️' : ''}`).join(', ');
-    const timeModel = state.attackTimeModel === 'cost' ? t('config.timeCost') : t('config.timeRealtime');
     $('#cfg-readout').innerHTML = `
       <div><b>${t('config.readout.round')}</b> ${state.round} · ${phaseName}</div>
       <div><b>${t('config.readout.credit')}</b> ${t('config.readout.creditLeft', { n: credit })}</div>
       <div><b>${t('config.readout.enemies')}</b> ${enemyList}</div>
-      <div><b>${t('config.readout.queued')}</b> ${t('config.readout.queuedActions', { n: state.queue.length })}</div>
-      <div><b>${t('config.readout.timeModel')}</b> ${timeModel}</div>`;
+      <div><b>${t('config.readout.queued')}</b> ${t('config.readout.queuedActions', { n: state.queue.length })}</div>`;
     renderLog($('#cfg-log'), state.log);
   }
 
