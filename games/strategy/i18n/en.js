@@ -106,7 +106,7 @@ export const en = {
     attack: {
       freeze: 'Freeze — suspends the target for its duration: ×0 firepower + its system goes offline. A frozen focus is brittle (+40% dmg). ⚠ Cancels with Burning.',
       confuse: "Confuse — halves (−50%) the target's firepower contribution to the enemy's next attack.",
-      drain: "Drain — siphons the target's HP into your firepower pool AND heals your Core; also chokes its output (×0.6).",
+      drain: "Drain — an ongoing siphon: on apply it feeds your firepower pool + heals your Core, and EACH turn it lasts it drains more HP from the part into your Core; also chokes its output (×0.6).",
       burning: 'Burning — damage-over-time each round that BYPASSES the Core shield (the anti-shield tool). ⚠ Cancels with Freeze.',
       shatter: 'Shatter — the target takes +50% from all your fire; the universal combo enabler (Glass, Meltdown, Backfire, Collapse).',
     },
@@ -120,7 +120,7 @@ export const en = {
     status: {
       freeze: ({ turns }) => `❄️ Frozen ${turns}t — ×0 firepower, system offline`,
       confuse: ({ turns }) => `🌀 Confused ${turns}t — −50% firepower`,
-      drain: ({ turns }) => `🩸 Draining ${turns}t — −40% firepower`,
+      drain: ({ turns }) => `🩸 Draining ${turns}t — siphons HP/turn, −40% firepower`,
       burning: ({ turns, dot }) => `🔥 Burning ${turns}t — ${dot}/round, bypasses shield`,
       shatter: ({ turns }) => `💥 Shattered ${turns}t — +50% damage taken`,
     },

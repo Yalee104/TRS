@@ -76,7 +76,7 @@
     "_comment": "Per-effect translation of a solved TRS combo's `value` (1..~15 potency) into game numbers. Statuses last whole TURNS (resolves): turns = clamp(round(potency/divisor), min, max). `minChain` = minimum payload icons that must be chained on the route for the solve to SUCCEED (1 for potency-scaled effects).",
     "freeze":  { "minChain": 1, "dmgPerPotency": 1.5, "turns": { "divisor": 4, "min": 1, "max": 3 } },
     "confuse": { "minChain": 1, "dmgPerPotency": 1.0, "turns": { "divisor": 4, "min": 1, "max": 3 } },
-    "drain":   { "minChain": 1, "dmgPerPotency": 3.0, "healPerPotency": 2.0, "turns": { "divisor": 5, "min": 1, "max": 2 } },
+    "drain":   { "minChain": 1, "dmgPerPotency": 3.0, "healPerPotency": 2.0, "dotPerPotency": 1.0, "turns": { "divisor": 5, "min": 1, "max": 2 } },
     "burning": { "minChain": 1, "dmgPerPotency": 1.0, "dotPerPotency": 1.2, "dotCap": 24, "turns": { "divisor": 3, "min": 1, "max": 4, "stackMax": 6 } },
     "shatter": { "minChain": 1, "dmgPerPotency": 2.0, "turns": { "divisor": 3, "min": 1, "max": 3 } },
     "synergy": {

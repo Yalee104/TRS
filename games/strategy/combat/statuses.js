@@ -62,14 +62,18 @@ export function cleanseOldest(component) {
 }
 
 /**
- * End-of-round tick on one aircraft. Applies DoT from Burning, plus the ongoing
- * combo-statuses Meltdown (DoT + core-funnel, bypasses shield) and Wildfire (DoT).
- * Returns { dot, meltdown }.
+ * End-of-round tick on one aircraft. Applies DoT from Burning, the ongoing combo-statuses
+ * Meltdown (DoT + core-funnel) and Wildfire (DoT), and the ongoing **Drain siphon** — each
+ * active turn a drained part loses `drain.dotPerPotency × potency` HP that flows back to the
+ * applier (returned as `drainHeal`; the host adds it to the player's Core). Enemy-applied drain
+ * has potency 0 (choke only), so only your drains siphon. Returns { dot, meltdown, drainHeal }.
  */
 export function tickAircraftStatuses(aircraft, config) {
   let dot = 0;
   let meltdown = 0;
+  let drainHeal = 0;
   const K = config?.effects?.synergy?.combos || {};
+  const drainDotPer = config?.effects?.drain?.dotPerPotency || 0;
   const core = aircraft.components.core;
   for (const comp of Object.values(aircraft.components)) {
     const burn = comp.statuses.burning;
@@ -84,9 +88,14 @@ export function tickAircraftStatuses(aircraft, config) {
       if (comp.id !== 'core' && core && core.hp > 0) { const f = md.dot * (K.meltdown?.coreFrac || 0); core.hp -= f; meltdown += f; }
     }
 
+    const drn = comp.statuses.drain;              // Drain: ongoing siphon (part HP → the applier)
+    if (drn && drn.turns > 0 && (drn.potency || 0) > 0 && drainDotPer > 0) {
+      const amt = drainDotPer * drn.potency; comp.hp -= amt; drainHeal += amt;
+    }
+
     for (const [key, s] of Object.entries(comp.statuses)) { s.turns -= 1; if (s.turns <= 0) delete comp.statuses[key]; }
   }
-  return { dot, meltdown };
+  return { dot, meltdown, drainHeal };
 }
 
 /**

@@ -193,7 +193,7 @@ status to the same part.
 |---|---|---|---|---|
 | **Freeze** ❄️ (Weapon) | Any | **1** | **Refresh** (MAX), pool adds | ① pool +1.5×p [scaled] · ② part contributes **×0** firepower [flat]; frozen Tower → enemy aim scatters (−40%) / **your telegraph goes blind**; frozen Engine → no evasion [flat]; **on Focus +40%** [flat]; duration round(p/4), 1–3 [scaled]. **Cancels with Burning.** |
 | **Confuse** 🌀 (Tower) | Any | **1** | Refresh (MAX), pool adds | ① pool +1.0×p [scaled] · ② part ×0.5 (−50%) firepower [flat]; **on your own Tower → telegraph turns UNRELIABLE (~50% false predictions)** [flat]; duration round(p/4), 1–3 [scaled] |
-| **Drain** 🩸 (Generator) | Any | **1** | **Heal per apply**, choke MAX, pool adds | ① pool +3.0×p [scaled] · ② heal +2.0×p to your Core, once [scaled]; part ×0.6 (−40%) firepower [flat]; duration round(p/5), 1–2 [scaled] |
+| **Drain** 🩸 (Generator) | Any | **1** | **Heal per apply**, choke MAX, pool adds | ① pool +3.0×p [scaled] · ② heal +2.0×p to your Core on apply [scaled] **+ an ongoing SIPHON: each turn it lasts the part loses `dotPerPotency`×p HP that flows back to your Core** [scaled]; part ×0.6 (−40%) firepower [flat]; duration round(p/5), 1–2 [scaled] |
 | **Burning** 🔥 (Launch Pad) | Any | **1** | **STACKS** — DoT adds (cap 24), duration extends (cap 6); pool adds | ① pool +1.0×p [scaled] · ② DoT 1.2×p/round, **bypasses Core shield** [scaled]; part ×0.85 (−15%) firepower [flat]; duration round(p/3), 1–4 [scaled]. **Cancels with Freeze.** |
 | **Shatter** 💥 (Engine) | Any | **1** | Refresh (MAX), pool adds | ① pool +2.0×p [scaled] · ② **on Focus +50%** [flat]; no firepower choke (×1.0); duration round(p/3), 1–3 [scaled]; enables Glass/Meltdown/Backfire/Collapse |
 
