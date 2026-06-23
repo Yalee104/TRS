@@ -169,16 +169,18 @@ v1 statuses: **Freeze · Confuse · Drain · Burning · Shatter** (5). The ampli
 high-tier branches are deferred to v2. **Detonate / Multihack / Beam** are Table-C mechanics, not
 component effects.
 
-### 3.5 Table B — effect validity (which effects matter on which target) · v1 ✅
-Kept (not dropped): an effect only does something on appropriate targets, so choosing your Focus
-*and* your effects is a real matching decision (Confuse on a Generator is wasted).
-| Effect | Valid / meaningful targets | What it does there |
+### 3.5 Table B — effect validity · v1: **DROPPED** (any status on any part) ⏸️ parked
+**v1 simplification:** any status can be applied to **any** component (incl. the Core) — the validity
+gate is off (`core/components.js → EFFECT_VALID_TARGETS` all `'*'`). Nothing is greyed out when you
+pick a target. Effects are still *situationally* stronger on some parts (the "What it does there"
+column), but that's no longer a hard restriction. The richer matching rules may return later.
+| Effect | Valid targets | What it does there |
 |---|---|---|
-| **Freeze** | any *functional* part (not Core) | ×0 firepower contribution **and** suspends the part's system for the duration: frozen **Tower** → suspends *both* Tower roles — an **enemy** Tower's aim scatters (~40% softer), **your** Tower goes **blind** (no telegraph preview); frozen **Engine** → no evasion. (Generator shield/brownout + Launch Pad TRS stay tied to destruction.) **Cancels with Burning** — applying one wipes both. |
-| **Confuse** | parts that aim/fire — **Weapon Storage, Tower** | ×0.5 firepower contribution; **on your own Tower it jams the sensors → the telegraph stays visible but UNRELIABLE**: each predicted strike has a ~50% chance (`telegraph.confuseFalseChance`) of being a **false alarm** (wrong part/status), shown faded with a "?". *(Distinct from Freeze, which blinds the telegraph entirely. No effect on an enemy Tower, which never telegraphs your attacks.)* |
-| **Drain** | best on **Generator & Core** (HP on any) | siphon HP to you (heals your Core); kill the Generator to drop the Core shield |
-| **Burning** | any part | flat DoT each round; **bypasses the Core shield**; best on high-HP (Core, Generator). **Cancels with Freeze.** |
-| **Shatter** | **any part** (v2) | brittle → the focus takes **+50%** from all your fire (no effect on a *shielded* Core until its shield drops); universal combo-enabler |
+| **Freeze** | Any | ×0 firepower contribution **and** suspends the part's system for the duration: frozen **Tower** → suspends *both* Tower roles — an **enemy** Tower's aim scatters (~40% softer), **your** Tower goes **blind** (no telegraph preview); frozen **Engine** → no evasion. (Generator shield/brownout + Launch Pad TRS stay tied to destruction.) **Cancels with Burning** — applying one wipes both. |
+| **Confuse** | Any | ×0.5 firepower contribution; **on your own Tower it jams the sensors → the telegraph stays visible but UNRELIABLE**: each predicted strike has a ~50% chance (`telegraph.confuseFalseChance`) of being a **false alarm** (wrong part/status), shown faded with a "?". *(Distinct from Freeze, which blinds the telegraph entirely. No telegraph effect on an enemy Tower, which never telegraphs your attacks.)* |
+| **Drain** | Any | siphon HP to you (heals your Core); kill the Generator to drop the Core shield (best on Generator & Core) |
+| **Burning** | Any | flat DoT each round; **bypasses the Core shield**; best on high-HP (Core, Generator). **Cancels with Freeze.** |
+| **Shatter** | Any | brittle → the focus takes **+50%** from all your fire (no effect on a *shielded* Core until its shield drops); universal combo-enabler |
 
 #### Offensive status reference (full) — ✅ v2, all config-driven (`effects.<status>`)
 Each solved status feeds **two channels**: ① the shared **firepower pool** (`dmgPerPotency × potency`,
@@ -190,11 +192,11 @@ status to the same part.
 
 | Status (source) | Valid on | Min Chain | Stacks? | Full effect ( [scaled] grows with potency · [flat] fixed ) |
 |---|---|---|---|---|
-| **Freeze** ❄️ (Weapon) | any non-Core | **1** | **Refresh** (MAX), pool adds | ① pool +1.5×p [scaled] · ② part contributes **×0** firepower [flat]; frozen Tower → enemy aim scatters (−40%) / **your telegraph goes blind**; frozen Engine → no evasion [flat]; **on Focus +40%** [flat]; duration round(p/4), 1–3 [scaled]. **Cancels with Burning.** |
-| **Confuse** 🌀 (Tower) | Weapon, Tower | **1** | Refresh (MAX), pool adds | ① pool +1.0×p [scaled] · ② part ×0.5 (−50%) firepower [flat]; **on your own Tower → telegraph turns UNRELIABLE (~50% false predictions)** [flat]; duration round(p/4), 1–3 [scaled] |
-| **Drain** 🩸 (Generator) | any part | **1** | **Heal per apply**, choke MAX, pool adds | ① pool +3.0×p [scaled] · ② heal +2.0×p to your Core, once [scaled]; part ×0.6 (−40%) firepower [flat]; duration round(p/5), 1–2 [scaled] |
-| **Burning** 🔥 (Launch Pad) | any part | **1** | **STACKS** — DoT adds (cap 24), duration extends (cap 6); pool adds | ① pool +1.0×p [scaled] · ② DoT 1.2×p/round, **bypasses Core shield** [scaled]; part ×0.85 (−15%) firepower [flat]; duration round(p/3), 1–4 [scaled]. **Cancels with Freeze.** |
-| **Shatter** 💥 (Engine) | **any part** | **1** | Refresh (MAX), pool adds | ① pool +2.0×p [scaled] · ② **on Focus +50%** [flat]; no firepower choke (×1.0); duration round(p/3), 1–3 [scaled]; enables Glass/Meltdown/Backfire/Collapse |
+| **Freeze** ❄️ (Weapon) | Any | **1** | **Refresh** (MAX), pool adds | ① pool +1.5×p [scaled] · ② part contributes **×0** firepower [flat]; frozen Tower → enemy aim scatters (−40%) / **your telegraph goes blind**; frozen Engine → no evasion [flat]; **on Focus +40%** [flat]; duration round(p/4), 1–3 [scaled]. **Cancels with Burning.** |
+| **Confuse** 🌀 (Tower) | Any | **1** | Refresh (MAX), pool adds | ① pool +1.0×p [scaled] · ② part ×0.5 (−50%) firepower [flat]; **on your own Tower → telegraph turns UNRELIABLE (~50% false predictions)** [flat]; duration round(p/4), 1–3 [scaled] |
+| **Drain** 🩸 (Generator) | Any | **1** | **Heal per apply**, choke MAX, pool adds | ① pool +3.0×p [scaled] · ② heal +2.0×p to your Core, once [scaled]; part ×0.6 (−40%) firepower [flat]; duration round(p/5), 1–2 [scaled] |
+| **Burning** 🔥 (Launch Pad) | Any | **1** | **STACKS** — DoT adds (cap 24), duration extends (cap 6); pool adds | ① pool +1.0×p [scaled] · ② DoT 1.2×p/round, **bypasses Core shield** [scaled]; part ×0.85 (−15%) firepower [flat]; duration round(p/3), 1–4 [scaled]. **Cancels with Freeze.** |
+| **Shatter** 💥 (Engine) | Any | **1** | Refresh (MAX), pool adds | ① pool +2.0×p [scaled] · ② **on Focus +50%** [flat]; no firepower choke (×1.0); duration round(p/3), 1–3 [scaled]; enables Glass/Meltdown/Backfire/Collapse |
 
 *Stacking policy:* only **Burning** truly stacks (DoT & duration accumulate, capped); the rest
 **refresh** (keep the stronger) — but the **pool always adds**, so re-applying any status still helps.

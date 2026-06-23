@@ -245,14 +245,14 @@ test('Meltdown: Shatter+Burning forms a meltdown status that funnels into the sh
 });
 
 // --- attack flow (pending → target) + resolve --------------------------------
-test('solving holds a pending action; Table B gates valid targets', () => {
+test('solving holds a pending action; any status applies to any component (Table B dropped)', () => {
   const s = fresh();
-  makePendingAttack(s, 'tower', combo(5)); // confuse — valid only on weapon/tower
+  makePendingAttack(s, 'tower', combo(5)); // confuse — now valid on ANY part
   assert(s.pendingAction && s.pendingAction.effect === 'confuse', 'pending confuse held');
   const valid = validAttackTargets(s).filter((t) => t.eid === 0).map((t) => t.component).sort();
-  assert(valid.join() === ['tower', 'weapon'].join(), `confuse valid on weapon/tower, got ${valid}`);
-  assert(finalizeAttackTarget(s, 0, 'generator') === null, 'cannot apply confuse to generator');
-  finalizeAttackTarget(s, 0, 'weapon');
+  const allAlive = Object.keys(s.enemies[0].components).sort();
+  assert(valid.join() === allAlive.join(), `confuse valid on every alive part, got ${valid}`);
+  assert(finalizeAttackTarget(s, 0, 'generator') !== null, 'confuse now applies to the generator');
   assert(s.queue.length === 1 && s.pendingAction === null, 'queued + pending cleared');
 });
 

@@ -3,68 +3,88 @@
 // =============================================================================
 //
 //  A floating panel that appears while the cursor is inside a component box and
-//  follows it, explaining EVERYTHING about that part so the player can decide
-//  which status to apply and which part to focus-fire / protect:
-//    • what it powers + its offensive effect (Table A) and valid targets (Table B)
-//    • its defensive verb (B.0) • current HP, live statuses + turns, pre-loaded
-//      defenses • cascade consequences (while damaged / when destroyed) • the
-//      Reactor-Core shield state • any incoming telegraphed strike.
+//  follows it. Content is organised into LABELED, SIDE-AWARE sections so each
+//  idea is stated once and only what APPLIES to that part on that side shows:
+//    ROLE     what the part does for its owner + the side-relevant kill payoff
+//             (+ 🔗 shield-link); for the Core, the shield UP/DOWN state.
+//    ATTACK   (your parts) the effect this part fires when you solve it.
+//    DEFENCE  (your parts) the verb this part solves for.
+//    STATE    live debuffs (+turns), incoming telegraph, cooldown, carried
+//             defenses, queued chain, or DESTROYED.
+//  Any status applies to any component now (Table B dropped — see core/components.js),
+//  so there's no "valid on" / "apply here" list.
 //  Lives in <body> so board re-renders never wipe it; driven purely off state.
 // =============================================================================
 
-import { ATTACK_EFFECT, DEFENSE_VERB, EFFECT_VALID_TARGETS, hpFrac } from '../core/components.js';
+import { ATTACK_EFFECT, DEFENSE_VERB, hpFrac } from '../core/components.js';
 import { coreShieldStatus } from '../core/cascade.js';
 import { PHASES } from '../core/state.js';
 
-const SYSTEM = {
-  core: 'The heart of the aircraft. If it reaches 0 HP the battle ends. Protected by an indestructible shield (below) until enough shield-linked parts are destroyed.',
-  generator: 'Powers every system. Drives the largest share of your firepower (Combat Condition) and is the biggest shield-linked part.',
-  weapon: 'Your base / automatic firepower — a big slice of Combat Condition.',
-  tower: 'Sensors — two roles. VISION: YOUR Tower lets you SEE the enemy’s telegraphed strike before you defend; destroyed/Frozen → blind (no preview); Confused → telegraph stays but is UNRELIABLE (~50% false alarms). AIM: the owner’s Tower governs its targeting — destroy the ENEMY’s Tower (or Freeze it) and its strikes SCATTER to random parts and deal only ×0.6 damage (Confuse does NOT scatter aim).',
-  engine: 'Evasion — dodges part of every hit (×0.15 at full HP, scaling with HP). YOUR Engine reduces ALL incoming damage in defense; the ENEMY’s Engine dodges part of your focus-fire in attack. Destroyed/Frozen → 0% (hits land in full). (Initiative/resolve-order is parked.)',
-  launchpad: 'Governs its OWNER’s TRS quality: healthy = easier grids (fewer blockers/traps), damaged = grids drift to baseline, destroyed = congested. Also carries a small share of attack strength.',
+// ROLE — owner role folded with the side-specific consequence (you: "if lost";
+// enemy: the kill/Freeze payoff). One line per side; the cascade detail lives here
+// instead of a separate row.
+const ROLE = {
+  core: {
+    you: 'The heart — if it reaches 0 HP you lose.',
+    foe: 'The heart — reduce it to 0 to defeat this enemy.',
+  },
+  generator: {
+    you: 'Powers everything — your largest firepower share (40%). Destroyed → brownout: all output ×0.5.',
+    foe: 'Powers the enemy (40% of its firepower). Destroy it → the Core is exposed + brownout (its output ×0.5).',
+  },
+  weapon: {
+    you: 'Your base / automatic firepower (35% of Combat Condition). Destroyed → base damage collapses.',
+    foe: 'The enemy’s base firepower (35%). Destroy it → its base damage collapses.',
+  },
+  tower: {
+    you: 'Sensors — you SEE the enemy’s telegraphed strike before you defend. Destroyed/Frozen → blind (no preview); Confused → telegraph stays but UNRELIABLE (~50% false).',
+    foe: 'Sensors (aim). Destroy it or Freeze it → its strikes SCATTER to random parts and hit ~40% softer.',
+  },
+  engine: {
+    you: 'Evasion — dodges part of every incoming hit (×0.15 at full HP, scaling with HP). Destroyed/Frozen → 0% (hits land in full).',
+    foe: 'Evasion — dodges part of your focus-fire (scales with HP). Destroy it or Freeze it → your fire lands in full.',
+  },
+  launchpad: {
+    you: 'Governs YOUR TRS quality: healthy = easier grids (fewer blockers/traps), damaged drifts to baseline, destroyed = congested. Also a small attack-strength share.',
+    foe: 'Carries a small share of the enemy’s attack strength. (Its TRS-quality role only affects a side that solves puzzles — i.e. you.)',
+  },
 };
 
-const EFFECT_DESC = {
-  freeze: 'Freeze — suspends the part for its duration: ×0 firepower contribution AND its system goes offline. Frozen Tower → suspends both roles: an enemy Tower’s aim scatters, YOUR Tower goes blind (no telegraph). Frozen Engine → no evasion. Alone: a Frozen focus is brittle (+40% dmg). ⚠ Cancels with Burning.',
-  confuse: 'Confuse — scrambles the part’s fire: −50% of its firepower contribution to the enemy’s next attack. On a TOWER it jams the sensors → the telegraph stays visible but UNRELIABLE: each predicted strike has a ~50% chance of being a false alarm (wrong part/status), shown faded with a “?”. (Distinct from Freeze, which blinds the telegraph entirely.) Meaningful on Weapon / Tower.',
-  drain: 'Drain — siphons the part: damage feeds your firepower pool AND heals your Core; also chokes the part’s output (×0.6).',
+// ATTACK — the effect a PLAYER part fires when solved (the telegraph note for Confuse
+// lives in the Tower ROLE, not here, since you apply Confuse to an enemy).
+const ATTACK_DESC = {
+  freeze: 'Freeze — suspends the target for its duration: ×0 firepower + its system goes offline. A frozen focus is brittle (+40% dmg). ⚠ Cancels with Burning.',
+  confuse: 'Confuse — halves (−50%) the target’s firepower contribution to the enemy’s next attack.',
+  drain: 'Drain — siphons the target’s HP into your firepower pool AND heals your Core; also chokes its output (×0.6).',
   burning: 'Burning — damage-over-time each round that BYPASSES the Core shield (the anti-shield tool). ⚠ Cancels with Freeze.',
-  shatter: 'Shatter — alone, the part takes +50% from all your fire; valid on ANY part, so it’s the universal combo enabler (Glass, Meltdown, Backfire, Collapse).',
+  shatter: 'Shatter — the target takes +50% from all your fire; the universal combo enabler (Glass, Meltdown, Backfire, Collapse).',
 };
 
-// Defence verb description (v2), pulling the actual numbers from config.
-function verbDesc(verb, config) {
+// DEFENCE — the verb a PLAYER part solves for; numbers pulled from config.
+function defenceDesc(verb, config) {
   const d = config.defense || {};
   switch (verb) {
-    case 'shield': return `Shield — absorbs incoming damage; +${d.shield?.absorbPerPotency} per potency, stacks additively.`;
-    case 'repair': return `Repair — restores HP to the target part; +${d.repair?.hpPerPotency} per potency (applied after the strike).`;
-    case 'cleanse': return 'Cleanse — strips the OLDEST 1 status off the target (FCFS). It runs before the strike, so it can’t stop an incoming status (those land after your defenses). Reboot (Cleanse+Overclock) strips ALL.';
-    case 'harden':
-      return `Harden — % off the FIRST incoming hit only: +${Math.round((d.harden?.reductionPerPotency || 0) * 100)}% per potency, capped at ${Math.round((d.harden?.maxReduction || 0) * 100)}%; combines with Engine evasion (90% total cap). Bastion (Shield+Harden) caps ALL hits instead.`;
-    case 'overclock':
-      return `Overclock — banks +${((d.overclock?.creditBonusMs || 0) / 1000).toFixed(1)}s of build-credit for your NEXT attack phase (stacks; grants nothing if it forms a combo).`;
+    case 'shield': return `Shield — absorbs +${d.shield?.absorbPerPotency}/potency before HP (stacks).`;
+    case 'repair': return `Repair — heals +${d.repair?.hpPerPotency}/potency, applied after the strike.`;
+    case 'cleanse': return 'Cleanse — strips the OLDEST status (FCFS); Reboot (Cleanse+Overclock) strips all.';
+    case 'harden': return `Harden — −${Math.round((d.harden?.reductionPerPotency || 0) * 100)}%/potency off the FIRST hit (cap ${Math.round((d.harden?.maxReduction || 0) * 100)}%; combines with evasion).`;
+    case 'overclock': return `Overclock — banks +${((d.overclock?.creditBonusMs || 0) / 1000).toFixed(1)}s of build-credit for your next attack.`;
     default: return '';
   }
 }
 
-const CASCADE = {
-  generator: { damaged: 'Core shield link + 40% firepower weight.', dead: 'Reactor shield contribution lost + brownout: all output ×0.5.' },
-  weapon: { damaged: '35% firepower weight; base damage scales with HP.', dead: 'Base firepower collapses (only weakened TRS add-ons remain).' },
-  tower: { damaged: 'No change until destroyed (binary in v1); Confuse on it → your telegraph turns unreliable (~50% false).', dead: 'YOUR Tower → you defend blind (no telegraph preview). ENEMY Tower → its aim scatters to random parts and lands ~40% softer.' },
-  engine: { damaged: 'Evasion fades with HP (less dodge, both in defense and vs your focus-fire).', dead: 'No evasion — incoming hits and your focus-fire on it land in full.' },
-  launchpad: { damaged: 'TRS easing fades toward baseline; small attack-strength dip.', dead: 'Owner’s TRS congests (bigger grid, more blockers); loses its attack-strength share.' },
-  core: { damaged: '', dead: 'Match over.' },
+// STATE — one chip per live debuff, with turns + what it does to the part.
+const STATUS_CHIP = {
+  freeze: (s) => `❄️ Frozen ${s.turns}t — ×0 firepower, system offline`,
+  confuse: (s) => `🌀 Confused ${s.turns}t — −50% firepower`,
+  drain: (s) => `🩸 Draining ${s.turns}t — −40% firepower`,
+  burning: (s) => `🔥 Burning ${s.turns}t — ${Math.round(s.dot || 0)}/round, bypasses shield`,
+  shatter: (s) => `💥 Shattered ${s.turns}t — +50% damage taken`,
 };
 
 // component display names are identical across aircraft, so read them off the player
 const compName = (state, id) => state.player.components[id].name;
-
-function validTargetsText(state, effect) {
-  const v = EFFECT_VALID_TARGETS[effect];
-  if (v === '*') return 'any part';
-  return (v || []).map((id) => compName(state, id)).join(', ');
-}
+const row = (k, v) => `<div class="tt-row"><span class="tt-k">${k}</span><span class="tt-v">${v}</span></div>`;
 
 export function createTooltip(rootEl, getState) {
   const el = document.createElement('div');
@@ -100,67 +120,56 @@ function dossier(state, side, id, eid) {
   const aircraft = side === 'player' ? state.player : state.enemies[eid];
   if (!aircraft) return '';
   const c = aircraft.components[id];
-  const sideLabel = side === 'player' ? 'YOU' : aircraft.label;
+  const isPlayer = side === 'player';
+  const sideLabel = isPlayer ? 'YOU' : aircraft.label;
   const pct = Math.round(hpFrac(c) * 100);
   const dead = c.hp <= 0;
 
   const rows = [];
-  rows.push(`<div class="tt-h"><b>${c.name}</b> <span class="tt-side ${side}">${sideLabel}</span></div>`);
-  rows.push(`<div class="tt-hp">HP ${Math.max(0, Math.round(c.hp))}/${c.maxHp} (${pct}%)${dead ? ' — DESTROYED' : ''}</div>`);
-  rows.push(`<div class="tt-sys">${SYSTEM[id] || ''}</div>`);
 
+  // header: name + side badge + HP (right-aligned)
+  const hp = dead ? 'DESTROYED' : `${Math.max(0, Math.round(c.hp))}/${c.maxHp} (${pct}%)`;
+  rows.push(`<div class="tt-h"><b>${c.name}</b> <span class="tt-side ${side}">${sideLabel}</span><span class="tt-hp${dead ? ' dead' : ''}">${hp}</span></div>`);
+
+  // ROLE (+ 🔗 shield-link)
+  let role = (ROLE[id] && ROLE[id][isPlayer ? 'you' : 'foe']) || '';
+  const contrib = state.config.coreShield?.contributors?.[id];
+  if (contrib && id !== 'core') {
+    role += ` <span class="tt-dim">🔗 Shield-link ${contrib}% (toward exposing the Core, needs ${state.config.coreShield.threshold}%).</span>`;
+  }
+  if (role) rows.push(row('Role', role));
+
+  // Core shield state
   if (id === 'core') {
     const sh = coreShieldStatus(aircraft, state.config);
     if (sh.up) {
       const rem = sh.remaining.map((r) => `${compName(state, r.id)} ${r.pct}%`).join(', ');
-      rows.push(`<div class="tt-shield up">🛡️ Shield UP — Core takes 0 damage. Destroy shield-linked parts (${sh.downSum}/${sh.threshold}% down). Still standing: ${rem || 'none'}.</div>`);
+      rows.push(row('Shield', `<span class="tt-shield up">🛡️ UP</span> — Core takes 0 damage. Destroy linked parts (${sh.downSum}/${sh.threshold}% down). Standing: ${rem || 'none'}.`));
     } else {
-      rows.push(`<div class="tt-shield down">⚠️ Shield DOWN (${sh.downSum}/${sh.threshold}%) — the Core is exposed.</div>`);
+      rows.push(row('Shield', `<span class="tt-shield down">⚠️ DOWN (${sh.downSum}/${sh.threshold}%)</span> — the Core is exposed.`));
     }
   }
 
-  // shield-linked parts: destroying them counts toward dropping the Core shield
-  const contrib = state.config.coreShield?.contributors?.[id];
-  if (contrib && id !== 'core') {
-    rows.push(`<div class="tt-shield">🔗 Shield-linked: destroying it adds ${contrib}% toward dropping the Core shield (needs ${state.config.coreShield.threshold}%).</div>`);
+  // ATTACK / DEFENCE — your parts only, and only while they can act
+  if (isPlayer && !dead) {
+    const eff = ATTACK_EFFECT[id];
+    if (eff) rows.push(row('Attack', ATTACK_DESC[eff]));
+    const verb = DEFENSE_VERB[id];
+    if (verb) rows.push(row('Defence', defenceDesc(verb, state.config)));
   }
 
-  const eff = ATTACK_EFFECT[id];
-  if (eff) rows.push(`<div class="tt-off"><b>Offence:</b> ${EFFECT_DESC[eff]}<br><span class="tt-dim">valid on: ${validTargetsText(state, eff)}</span></div>`);
-  const verb = DEFENSE_VERB[id];
-  if (verb) rows.push(`<div class="tt-def"><b>Defence:</b> ${verbDesc(verb, state.config)}</div>`);
-
-  // Why a player part may be greyed out with no statuses: a failed TRS cools it down.
-  if (side === 'player' && state.cooldowns?.[id] > 0) {
-    rows.push(`<div class="tt-cd">⏳ Recovering from a failed TRS — unusable for ${state.cooldowns[id]} more round(s).</div>`);
+  // STATE — live debuffs + (player) telegraph/cooldown/carried + queued chain
+  const bits = [];
+  if (dead) bits.push('<span class="tt-cd">Destroyed — out of the fight.</span>');
+  for (const [k, s] of Object.entries(c.statuses).filter(([, s]) => s.turns > 0)) {
+    bits.push(STATUS_CHIP[k] ? STATUS_CHIP[k](s) : `${k} ${s.turns}t`);
   }
-
-  const casc = CASCADE[id];
-  if (casc && (casc.damaged || casc.dead)) {
-    rows.push(`<div class="tt-casc">${casc.damaged ? `<div>· damaged: ${casc.damaged}</div>` : ''}<div>· destroyed: ${casc.dead}</div></div>`);
-  }
-
-  const statuses = Object.entries(c.statuses).filter(([, s]) => s.turns > 0);
-  if (statuses.length) rows.push(`<div class="tt-st">Statuses: ${statuses.map(([k, s]) => `${k} (${s.turns}t)`).join(', ')}</div>`);
-
-  // this-phase queued chain (statuses on an enemy part / verbs on your part), in order with breaks
-  const build = (side === 'enemy' && state.phase === PHASES.ATTACK_BUILD) || (side === 'player' && state.phase === PHASES.DEFENSE_BUILD);
-  if (build) {
-    const q = state.queue
-      .filter((x) => (side === 'enemy' ? (x.target && x.target.eid === eid && x.target.component === id) : (x.target === id)))
-      .map((x) => (x.brk ? '⊘' : (x.effect || x.verb)));
-    if (q.length) rows.push(`<div class="tt-pending">Queued chain: ${q.join(' → ')} <span class="tt-dim">(combos form on adjacent pairs; ⊘ = break)</span></div>`);
-  }
-
-  // carried defensive states (Sustain shield / Field Repair HoT)
-  if (side === 'player') {
+  if (isPlayer) {
+    if (state.cooldowns?.[id] > 0) bits.push(`<span class="tt-cd">⏳ Recovering from a failed TRS — ${state.cooldowns[id]} more round(s).</span>`);
     const carry = [];
     if (c.carry && c.carry.shield > 0) carry.push(`shield ${Math.round(c.carry.shield)}`);
     if (c.carryHeal > 0) carry.push(`field-repair ${Math.round(c.carryHeal)}/next`);
-    if (carry.length) rows.push(`<div class="tt-defs">Carried: ${carry.join(', ')}</div>`);
-  }
-
-  if (side === 'player') {
+    if (carry.length) bits.push(`🛡️ Carried: ${carry.join(', ')}`);
     const incoming = state.enemies
       .filter((en) => en.telegraph && en.telegraph.visible)
       .map((en) => ({ en, t: (en.telegraph.display || en.telegraph.entries).find((x) => x.component === id) }))
@@ -168,9 +177,19 @@ function dossier(state, side, id, eid) {
     if (incoming.length) {
       const detail = incoming.map((x) => `${x.en.label}${x.t.status ? ` (+${x.t.status})` : ''}${x.t.uncertain ? '?' : ''}`).join(', ');
       const unreliable = incoming.some((x) => x.t.uncertain);
-      rows.push(`<div class="tt-tel">⚠️ Incoming${unreliable ? ' (UNRELIABLE — Tower confused, ~50% false)' : ''} from: ${detail}.</div>`);
+      bits.push(`<span class="tt-tel">⚠️ Incoming${unreliable ? ' (UNRELIABLE — Tower confused)' : ''} from ${detail}.</span>`);
     }
   }
+  // this-phase queued chain (statuses on an enemy part / verbs on your part)
+  const build = (!isPlayer && state.phase === PHASES.ATTACK_BUILD) || (isPlayer && state.phase === PHASES.DEFENSE_BUILD);
+  if (build) {
+    const q = state.queue
+      .filter((x) => (!isPlayer ? (x.target && x.target.eid === eid && x.target.component === id) : (x.target === id)))
+      .map((x) => (x.brk ? '⊘' : (x.effect || x.verb)));
+    if (q.length) bits.push(`<span class="tt-pending">Queued: ${q.join(' → ')} <span class="tt-dim">(⊘ = break)</span></span>`);
+  }
+  if (!bits.length) bits.push(`<span class="tt-dim">Healthy · no debuffs${isPlayer ? ' · no incoming strike' : ''}.</span>`);
+  rows.push(row('State', bits.join('<br>')));
 
   return rows.join('');
 }

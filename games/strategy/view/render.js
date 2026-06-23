@@ -13,10 +13,22 @@
 import { COMPONENT_IDS, ATTACK_EFFECT, DEFENSE_VERB, isAlive, isEffectValidOn } from '../core/components.js';
 import { PHASES } from '../core/state.js';
 import { coreShieldUp } from '../core/cascade.js';
+import { OFFENSE_COMBOS, DEFENSE_COMBOS, lookupCombo } from '../combat/combos.js';
 
 const STATUS_ICON = { freeze: '❄️', confuse: '🌀', drain: '🩸', burning: '🔥', shatter: '💥' };
 const COMBO_ICON = { meltdown: '🌋', stasisLock: '🔒', wildfire: '♨️' };
 const DEF_ICON = { shield: '🛡️', repair: '🔧', cleanse: '🧹', harden: '🪨', overclock: '⚡' };
+// Base-status order the resolve uses to build the chain (mirror of BASE_OFFENSE).
+const BASE_OFFENSE_ORDER = ['freeze', 'confuse', 'drain', 'burning', 'shatter'];
+// Combo icons (kept in sync with view/comboInfo.js).
+const OFFENSE_COMBO_ICON = {
+  Glass: '🪟', 'Stasis Lock': '🔒', Meltdown: '🌋', Backfire: '💢',
+  Collapse: '🏚️', Wildfire: '♨️', Vaporize: '💨', 'Feedback Cascade': '🔗',
+};
+const DEFENSE_COMBO_ICON = {
+  Sustain: '🔁', 'Purified Barrier': '✨', Bastion: '🏰', 'Reactive Plating': '🪞',
+  'Field Repair': '🩹', Deflect: '🤺', Reboot: '🔄',
+};
 const parseEid = (ds) => (ds.eid != null && ds.eid !== '' ? Number(ds.eid) : null);
 
 /**
@@ -44,6 +56,49 @@ function queuedFor(state, side, id, eid) {
   return state.queue.filter((x) => (side === 'enemy'
     ? (x.target && x.target.eid === eid && x.target.component === id)
     : (x.target === id)));
+}
+
+/**
+ * Render the queued-chain row with a LIVE combo preview: mirror the resolve chain
+ * (live entries + this phase's queued additions/breaks) and walk it greedily exactly
+ * like `resolveChain`, but COLLAPSE each comboing pair into a single combo icon —
+ * `[status1][status2]` becomes `[combo]` as soon as the pair forms, no wait for resolve.
+ *   - enemy/attack: live = base statuses; pairs use OFFENSE_COMBOS.
+ *   - player/defense: live = a carried (Sustain/Bastion/…) shield; pairs use DEFENSE_COMBOS.
+ * Live (non-fresh) leftovers aren't re-drawn here — they already show in the badges row;
+ * only this-phase queued leftovers + breaks render alongside the collapsed combos.
+ */
+function queuedChainHtml(state, side, id, eid, q) {
+  const comp = (side === 'enemy' ? state.enemies[eid] : state.player).components[id];
+  const table = side === 'enemy' ? OFFENSE_COMBOS : DEFENSE_COMBOS;
+  const comboIcon = side === 'enemy' ? OFFENSE_COMBO_ICON : DEFENSE_COMBO_ICON;
+  const icon = side === 'enemy' ? STATUS_ICON : DEF_ICON;
+
+  const live = side === 'enemy'
+    ? BASE_OFFENSE_ORDER.filter((k) => comp.statuses[k] && comp.statuses[k].turns > 0).map((k) => ({ key: k, fresh: false }))
+    : (comp.carry && comp.carry.shield > 0 ? [{ key: 'shield', fresh: false }] : []);
+  const queued = q.map((x) => (x.brk ? { brk: true } : { key: x.effect || x.verb, fresh: true }));
+  const chain = [...live, ...queued];
+
+  const out = [];
+  let i = 0;
+  while (i < chain.length) {
+    const e = chain[i];
+    if (e.brk) { out.push('<span class="brk" title="break — a combo can\'t form across this">⊘</span>'); i += 1; continue; }
+    const n = chain[i + 1];
+    if (n && !n.brk) {
+      const def = lookupCombo(table, e.key, n.key);          // ≥1 fresh entry, mirrors resolveChain
+      if (def && (e.fresh || n.fresh)) {
+        const fo = def.focusOnly ? ' · focus only' : '';
+        out.push(`<span class="combo-prev" title="${def.name} — ${e.key}+${n.key}${fo} (forms at resolve)">${comboIcon[def.name] || '✦'}</span>`);
+        i += 2; continue;
+      }
+    }
+    // single entry: only this-phase queued additions render here (live ones are in the badges row)
+    if (e.fresh) out.push(`<span class="st pending" title="queued ${e.key} — resolves this phase">${icon[e.key] || '•'}</span>`);
+    i += 1;
+  }
+  return out.join('');
 }
 
 function enemyHtml(state) {
@@ -124,16 +179,15 @@ function cardHtml(state, side, id, eid) {
     if (c.carryHeal > 0) carried += `<span class="df" title="Field Repair (heals next defense)">🔧${Math.round(c.carryHeal)}</span>`;
   }
 
-  // QUEUED chain this phase (statuses on enemy / verbs on you), in order, with break markers
+  // QUEUED chain this phase, with comboing pairs collapsed to a live combo icon
+  // (enemy → offensive combos, player → defensive combos). See queuedChainHtml.
   let queued = '';
   let breakBtn = '';
   const buildSide = (side === 'enemy' && state.phase === PHASES.ATTACK_BUILD)
     || (side === 'player' && state.phase === PHASES.DEFENSE_BUILD);
   if (buildSide && !dead) {
     const q = queuedFor(state, side, id, eid);
-    queued = q.map((x) => (x.brk
-      ? '<span class="brk" title="break — a combo can\'t form across this">⊘</span>'
-      : `<span class="st pending" title="queued ${x.effect || x.verb} — resolves this phase">${(side === 'enemy' ? STATUS_ICON[x.effect] : DEF_ICON[x.verb]) || '•'}</span>`)).join('');
+    queued = queuedChainHtml(state, side, id, eid, q);
     if (q.length && !q[q.length - 1].brk) {
       breakBtn = `<span class="breakbtn" data-side="${side}" data-id="${id}"${side === 'enemy' ? ` data-eid="${eid}"` : ''} title="insert a break so the next pair won't combo">⊘</span>`;
     }

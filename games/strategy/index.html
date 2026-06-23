@@ -113,6 +113,10 @@
       .breakbtn { font-size: 11px; cursor: pointer; color: #ff8a3d; border: 1px solid #ff8a3d66;
         border-radius: 4px; padding: 0 4px; margin-left: 2px; user-select: none; }
       .breakbtn:hover { background: #ff8a3d22; }
+      /* live combo preview: a comboing pair in the queue collapses to this single icon */
+      .combo-prev { font-size: 11px; border: 1px solid #e6c84a; border-radius: 4px; padding: 0 3px;
+        background: #e6c84a1f; box-shadow: 0 0 6px #e6c84a66; animation: combo-pop .2s ease-out; }
+      @keyframes combo-pop { from { transform: scale(.6); } to { transform: scale(1); } }
       .role { font-size: 10px; color: #7f8696; margin-top: 4px; font-style: italic; }
       .cd { font-size: 9px; color: #ff8a3d; }
 
@@ -153,27 +157,30 @@
       .en { color: #ff7a8a; font-weight: 700; }
       .sep { color: #3a3f4d; margin: 0 8px; }
 
-      /* hover dossier (view/tooltip.js) */
+      /* hover dossier (view/tooltip.js) — labeled, side-aware sections */
       .trs-tooltip { position: fixed; z-index: 50; max-width: 320px; pointer-events: none;
         background: #1b1e27; color: #d8dce4; border: 1px solid #39414f;
         border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.45;
         box-shadow: 0 8px 28px #000a; }
-      .trs-tooltip .tt-h { font-size: 13px; margin-bottom: 3px; }
-      .trs-tooltip .tt-side { font-size: 10px; padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle; }
+      /* header row: name + side badge + HP (right-aligned) */
+      .trs-tooltip .tt-h { display: flex; align-items: baseline; gap: 6px; font-size: 13px;
+        padding-bottom: 5px; margin-bottom: 2px; border-bottom: 1px solid #2a2f3b; }
+      .trs-tooltip .tt-side { font-size: 10px; padding: 1px 5px; border-radius: 4px; }
       .trs-tooltip .tt-side.player { background: #1f3a66; color: #9cc2ff; }
       .trs-tooltip .tt-side.enemy { background: #5a2230; color: #ff9caa; }
-      .trs-tooltip .tt-hp { color: #aeb4c0; margin-bottom: 4px; }
-      .trs-tooltip .tt-sys { color: #c2c7d2; margin-bottom: 6px; }
-      .trs-tooltip .tt-off, .trs-tooltip .tt-def, .trs-tooltip .tt-casc,
-      .trs-tooltip .tt-st, .trs-tooltip .tt-pending, .trs-tooltip .tt-defs,
-      .trs-tooltip .tt-tel, .trs-tooltip .tt-shield { margin-top: 5px; }
+      .trs-tooltip .tt-hp { margin-left: auto; color: #aeb4c0; font-size: 11px; font-weight: 600; }
+      .trs-tooltip .tt-hp.dead { color: #ff5566; }
+      /* labeled section rows: fixed-width small-caps label + value */
+      .trs-tooltip .tt-row { display: flex; gap: 9px; margin-top: 5px; }
+      .trs-tooltip .tt-k { flex: 0 0 50px; color: #7e8597; font-size: 10px; font-weight: 700;
+        letter-spacing: .06em; padding-top: 2px; }
+      .trs-tooltip .tt-v { flex: 1 1 auto; min-width: 0; }
       .trs-tooltip .tt-dim { color: #8a90a0; }
-      .trs-tooltip .tt-casc { color: #9aa0aa; font-size: 11px; }
       .trs-tooltip .tt-shield.up { color: #6fc0ff; }
       .trs-tooltip .tt-shield.down { color: #ffb04a; }
       .trs-tooltip .tt-pending { color: #9cc2ff; }
       .trs-tooltip .tt-tel { color: #ffb04a; }
-      .trs-tooltip .tt-cd { color: #ff8a3d; margin-top: 5px; }
+      .trs-tooltip .tt-cd { color: #ff8a3d; }
       .cdbadge { font-size: 11px; color: #ff8a3d; }
     </style>
   </head>

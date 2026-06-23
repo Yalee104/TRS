@@ -29,13 +29,18 @@ export const DEFENSE_VERB = {
   launchpad: 'overclock',
 };
 
-/** Effect → which target components it is meaningful on (Table B v1). `'*'` = any. */
+/**
+ * Effect → which target components it is meaningful on. `'*'` = any part.
+ * v1 simplification (parked): Table B effect-validity is dropped — ANY status can be
+ * applied to ANY component (incl. the Core). The richer matching rules may return later;
+ * `isEffectValidOn` stays the single gate so re-tightening only means editing this map.
+ */
 export const EFFECT_VALID_TARGETS = {
-  freeze: ['generator', 'weapon', 'tower', 'engine', 'launchpad'], // any functional part (not core)
-  confuse: ['weapon', 'tower'],                                    // only parts that aim/fire
-  drain: '*',                                                      // any part for HP; best on generator/core
-  burning: '*',                                                    // everything burns
-  shatter: '*',                                                    // v2: any part (universal brittle enabler)
+  freeze: '*',
+  confuse: '*',
+  drain: '*',
+  burning: '*',
+  shatter: '*',
 };
 
 /** Build a fresh component from its config entry. */
