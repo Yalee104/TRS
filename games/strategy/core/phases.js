@@ -67,6 +67,11 @@ function endOfRound(state) {
     const r = tickAircraftStatuses(e, state.config);
     if (r.dot) logEvent(state, `End of round: Burning dealt ${Math.round(r.dot)} to ${e.label}.`);
     if (r.meltdown) logEvent(state, `Meltdown: ${Math.round(r.meltdown)} funnelled into ${e.label}'s Reactor Core.`);
+    if (r.drainHeal) {                              // ongoing Drain siphons enemy HP into your Core
+      const pc = state.player.components.core;
+      pc.hp = Math.min(pc.maxHp, pc.hp + r.drainHeal);
+      logEvent(state, `End of round: Drain siphoned ${Math.round(r.drainHeal)} from ${e.label} into your Core.`);
+    }
   }
   const rp = tickAircraftStatuses(state.player, state.config);
   if (rp.dot) logEvent(state, `End of round: Burning dealt ${Math.round(rp.dot)} to you.`);

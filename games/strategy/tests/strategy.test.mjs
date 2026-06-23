@@ -265,6 +265,17 @@ test('attack resolve damages the Focus; Drain heals + pierces armor', () => {
   assert(sum.healed > 0, 'drain healed the player');
 });
 
+test('Drain siphons each active turn — DoT to the part + heal returned to the applier', () => {
+  const s = fresh();
+  applyStatus(s.enemies[0].components.weapon, 'drain', { turns: 2, potency: 10 }); // 2-turn drain
+  const before = s.enemies[0].components.weapon.hp;
+  const r = tickAircraftStatuses(s.enemies[0], CONFIG);
+  const siphon = 10 * CONFIG.effects.drain.dotPerPotency;
+  assert(near(s.enemies[0].components.weapon.hp, before - siphon, 0.001), 'drained part loses HP this turn');
+  assert(near(r.drainHeal, siphon, 0.001), 'siphon flows back to the applier');
+  assert(s.enemies[0].components.weapon.statuses.drain.turns === 1, 'still 1 turn left → it siphons again next round');
+});
+
 test('Reactor Core shield blocks all damage while its shield-linked parts live', () => {
   const s = fresh();
   attack(s, 'engine', 6, 'core'); // shatter, valid on core
