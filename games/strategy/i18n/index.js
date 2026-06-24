@@ -25,8 +25,8 @@ const STORAGE_KEY = 'trs.lang';
 
 function detectInitial() {
   try { const s = localStorage.getItem(STORAGE_KEY); if (s && CATALOGS[s]) return s; } catch { /* no storage */ }
-  try { if ((navigator.language || '').toLowerCase().startsWith('zh')) return 'zh-Hant'; } catch { /* no navigator */ }
-  return 'en';
+  try { if ((navigator.language || '').toLowerCase().startsWith('en')) return 'en'; } catch { /* no navigator */ }
+  return 'zh-Hant'; // default language is Traditional Chinese
 }
 
 let locale = detectInitial();
