@@ -26,6 +26,12 @@ import { createBridge, statusFriction } from '../puzzle/bridge.js';
 import { ATTACK_EFFECT as PRESET_ATTACK_EFFECT, DEFENSE_VERB as PRESET_DEFENSE_VERB } from '../../grid-path-puzzle/presets/trs.js';
 import { evaluate } from '../../grid-path-puzzle/combo/ComboEngine.js';
 import { generate } from '../../grid-path-puzzle/module/core/generator.js';
+import { isOwned, COMPONENT_IDS } from '../core/components.js';
+import {
+  createRun, effectiveConfig, buildBattleUi, applyOwnership, applyPersistentHp,
+  captureBattleResult, advanceBattle, isFinalBattle, rollRewardOffer, applyRewardChoice,
+  rewardPools, deepMerge, moddedMaxHp,
+} from '../core/run.js';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const CONFIG = JSON.parse(readFileSync(resolve(__dir, '../config/game.json'), 'utf8'));
@@ -700,4 +706,187 @@ test('defensive palettes also generate solvable boards that evaluate', () => {
 test('comboPotency sums item values', () => {
   assert(comboPotency({ items: [{ value: 2 }, { value: 3 }] }) === 5, 'sum');
   assert(comboPotency(null) === 0, 'null → 0');
+});
+
+// =============================================================================
+//  run meta-layer (core/run.js) — ownership, mods, progression, rewards
+// =============================================================================
+
+// Build a fresh battle state from a run exactly as main.js would.
+const battleFrom = (run) => {
+  const s = createState(effectiveConfig(run), buildBattleUi(run, CONFIG.ui));
+  applyOwnership(s, run);
+  applyPersistentHp(s, run);
+  startAttackBuild(s);
+  return s;
+};
+const bridgeFor = (s) => createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+
+// --- deepMerge helper --------------------------------------------------------
+test('deepMerge: nested objects merge, scalars/arrays overwrite, no shared refs', () => {
+  const base = { a: { x: 1, y: 2 }, b: 5 };
+  deepMerge(base, { a: { y: 9, z: 3 }, b: 6 });
+  assert(base.a.x === 1 && base.a.y === 9 && base.a.z === 3, 'nested merge keeps siblings');
+  assert(base.b === 6, 'scalar overwrite');
+});
+
+// --- ownership gating --------------------------------------------------------
+test('run: a burst loadout owns exactly Core + Weapon + Engine', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  assert(run.owned.core && run.owned.weapon && run.owned.engine, 'burst owns core/weapon/engine');
+  assert(!run.owned.generator && !run.owned.tower && !run.owned.launchpad, 'others not owned');
+});
+
+test('ownership: only owned components can open their TRS (the keystone gate)', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const s = battleFrom(run);
+  assert(s.player.components.weapon.owned === true, 'weapon owned');
+  assert(s.player.components.tower.owned === false, 'tower not owned');
+  assert(s.player.components.core.owned === true, 'core forced owned');
+  const b = bridgeFor(s);
+  assert(b.canOpen('weapon', true) === true, 'owned weapon opens');
+  assert(b.canOpen('tower', true) === false, 'unowned tower cannot open → its confuse never applies');
+});
+
+test('ownership: a combo cannot form when a source component is unowned', () => {
+  // Glass = Freeze(weapon)+Shatter(engine); owning only the weapon means Shatter can
+  // never be applied (engine TRS is gated), so Glass can never form.
+  const run = createRun(CONFIG, { components: ['weapon'] });
+  const s = battleFrom(run);
+  const b = bridgeFor(s);
+  assert(b.canOpen('weapon', true) === true, 'weapon (freeze) available');
+  assert(b.canOpen('engine', true) === false, 'engine (shatter) gated → no Glass');
+});
+
+test('ownership: an unowned weighted part contributes 0 to Combat Condition', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' }); // owns weapon(.35)+engine(.10) only
+  const s = battleFrom(run);
+  assert(near(combatCondition(s.player, s.config), 0.45, 0.001), 'only owned weighted parts count');
+});
+
+test('ownership: an unowned Generator gives no brownout protection (systemState)', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' }); // no generator
+  const s = battleFrom(run);
+  assert(systemState(s.player, s.config).brownout === CONFIG.cascade.brownoutMult, 'unowned generator → brownout');
+  assert(systemState(s.player, s.config).coreArmor === 0, 'unowned generator → no core armor');
+});
+
+// --- mods + effective config (no base mutation) ------------------------------
+test('mods: a combo-mod overrides the combo number; base config is untouched', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  applyRewardChoice(run, { type: 'comboMod', modId: 'meltdownCore', combo: 'meltdown', table: 'offense', patch: { coreFrac: 0.7 } });
+  const cfg = effectiveConfig(run);
+  assert(cfg.effects.synergy.combos.meltdown.coreFrac === 0.7, 'effective config has 0.7');
+  assert(run.config.effects.synergy.combos.meltdown.coreFrac === 0.5, 'run.config unchanged (0.5)');
+  assert(CONFIG.effects.synergy.combos.meltdown.coreFrac === 0.5, 'base CONFIG unchanged');
+});
+
+test('mods: a defense combo-mod merges into defense.combos', () => {
+  const run = createRun(CONFIG, { loadout: 'sustain' });
+  applyRewardChoice(run, { type: 'comboMod', modId: 'bastionCap', combo: 'bastion', table: 'defense', patch: { capFrac: 0.35 } });
+  assert(effectiveConfig(run).defense.combos.bastion.capFrac === 0.35, 'bastion cap modded');
+});
+
+test('mods: a component-mod raises maxHp and flows effect numbers into the config', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  applyRewardChoice(run, { type: 'componentMod', modId: 'coreHp', id: 'core', patch: { hpBonus: 40 } });
+  applyRewardChoice(run, { type: 'componentMod', modId: 'weaponFreeze', id: 'weapon', patch: { effect: { freeze: { dmgPerPotency: 2.0 } } } });
+  const cfg = effectiveConfig(run);
+  assert(cfg.components.core.hp === CONFIG.components.core.hp + 40, 'core hp +40 in effective config');
+  assert(moddedMaxHp(run, 'core') === CONFIG.components.core.hp + 40, 'moddedMaxHp reflects bonus');
+  assert(cfg.effects.freeze.dmgPerPotency === 2.0, 'weapon freeze dmg modded');
+  assert(CONFIG.components.core.hp === 200 && CONFIG.effects.freeze.dmgPerPotency === 1.5, 'base untouched');
+});
+
+test('mods: per-battle escalation scales archetype damage budgets', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.battleIndex = 2; // mult = 1.08^2
+  const expected = Math.round(CONFIG.archetypes.saboteur.damageBudget * 1.08 ** 2);
+  assert(effectiveConfig(run).archetypes.saboteur.damageBudget === expected, 'damageBudget escalates');
+});
+
+// --- run progression ---------------------------------------------------------
+test('progression: HP persists between battles; Core is clamped to >=1', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const b1 = battleFrom(run);
+  b1.player.components.weapon.hp = 30;
+  b1.player.components.core.hp = 50;
+  captureBattleResult(run, b1);
+  advanceBattle(run);
+  assert(run.battleIndex === 1, 'advanced to battle 1');
+  const b2 = battleFrom(run);
+  assert(b2.player.components.weapon.hp === 30, 'weapon HP carried');
+  assert(b2.player.components.core.hp === 50, 'core HP carried');
+  // a near-dead core still starts the next battle alive
+  run.persistentHp.core = 0;
+  assert(battleFrom(run).player.components.core.hp === 1, 'core clamped to >=1');
+});
+
+test('progression: isFinalBattle is true only on the last battle', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  assert(isFinalBattle(run) === false, 'battle 0 is not final');
+  run.battleIndex = CONFIG.run.battles.length - 1;
+  assert(isFinalBattle(run) === true, 'last battle is final');
+});
+
+test('progression: a destroyed owned part is dead next battle until repaired', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.persistentHp.weapon = 0;
+  let s = battleFrom(run);
+  assert(s.player.components.weapon.hp === 0, 'weapon starts dead');
+  assert(bridgeFor(s).canOpen('weapon', true) === false, 'dead part cannot open');
+  applyRewardChoice(run, { type: 'repair', id: 'weapon', amount: 'full' });
+  s = battleFrom(run);
+  assert(s.player.components.weapon.hp === s.player.components.weapon.maxHp, 'repaired to full');
+  assert(bridgeFor(s).canOpen('weapon', true) === true, 'revived part opens again');
+});
+
+// --- reward generation -------------------------------------------------------
+test('rewards: offer honors size, never offers an owned component, and is deterministic', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const a = rollRewardOffer(run);
+  assert(a.length === CONFIG.run.reward.offerSize, 'offer is offerSize');
+  assert(a.every((r) => r.type !== 'component' || !run.owned[r.id]), 'never offers an owned component');
+  assert(a.some((r) => r.type === 'component'), 'pity rule guarantees a component while unowned remain');
+  const b = rollRewardOffer(run);
+  assert(JSON.stringify(a) === JSON.stringify(b), 'same seed+battleIndex → identical offer');
+});
+
+test('rewards: combo-mods are only offered for currently-formable combos', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' }); // owns weapon+engine, not launchpad
+  const ids = rewardPools(run).comboMod.map((m) => m.modId);
+  assert(ids.includes('glassShatter'), 'Glass (weapon+engine) is formable → offerable');
+  assert(!ids.includes('meltdownCore'), 'Meltdown (launchpad+engine) not formable → not offered');
+});
+
+test('rewards: repair only appears when something is damaged', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  assert(rewardPools(run).repair.length === 0, 'all full → no repair');
+  run.persistentHp.weapon = 10;
+  assert(rewardPools(run).repair.some((r) => r.id === 'weapon'), 'damaged weapon → repair offered');
+});
+
+test('rewards: applyRewardChoice mutates the run per type', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  applyRewardChoice(run, { type: 'component', id: 'launchpad' });
+  assert(run.owned.launchpad && run.persistentHp.launchpad === moddedMaxHp(run, 'launchpad'), 'component acquired at full HP');
+  applyRewardChoice(run, { type: 'comboMod', modId: 'glassShatter', combo: 'glass', table: 'offense', patch: { mult: 2.5 } });
+  assert(run.comboMods.glass.mult === 2.5, 'combo-mod recorded');
+  applyRewardChoice(run, { type: 'componentMod', modId: 'engineShatter', id: 'engine', patch: { effect: { shatter: { dmgPerPotency: 3.0 } } } });
+  assert(run.componentMods.engine.effect.shatter.dmgPerPotency === 3.0, 'component-mod recorded');
+});
+
+test('rewards: an all-owned, all-repaired, all-modded run still yields a non-empty offer', () => {
+  const run = createRun(CONFIG, { components: COMPONENT_IDS.filter((id) => id !== 'core') });
+  for (const id of COMPONENT_IDS) run.persistentHp[id] = moddedMaxHp(run, id);
+  for (const modId of Object.keys(CONFIG.run.comboModCatalog)) if (modId !== '_comment') run.rewardsTaken.push({ type: 'comboMod', modId });
+  for (const modId of Object.keys(CONFIG.run.componentModCatalog)) if (modId !== '_comment') run.rewardsTaken.push({ type: 'componentMod', modId });
+  const offer = rollRewardOffer(run);
+  assert(offer.length >= 1, 'never empty (repair fallback)');
+});
+
+// --- backward compatibility --------------------------------------------------
+test('back-compat: a plain createState leaves every component owned (gating is a no-op)', () => {
+  const s = createState(CONFIG);
+  assert(COMPONENT_IDS.every((id) => isOwned(s.player.components[id])), 'all owned by default');
 });

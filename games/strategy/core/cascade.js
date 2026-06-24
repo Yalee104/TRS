@@ -11,17 +11,23 @@
 //    • Launch Pad — destroyed → TRS congests (bigger grid, more blockers, less budget)
 // =============================================================================
 
-import { isAlive, hpFrac, hasStatus } from './components.js';
+import { isAlive, isOwned, hpFrac, hasStatus } from './components.js';
+
+/** A part provides its system only if the owner actually has it AND it's alive. */
+const works = (c) => isOwned(c) && isAlive(c);
 
 export function systemState(aircraft, config) {
   const c = aircraft.components;
   const casc = config.cascade;
 
-  const generatorAlive = isAlive(c.generator);
-  const weaponAlive = isAlive(c.weapon);
-  const towerAlive = isAlive(c.tower);
-  const engineAlive = isAlive(c.engine);
-  const launchpadAlive = isAlive(c.launchpad);
+  // Unowned parts (run meta-layer) behave like missing ones: no system benefit. The
+  // Core *shield* is intentionally NOT gated this way (see coreShieldStatus) so an
+  // early run with few parts isn't born with an exposed Core.
+  const generatorAlive = works(c.generator);
+  const weaponAlive = works(c.weapon);
+  const towerAlive = works(c.tower);
+  const engineAlive = works(c.engine);
+  const launchpadAlive = works(c.launchpad);
 
   return {
     // Generator → Core armor (gradient) + brownout (cliff)
@@ -89,9 +95,9 @@ export function coreShieldUp(aircraft, config) {
 /** A part is "disabled" if Frozen OR Stasis-Locked (the Frozen+Confused combo). */
 const isDisabled = (c) => hasStatus(c, 'freeze') || hasStatus(c, 'stasisLock');
 
-/** Is the Tower providing its system right now? (alive AND not frozen/locked) */
+/** Is the Tower providing its system right now? (owned, alive AND not frozen/locked) */
 export function towerActive(aircraft) {
-  return isAlive(aircraft.components.tower) && !isDisabled(aircraft.components.tower);
+  return works(aircraft.components.tower) && !isDisabled(aircraft.components.tower);
 }
 
 /** Aim multiplier: full if the Tower is active, else the destroyed/jammed penalty. */

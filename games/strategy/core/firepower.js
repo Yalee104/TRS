@@ -9,7 +9,7 @@
 //  config, so the feel is tunable without code.
 // =============================================================================
 
-import { hpFrac, isAlive } from './components.js';
+import { hpFrac, isAlive, isOwned } from './components.js';
 import { systemState } from './cascade.js';
 
 const DEBUFF_KEYS = ['freeze', 'drain', 'confuse', 'burning', 'shatter'];
@@ -34,7 +34,7 @@ export function combatCondition(aircraft, config) {
   let cond = 0;
   for (const [id, w] of Object.entries(weights)) {
     const comp = aircraft.components[id];
-    if (!comp) continue;
+    if (!comp || !isOwned(comp)) continue;   // an unowned part contributes nothing (like a missing one)
     cond += w * hpFrac(comp) * debuffFactorOf(comp, config);
   }
   return Math.max(0, Math.min(1, cond));
@@ -65,6 +65,7 @@ export function conditionReport(aircraft, config) {
   for (const id of Object.keys(weights)) {
     const comp = aircraft.components[id];
     if (!comp) continue;
+    if (!isOwned(comp)) { chokes.push(`${comp.name} not owned ×0`); continue; }
     if (!isAlive(comp)) { chokes.push(`${comp.name} destroyed ×0`); continue; }
     const wd = worstDebuff(comp, config);
     const hf = hpFrac(comp);

@@ -13,7 +13,7 @@
 import { GridPathPuzzle } from '../../grid-path-puzzle/module/GridPathPuzzle.js';
 import { evaluate } from '../../grid-path-puzzle/combo/ComboEngine.js';
 import { PHASES } from '../core/state.js';
-import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, hasStatus } from '../core/components.js';
+import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, isOwned, hasStatus } from '../core/components.js';
 import { systemState } from '../core/cascade.js';
 import { spendCredit } from '../core/phases.js';
 import { logEvent } from '../core/state.js';
@@ -76,7 +76,8 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     if (state.pendingAction || state.pendingDefense) return false; // finish placing the last status first
     if (state.pickFocus) return false;
     if (state.cooldowns[componentId] > 0) return false;
-    if (!isAlive(state.player.components[componentId])) return false;
+    const comp = state.player.components[componentId];
+    if (!isAlive(comp) || !isOwned(comp)) return false;   // unowned part → no TRS → no effect → no combo
     if (isAttack) {
       if (state.phase !== PHASES.ATTACK_BUILD) return false;
       if (!ATTACK_EFFECT[componentId]) return false;

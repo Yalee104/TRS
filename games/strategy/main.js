@@ -26,7 +26,7 @@ import { createConfigPanel } from './view/configPanel.js';
 import { createInfoBar } from './view/infoBar.js';
 import { createTooltip } from './view/tooltip.js';
 import { createComboPanel } from './view/comboInfo.js';
-import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, isEffectValidOn } from './core/components.js';
+import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, isOwned, isEffectValidOn } from './core/components.js';
 import { t, onLocaleChange } from './i18n/index.js';
 
 const app = { state: createState(config), started: false };
@@ -64,13 +64,13 @@ function onComponentClick(side, id, eid) {
       if (enemyLives && isAlive(enemy.components[id]) && isEffectValidOn(s.pendingAction.effect, id)) finalizeAttackTarget(s, eid, id);
     } else if (s.pickFocus) {                                // resolve: pick the firepower Focus
       if (enemyLives && isAlive(enemy.components[id])) commitAttack(s, eid, id);
-    } else if (side === 'player' && ATTACK_EFFECT[id]) {     // step ①: play a weapon's TRS
+    } else if (side === 'player' && ATTACK_EFFECT[id] && isOwned(s.player.components[id])) { // step ①: play a weapon's TRS
       bridge.open(id);
     }
   } else if (s.phase === PHASES.DEFENSE_BUILD && side === 'player') {
     if (s.pendingDefense) {                                  // step ②: choose the part to protect
       if (isAlive(s.player.components[id])) finalizeDefenseTarget(s, id);
-    } else if (DEFENSE_VERB[id]) {                           // step ①: play a part's TRS
+    } else if (DEFENSE_VERB[id] && isOwned(s.player.components[id])) { // step ①: play a part's TRS
       bridge.open(id);
     }
   }
