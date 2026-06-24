@@ -20,8 +20,7 @@ export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, 
   const archList = Object.keys(archetypes || {}).filter((k) => k !== '_comment');
   const maxEnemies = defaults.maxEnemies || 4;
   const totalBattles = (config?.run?.battles || []).length;
-  let view = 'runSetup';   // default to the run meta-layer
-  let runMode = true;
+  let view = 'config';     // 'config'/'status' (single battle) · 'runSetup'/'runStatus' (run game)
   let run = null;
   // live single-battle values (seeded from config.ui defaults; preserved across rebuilds)
   let vals = {
@@ -58,14 +57,12 @@ export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, 
       seed: Number($('#cfg-seed').value) || 0,
     };
   }
-  const isSetup = () => view === 'config' || view === 'runSetup';
   const isBattle = () => view === 'status' || view === 'runStatus';
   function applyView() {
     setupEl.style.display = view === 'config' ? '' : 'none';
     runSetupEl.style.display = view === 'runSetup' ? '' : 'none';
     runHudEl.style.display = view === 'runStatus' ? '' : 'none';
     statusEl.style.display = isBattle() ? '' : 'none';
-    $('#cfg-mode').style.display = isSetup() ? '' : 'none';
     $('#cfg-restart').style.display = view === 'status' ? '' : 'none';
     $('#cfg-newrun').style.display = view === 'runStatus' ? '' : 'none';
   }
@@ -76,10 +73,6 @@ export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, 
       <label class="lang-row">${t('ui.language')}
         <select id="cfg-lang">${LOCALES.map((l) => `<option value="${l.code}"${l.code === getLocale() ? ' selected' : ''}>${l.label}</option>`).join('')}</select>
       </label>
-      <div class="mode-toggle" id="cfg-mode">
-        <button type="button" data-mode="run" class="${runMode ? 'active' : ''}">${t('run.modeRun')}</button>
-        <button type="button" data-mode="single" class="${runMode ? '' : 'active'}">${t('run.modeSingle')}</button>
-      </div>
       <div class="setup">
         <label>${t('config.enemies')} <span class="dim">${t('config.upTo', { max: maxEnemies })}</span></label>
         <div id="cfg-roster" class="roster"></div>
@@ -109,12 +102,6 @@ export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, 
     rosterEl = $('#cfg-roster');
 
     $('#cfg-lang').addEventListener('change', (e) => setLocale(e.target.value));
-    $('#cfg-mode').addEventListener('click', (e) => {
-      const b = e.target.closest('button[data-mode]');
-      if (!b) return;
-      runMode = b.dataset.mode === 'run';
-      if (typeof onMode === 'function') onMode(runMode ? 'run' : 'single');
-    });
     rosterEl.addEventListener('click', (e) => {
       if (e.target.classList.contains('rm') && rowSelects().length > 1) { e.target.closest('.roster-row').remove(); syncButtons(); }
     });
@@ -126,16 +113,16 @@ export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, 
     $('#cfg-seed').value = vals.seed;
     $('#cfg-credit').addEventListener('input', () => { $('#cfg-credit-val').textContent = `${$('#cfg-credit').value}s`; });
 
-    $('#cfg-start').addEventListener('click', () => onStart(getUi()));
-    $('#cfg-restart').addEventListener('click', () => onRestart());
+    $('#cfg-start').addEventListener('click', () => { if (typeof onStart === 'function') onStart(getUi()); });
+    $('#cfg-restart').addEventListener('click', () => { if (typeof onRestart === 'function') onRestart(); });
     $('#cfg-newrun').addEventListener('click', () => { if (typeof onNewRun === 'function') onNewRun(); });
     applyView();
     if (view === 'runStatus' && run) renderHud();
   }
 
   function getUi() { return captureVals(); }
-  function showConfig() { view = 'config'; runMode = false; applyView(); }
-  function showRunSetup() { view = 'runSetup'; runMode = true; applyView(); }
+  function showConfig() { view = 'config'; applyView(); }
+  function showRunSetup() { view = 'runSetup'; applyView(); }
   function showStatus() { view = 'status'; applyView(); }
   function showRunStatus() { view = 'runStatus'; applyView(); }
   function setRun(r) { run = r; if (view === 'runStatus') renderHud(); }

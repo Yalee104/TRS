@@ -1,0 +1,249 @@
+/* =============================================================================
+   style.css — shared visual shell for the strategy games.
+   Used by BOTH "TRS Command" (games/strategy/, single battle) and "TRS Run"
+   (games/strategy-run/, the roguelike). Keeping one stylesheet means the boards
+   stay visually identical as the look is tuned. The run-only rules (#run-screen,
+   .rs-*, .run-hud, .comp.unowned) are inert in the single-battle game.
+   ============================================================================= */
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #0e0f13; color: #e6e6e6;
+  font-family: system-ui, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif; font-size: 14px; }
+
+#app { display: grid; height: 100vh;
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: 1fr 104px;
+  grid-template-areas: "left center" "left info"; }
+
+#left   { grid-area: left;  background: #14161d; border-right: 1px solid #262a36; padding: 14px; overflow:auto; }
+#center { grid-area: center; display: flex; flex-direction: column; min-width: 0; overflow: auto; position: relative; }
+/* combo reference card, docked bottom-left of the board area (hidden while TRS is open) */
+#combo-panel { position: absolute; left: 8px; bottom: 8px; z-index: 20; width: 188px;
+  background: #14161deb; border: 1px solid #2a2e3a; border-radius: 8px; padding: 7px 9px;
+  font-size: 11px; box-shadow: 0 6px 20px #0008; }
+#combo-panel .cp-title { font-weight: 700; color: #cdd3df; margin-bottom: 4px; }
+#combo-panel .cp-hint { font-weight: 400; color: #7f8696; font-size: 10px; }
+#combo-panel .cp-row { padding: 2px 4px; border-radius: 5px; cursor: help; color: #b3b9c6;
+  display: flex; align-items: center; gap: 4px; }
+#combo-panel .cp-row:hover { background: #5b8def22; color: #fff; }
+#combo-panel .cp-ic { width: 16px; text-align: center; }
+#combo-panel .cp-recipe { margin-left: auto; opacity: .7; font-size: 10px; }
+#combo-panel .cp-foot { margin-top: 5px; color: #8a90a0; font-size: 10px; border-top: 1px solid #262a36; padding-top: 4px; }
+/* TRS view lives BETWEEN the two boards (centre), growing to push the player board down */
+#puzzle-overlay { display: none; flex: 1 1 auto; min-height: 0; overflow: auto;
+  align-items: center; justify-content: center; padding: 14px;
+  background: #101218; border-top: 1px solid #262a36; border-bottom: 1px solid #262a36; }
+/* While the TRS puzzle is open, hide the boards + controls so the puzzle gets the
+   full centre column (it isn't interactive then anyway). On small/tablet viewports
+   this stops the boards from overlapping the puzzle. The freed vertical space also
+   lets the square grow (relaxed max size). */
+#center.puzzle-open .board-wrap,
+#center.puzzle-open #controls { display: none; }
+#center.puzzle-open #puzzle-overlay .trs-panel { max-width: clamp(240px, calc(100vh - 180px), 680px); }
+
+/* run meta-layer screens (loadout / reward / run-over) cover the whole centre */
+#run-screen { display: none; position: absolute; inset: 0; z-index: 30; overflow: auto;
+  background: #0e0f13; padding: 26px clamp(16px, 4vw, 56px); }
+#center.screen-open .board-wrap,
+#center.screen-open #controls,
+#center.screen-open #combo-panel,
+#center.screen-open #puzzle-overlay { display: none; }
+#center.screen-open #run-screen { display: block; }
+.rs-wrap { max-width: 880px; margin: 0 auto; }
+.rs-title { font-size: 26px; font-weight: 800; color: #f0e9b6; margin: 0 0 6px; text-align: center; }
+.rs-sub { color: #9aa0aa; text-align: center; margin: 0 0 22px; }
+.rs-section-label { color: #8a90a0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin: 18px 0 8px; }
+/* preset cards */
+.rs-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.rs-preset { background: #181b23; border: 2px solid #2a2e3a; border-radius: 12px; padding: 14px;
+  cursor: pointer; transition: border-color .12s, transform .1s; }
+.rs-preset:hover { transform: translateY(-2px); border-color: #4a5570; }
+.rs-preset.active { border-color: #3a6df0; box-shadow: 0 0 0 2px #3a6df055; }
+.rs-preset .rs-pname { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.rs-preset .rs-pdesc { color: #9aa0aa; font-size: 12px; line-height: 1.5; }
+/* component chips (pick-2) */
+.rs-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.rs-chip { background: #181b23; border: 2px solid #2a2e3a; border-radius: 10px; padding: 10px 14px;
+  cursor: pointer; transition: border-color .12s, transform .1s; min-width: 120px; }
+.rs-chip:hover { transform: translateY(-2px); border-color: #4a5570; }
+.rs-chip.selected { border-color: #3ad17a; box-shadow: 0 0 0 2px #3ad17a55; }
+.rs-chip.locked { opacity: .6; cursor: default; border-style: dashed; }
+.rs-chip.locked:hover { transform: none; border-color: #2a2e3a; }
+.rs-chip .rs-cname { font-weight: 700; font-size: 13px; }
+.rs-chip .rs-crole { color: #8a90a0; font-size: 11px; margin-top: 3px; }
+/* reward cards */
+.rs-rewards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.rs-reward { background: #181b23; border: 2px solid #2a2e3a; border-radius: 12px; padding: 16px;
+  cursor: pointer; transition: border-color .12s, transform .1s; display: flex; flex-direction: column; gap: 6px; }
+.rs-reward:hover { transform: translateY(-3px); border-color: #d05bff; box-shadow: 0 0 0 2px #d05bff44; }
+.rs-reward .rs-rtype { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #c98bff; font-weight: 700; }
+.rs-reward .rs-rname { font-weight: 700; font-size: 15px; }
+.rs-reward .rs-rdesc { color: #aeb4c0; font-size: 12px; line-height: 1.5; }
+.rs-foot { display: flex; justify-content: center; gap: 12px; margin-top: 26px; }
+.rs-btn { padding: 11px 26px; border: 0; border-radius: 9px; background: #3a6df0; color: #fff;
+  font-weight: 700; font-size: 15px; cursor: pointer; }
+.rs-btn:disabled { opacity: .4; cursor: default; }
+.rs-btn.secondary { background: #3a3f4d; }
+.rs-counter { text-align: center; color: #9aa0aa; margin-top: 14px; font-size: 13px; }
+
+/* left-rail run additions: run HUD */
+.run-hud { margin: 10px 0; line-height: 1.7; }
+.run-hud .rh-battle { font-weight: 700; color: #f0e9b6; }
+.run-hud .rh-row { margin-top: 6px; }
+.run-hud .rh-k { color: #8a90a0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.run-hud .rh-chip { display: inline-block; background: #20242f; border: 1px solid #2e3340; border-radius: 5px;
+  padding: 1px 6px; margin: 2px 3px 0 0; font-size: 11px; color: #c5cbd6; }
+.run-hud .rh-chip.mod { border-color: #c98bff55; color: #d8b6ff; }
+#infobar { grid-area: info; background: #14161d; border-top: 1px solid #262a36;
+  padding: 14px 22px; display: flex; align-items: center; line-height: 1.75; overflow: auto; }
+#infobar b { margin: 0 .45em; }
+#infobar b:first-child { margin-left: 0; }
+
+/* left rail */
+#left h2 { margin: 0 0 12px; font-size: 18px; }
+#left label { display: block; margin: 10px 0; color: #aeb4c0; font-size: 12px; }
+#left select, #left input[type=number] { width: 100%; margin-top: 4px; padding: 6px;
+  background: #0e0f13; color: #e6e6e6; border: 1px solid #2a2e3a; border-radius: 6px; }
+#left input[type=range] { width: 100%; }
+#left button { width: 100%; margin-top: 12px; padding: 9px; border: 0; border-radius: 8px;
+  background: #3a6df0; color: white; font-weight: 600; cursor: pointer; }
+#left button#cfg-restart { background: #3a3f4d; }
+#left button:disabled { opacity: .4; cursor: default; }
+.dim { color: #7f8696; font-weight: 400; }
+/* enemy roster builder */
+.roster { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.roster-row { display: flex; gap: 6px; align-items: center; }
+.roster-row select { flex: 1; margin-top: 0; }
+#left .roster-row .rm { width: auto; margin: 0; padding: 6px 9px; background: #3a3f4d; font-weight: 700; }
+#left #cfg-add { width: auto; margin-top: 6px; padding: 6px 10px; background: #2a2e3a; font-weight: 600; }
+.status #cfg-readout { margin: 12px 0; line-height: 1.8; }
+.log-title { color: #8a90a0; font-size: 12px; margin-top: 8px; }
+.log { font-size: 11px; color: #9aa0aa; line-height: 1.5; max-height: 42vh; overflow:auto; }
+.log-grp { color: #cdd3df; font-weight: 700; font-size: 11px; margin-top: 8px;
+  border-top: 1px solid #262a36; padding-top: 5px; }
+/* bullet + hanging indent: wrapped lines align under the text, not the bullet */
+.log-line { line-height: 1.5; padding-left: 12px; text-indent: -12px; }
+.log-line.l1 { color: #b3b9c6; margin-left: 8px; }
+.log-line.l2 { color: #8a90a0; margin-left: 22px; }
+
+/* boards (enemy on top, player below — the TRS view slots between them) */
+.board-wrap { padding: 10px 14px; flex: 0 0 auto; }
+/* up to 4 enemy aircraft sit in a wrapping row, each its own mini-board */
+.enemy-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+.enemy-row .board { flex: 1 1 220px; min-width: 200px; background: #121319;
+  border: 1px solid #23262f; border-radius: 10px; padding: 8px; }
+.enemy-row .board.defeated { opacity: .45; filter: grayscale(.85); }
+.enemy-row .cards { gap: 5px; }
+.enemy-row .comp { min-height: 70px; padding: 6px; }
+.enemy-row .cn { font-size: 11px; margin-bottom: 4px; }
+#controls { padding: 4px 14px 12px; min-height: 44px; flex: 0 0 auto; }
+#controls button { padding: 10px 18px; border: 0; border-radius: 8px; background: #d05bff;
+  color: white; font-weight: 700; cursor: pointer; font-size: 15px; }
+.board-label { color: #8a90a0; font-size: 12px; letter-spacing: .08em; margin: 4px 0; }
+.phase-banner { text-align: center; color: #e6c84a; font-weight: 700; margin: 10px 0; }
+.cards { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.comp { background: #191c24; border: 2px solid #2a2e3a; border-radius: 10px; padding: 8px;
+  cursor: pointer; transition: border-color .1s, transform .1s; min-height: 96px; }
+.comp:hover { transform: translateY(-2px); border-color: #4a5570; }
+.comp.core { border-color: #6a4a8a; }
+.comp.core.shielded { border-color: #3aa0ff; border-width: 3px; box-shadow: 0 0 0 3px #3aa0ff66, inset 0 0 12px #3aa0ff33; }
+.comp.dead { opacity: .35; filter: grayscale(1); cursor: default; }
+.comp.focus { border-color: #ff5566; box-shadow: 0 0 0 2px #ff556655; }
+.comp.selected { border-color: #5b8def; box-shadow: 0 0 0 2px #5b8def55; }
+.comp.cooldown { opacity: .6; }
+.comp.used { opacity: .4; filter: grayscale(.7); cursor: default; }
+.comp.valid-target { border-color: #3ad17a; box-shadow: 0 0 0 2px #3ad17a66; }
+.comp.invalid-target { opacity: .35; }
+.comp.focus-candidate { border-color: #ff5566; box-shadow: 0 0 0 2px #ff556666; animation: pulse 1s infinite; }
+.comp.noclick { cursor: default; }
+/* run meta-layer: a component the player hasn't acquired yet (locked) */
+.comp.unowned { opacity: .4; border-style: dashed; cursor: default; background: #15161c; }
+.comp.unowned .hpfill { background: #3a3f4d; }
+.comp.unowned:hover { transform: none; border-color: #2a2e3a; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 4px #ff556633; } }
+#controls .hint { color: #9aa0aa; margin-left: 10px; font-size: 13px; }
+.cn { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.hpbar { height: 7px; background: #0e0f13; border-radius: 4px; overflow: hidden; }
+.hpfill { height: 100%; background: linear-gradient(90deg,#3ad17a,#9be36a); }
+.enemy-board .hpfill { background: linear-gradient(90deg,#ff7043,#ffb04a); }
+.hpnum { font-size: 10px; color: #9aa0aa; margin-top: 3px; }
+.badges { margin-top: 5px; min-height: 18px; display: flex; flex-wrap: wrap; gap: 3px; }
+.st, .df, .tel { font-size: 11px; }
+.st.pending { opacity: .5; filter: grayscale(.6); border: 1px dashed #5b8def88; border-radius: 4px; padding: 0 2px; }
+/* confused-telegraph predictions: could be a false alarm — amber dashed + faded + "?" */
+.tel.uncertain, .st.uncertain { opacity: .55; border: 1px dashed #e6c84a; border-radius: 4px; padding: 0 2px; filter: none; }
+/* this-phase queued chain (statuses/verbs in order) + break markers/button */
+.queued { margin-top: 3px; min-height: 16px; display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.queued .brk { font-size: 11px; color: #ff8a3d; }
+.breakbtn { font-size: 11px; cursor: pointer; color: #ff8a3d; border: 1px solid #ff8a3d66;
+  border-radius: 4px; padding: 0 4px; margin-left: 2px; user-select: none; }
+.breakbtn:hover { background: #ff8a3d22; }
+/* live combo preview: a comboing pair in the queue collapses to this single icon */
+.combo-prev { font-size: 11px; border: 1px solid #e6c84a; border-radius: 4px; padding: 0 3px;
+  background: #e6c84a1f; box-shadow: 0 0 6px #e6c84a66; animation: combo-pop .2s ease-out; }
+@keyframes combo-pop { from { transform: scale(.6); } to { transform: scale(1); } }
+.role { font-size: 10px; color: #7f8696; margin-top: 4px; font-style: italic; }
+.cd { font-size: 9px; color: #ff8a3d; }
+
+/* puzzle panel (mounted by the bridge) — centred between the boards.
+   The board is square and sized by WIDTH (module default), so we cap the panel
+   width by the vertical room left between the two boards: the square then fits the
+   height too and scales down on short windows. clamp() keeps a visible floor, and
+   the overlay scrolls if a very short window still can't fit it. */
+/* padding-top gives the top badges (confused 🌀 top-left + objective top-centre)
+   room to poke up above the grid; the ghost timer is centred so needs no room. */
+.trs-panel { position: relative; width: 100%; max-width: clamp(220px, calc(100vh - 470px), 560px); padding-top: 20px; padding-bottom: 8px; }
+
+/* "Ghost" solve-timer: a big centred watermark OVER the grid, so it's in your
+   field of view while you focus on routing. EXPERIMENT KNOBS:
+     - size:    --tsz  (font-size)
+     - calm:    --tcalm opacity (when you still have time)
+     - urgent:  --turg  opacity (kicks in at <=5s, set by bridge's showTime)
+   pointer-events:none = it never blocks the drag. Hidden until ticking starts
+   (the 'tick' class is added on the first tick) so it doesn't fight the GO/FAIL
+   centre overlays. */
+.trs-timer { --tsz: clamp(44px, 14vh, 96px); --tcalm: .28; --turg: .6;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 6; pointer-events: none; opacity: 0; visibility: hidden;
+  font-size: var(--tsz); font-weight: 800; text-align: center; color: #e6c84a; letter-spacing: .01em;
+  text-shadow: 0 2px 16px rgba(0,0,0,.85), 0 0 6px rgba(0,0,0,.6); }
+.trs-timer.tick { visibility: visible; opacity: var(--tcalm); }
+.trs-timer.urgent { color: #ff5566; opacity: var(--turg); animation: trs-timer-pulse .7s ease-in-out infinite; }
+@keyframes trs-timer-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50%      { transform: translate(-50%, -50%) scale(1.08); } }
+
+/* Module-visual override (scoped to our mount): drop the redundant "Need X more"
+   popup — the badge pips + the 🔒N count on the goal cell already show what's left
+   to chain. The objective badge keeps the module's default top-centre position. */
+#puzzle-overlay .gpp-obj-need { display: none !important; }
+
+/* info bar */
+.en { color: #ff7a8a; font-weight: 700; }
+.sep { color: #3a3f4d; margin: 0 8px; }
+
+/* hover dossier (view/tooltip.js) — labeled, side-aware sections */
+.trs-tooltip { position: fixed; z-index: 50; max-width: 320px; pointer-events: none;
+  background: #1b1e27; color: #d8dce4; border: 1px solid #39414f;
+  border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.45;
+  box-shadow: 0 8px 28px #000a; }
+/* header row: name + side badge + HP (right-aligned) */
+.trs-tooltip .tt-h { display: flex; align-items: baseline; gap: 6px; font-size: 13px;
+  padding-bottom: 5px; margin-bottom: 2px; border-bottom: 1px solid #2a2f3b; }
+.trs-tooltip .tt-side { font-size: 10px; padding: 1px 5px; border-radius: 4px; }
+.trs-tooltip .tt-side.player { background: #1f3a66; color: #9cc2ff; }
+.trs-tooltip .tt-side.enemy { background: #5a2230; color: #ff9caa; }
+.trs-tooltip .tt-hp { margin-left: auto; color: #aeb4c0; font-size: 11px; font-weight: 600; }
+.trs-tooltip .tt-hp.dead { color: #ff5566; }
+/* labeled section rows: fixed-width small-caps label + value */
+.trs-tooltip .tt-row { display: flex; gap: 9px; margin-top: 5px; }
+.trs-tooltip .tt-k { flex: 0 0 50px; color: #7e8597; font-size: 10px; font-weight: 700;
+  letter-spacing: .06em; padding-top: 2px; }
+.trs-tooltip .tt-v { flex: 1 1 auto; min-width: 0; }
+.trs-tooltip .tt-dim { color: #8a90a0; }
+.trs-tooltip .tt-shield.up { color: #6fc0ff; }
+.trs-tooltip .tt-shield.down { color: #ffb04a; }
+.trs-tooltip .tt-pending { color: #9cc2ff; }
+.trs-tooltip .tt-tel { color: #ffb04a; }
+.trs-tooltip .tt-cd { color: #ff8a3d; }
+.cdbadge { font-size: 11px; color: #ff8a3d; }
