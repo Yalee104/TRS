@@ -21,6 +21,7 @@ export const en = {
     hintApply: '↳ pick an enemy part to apply the status',
     hintFocus: '↳ click the enemy part to FOCUS firepower',
     hintProtect: '↳ pick one of your parts to protect',
+    locked: '🔒 Locked — acquire this component to use its attack & defense.',
     banner: {
       config: 'Configure on the left, then ▶ Start Battle',
       attack: 'Round {n} — ATTACK ⚔️',
@@ -176,4 +177,71 @@ export const en = {
   },
 
   puzzle: { go: 'GO', fail: 'FAIL', start: 'START', goal: 'Goal', trap: 'Trap', firehazard: 'Burning hazard' },
+
+  run: {
+    title: 'TRS Run',
+    begin: '▶ Begin Run',
+    newRun: '⟲ New Run',
+    battleOf: 'Battle {n} / {total}',
+    won: '🏆 RUN COMPLETE',
+    wonDesc: 'You cleared every battle. Press New Run to start a fresh build.',
+    lost: '💀 RUN OVER',
+    lostDesc: 'Your run ended here. Press New Run to try again.',
+    continue: '▶ Continue',
+    mode: 'Mode',
+    modeRun: 'Run',
+    modeSingle: 'Single battle',
+  },
+
+  loadout: {
+    title: 'Build your loadout',
+    subtitle: 'Your Reactor Core is always equipped. Pick {n} more — or start from a preset.',
+    pickN: 'Pick {n} components',
+    coreLocked: 'Core · always equipped',
+    presetsLabel: 'Presets',
+    customLabel: 'Custom',
+    beginRun: '▶ Begin Run',
+    chosen: 'Chosen: {n}/{max}',
+    preset: {
+      burst: 'Burst',
+      burstDesc: 'Weapon + Engine — enables the Glass combo for heavy focus-fire.',
+      sustain: 'Sustain',
+      sustainDesc: 'Generator + Tower — a defensive backbone (Repair + Cleanse).',
+      custom: 'Custom',
+      customDesc: 'Choose your own two components.',
+    },
+  },
+
+  reward: {
+    title: 'Choose a reward',
+    pickOne: 'Pick one to carry into the next battle.',
+    type: {
+      component: 'New component',
+      comboMod: 'Combo mod',
+      componentMod: 'Component mod',
+      repair: 'Repair',
+    },
+    component: { desc: ({ name }) => `Acquire ${name} — unlocks its attack effect and defense verb (and new combos).` },
+    repair: { desc: ({ name }) => `Repair ${name} to full HP.` },
+    comboMod: {
+      meltdownCore: { name: 'Meltdown: Overload', desc: 'Meltdown funnels 70% of each burn tick into the Core (was 50%).' },
+      glassShatter: { name: 'Glass: Lens', desc: 'Glass focus-fire multiplier ×2.5 (was ×2).' },
+      wildfireSpread: { name: 'Wildfire: Updraft', desc: 'Wildfire spreads 75% of the burn to a neighbour (was 50%).' },
+      bastionCap: { name: 'Bastion: Reinforce', desc: 'Bastion caps damage at 35% of max HP (was 25%).' },
+    },
+    componentMod: {
+      weaponFreeze: { name: 'Weapon: Cryo Coils', desc: 'Freeze deals 2.0 dmg / potency (was 1.5).' },
+      generatorDrain: { name: 'Generator: Siphon', desc: 'Drain heals 3.0 / potency (was 2.0).' },
+      engineShatter: { name: 'Engine: Fracture', desc: 'Shatter deals 3.0 dmg / potency (was 2.0).' },
+      launchpadBurn: { name: 'Launch Pad: Accelerant', desc: 'Burning deals 1.6 DoT / potency (was 1.2).' },
+      coreHp: { name: 'Core: Reinforced Hull', desc: 'Reactor Core max HP +40.' },
+    },
+  },
+
+  hud: {
+    battle: 'Battle {n}/{total}',
+    owned: 'Owned',
+    mods: 'Mods',
+    noMods: 'none',
+  },
 };

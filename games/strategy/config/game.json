@@ -169,6 +169,49 @@
 
   "telegraph": { "gated": true, "confuseFalseChance": 0.5 },
 
+  "run": {
+    "_comment": "Roguelike run meta-layer (core/run.js). A run is the ordered `battles` list (escalating rosters); win the isFinal battle to win the run, lose any battle to end it. The player owns Core + `startComponents.pickCount` parts at the start and acquires the rest as rewards. All tuning is data-driven: combo-mods/component-mods are catalog `patch` objects deep-merged over the base config at battle time (no base mutation). Component (incl. Core) HP persists between battles.",
+    "startComponents": { "core": true, "pickCount": 2 },
+    "battles": [
+      { "enemies": ["saboteur"], "creditSeconds": 15 },
+      { "enemies": ["saboteur", "brute"], "creditSeconds": 15 },
+      { "enemies": ["hunter", "swarm"], "creditSeconds": 16 },
+      { "enemies": ["disruptor", "brute", "saboteur"], "creditSeconds": 16 },
+      { "enemies": ["disruptor", "swarm", "brute", "hunter"], "creditSeconds": 18, "isFinal": true }
+    ],
+    "escalation": {
+      "_comment": "perBattleBudgetMult is raised to the battleIndex power and multiplied onto every archetype's damageBudget in effectiveConfig — later battles hit harder even with the same archetypes.",
+      "perBattleBudgetMult": 1.08
+    },
+    "reward": {
+      "_comment": "Between battles, offer `offerSize` choices. Each type's pool is filtered by current ownership/damage; types are weighted, empty pools skipped. guaranteeComponentUntilOwned forces at least one component offer while unowned parts remain so a run can always progress toward the full kit. A repair fallback guarantees the offer is never empty.",
+      "offerSize": 3,
+      "weights": { "component": 3, "comboMod": 2, "componentMod": 2, "repair": 1 },
+      "guaranteeComponentUntilOwned": true
+    },
+    "comboModCatalog": {
+      "_comment": "patch keys mirror effects.synergy.combos[combo] (offense) or defense.combos[combo] (defense). `needs` = the two components that must be owned for the combo to be formable (offer-gating).",
+      "meltdownCore":    { "combo": "meltdown",        "table": "offense", "needs": ["launchpad", "engine"], "patch": { "coreFrac": 0.7 } },
+      "glassShatter":    { "combo": "glass",           "table": "offense", "needs": ["weapon", "engine"],    "patch": { "mult": 2.5 } },
+      "wildfireSpread":  { "combo": "wildfire",        "table": "offense", "needs": ["launchpad", "tower"],  "patch": { "spreadFrac": 0.75 } },
+      "bastionCap":      { "combo": "bastion",         "table": "defense", "needs": ["engine", "weapon"],    "patch": { "capFrac": 0.35 } }
+    },
+    "componentModCatalog": {
+      "_comment": "patch shape mirrors the component-mod merge in effectiveConfig: hpBonus/armor on components[id], `effect` over effects[ATTACK_EFFECT[id]], `verb` over defense[DEFENSE_VERB[id]]. `component` must be owned to be offered.",
+      "weaponFreeze":    { "component": "weapon",    "patch": { "effect": { "freeze": { "dmgPerPotency": 2.0 } } } },
+      "generatorDrain":  { "component": "generator", "patch": { "effect": { "drain": { "healPerPotency": 3.0 } } } },
+      "engineShatter":   { "component": "engine",    "patch": { "effect": { "shatter": { "dmgPerPotency": 3.0 } } } },
+      "launchpadBurn":   { "component": "launchpad", "patch": { "effect": { "burning": { "dotPerPotency": 1.6 } } } },
+      "coreHp":          { "component": "core",      "patch": { "hpBonus": 40 } }
+    },
+    "loadouts": {
+      "_comment": "Presets pre-select the 2 non-core starting components (the player can still go custom). burst = Glass-enabling offense (Freeze+Shatter); sustain = defensive backbone (Repair+Cleanse).",
+      "burst":   { "components": ["weapon", "engine"] },
+      "sustain": { "components": ["generator", "tower"] },
+      "custom":  { "components": [] }
+    }
+  },
+
   "ui": {
     "enemies": ["saboteur"],
     "maxEnemies": 4,

@@ -21,6 +21,7 @@ export const zhHant = {
     hintApply: '↳ 選擇敵方部件以施加狀態',
     hintFocus: '↳ 點擊敵方部件以集中火力',
     hintProtect: '↳ 選擇我方部件加以防護',
+    locked: '🔒 未持有 — 取得此部件後才能使用其攻擊與防禦。',
     banner: {
       config: '在左側設定，然後 ▶ 開始戰鬥',
       attack: '第 {n} 回合 — 攻擊 ⚔️',
@@ -176,4 +177,71 @@ export const zhHant = {
   },
 
   puzzle: { go: '開始', fail: '失敗', start: '起點', goal: '終點', trap: '陷阱', firehazard: '燃燒危害' },
+
+  run: {
+    title: 'TRS 征程',
+    begin: '▶ 開始征程',
+    newRun: '⟲ 新征程',
+    battleOf: '第 {n} / {total} 場戰鬥',
+    won: '🏆 征程完成',
+    wonDesc: '你通過了每一場戰鬥。按新征程以全新配置再次挑戰。',
+    lost: '💀 征程結束',
+    lostDesc: '你的征程止步於此。按新征程以再次嘗試。',
+    continue: '▶ 繼續',
+    mode: '模式',
+    modeRun: '征程',
+    modeSingle: '單場戰鬥',
+  },
+
+  loadout: {
+    title: '組建你的配置',
+    subtitle: '反應爐核心永遠裝備。再挑選 {n} 個部件 — 或從預設開始。',
+    pickN: '挑選 {n} 個部件',
+    coreLocked: '核心 · 永遠裝備',
+    presetsLabel: '預設',
+    customLabel: '自訂',
+    beginRun: '▶ 開始征程',
+    chosen: '已選：{n}/{max}',
+    preset: {
+      burst: '爆發',
+      burstDesc: '武器庫 + 引擎 — 啟用玻璃化連段以進行重型集中火力。',
+      sustain: '續航',
+      sustainDesc: '發電機 + 感測塔 — 防禦中樞（修復 + 淨化）。',
+      custom: '自訂',
+      customDesc: '自行挑選兩個部件。',
+    },
+  },
+
+  reward: {
+    title: '選擇獎勵',
+    pickOne: '選擇一項帶入下一場戰鬥。',
+    type: {
+      component: '新部件',
+      comboMod: '連段改裝',
+      componentMod: '部件改裝',
+      repair: '修復',
+    },
+    component: { desc: ({ name }) => `取得${name} — 解鎖其攻擊效果與防禦動作（以及新的連段）。` },
+    repair: { desc: ({ name }) => `將${name}修復至滿生命。` },
+    comboMod: {
+      meltdownCore: { name: '熔毀：過載', desc: '熔毀將每次燃燒跳動的 70% 灌入核心（原為 50%）。' },
+      glassShatter: { name: '玻璃化：透鏡', desc: '玻璃化集中火力倍率 ×2.5（原為 ×2）。' },
+      wildfireSpread: { name: '野火：上升氣流', desc: '野火將 75% 的燃燒蔓延至鄰近部件（原為 50%）。' },
+      bastionCap: { name: '堡壘：強化', desc: '堡壘將傷害上限壓至最大生命的 35%（原為 25%）。' },
+    },
+    componentMod: {
+      weaponFreeze: { name: '武器庫：低溫線圈', desc: '凍結每點威力造成 2.0 傷害（原為 1.5）。' },
+      generatorDrain: { name: '發電機：虹吸', desc: '汲取每點威力治療 3.0（原為 2.0）。' },
+      engineShatter: { name: '引擎：斷裂', desc: '碎裂每點威力造成 3.0 傷害（原為 2.0）。' },
+      launchpadBurn: { name: '發射台：助燃劑', desc: '燃燒每點威力造成 1.6 持續傷害（原為 1.2）。' },
+      coreHp: { name: '核心：強化裝甲', desc: '反應爐核心最大生命 +40。' },
+    },
+  },
+
+  hud: {
+    battle: '第 {n}/{total} 場',
+    owned: '持有',
+    mods: '改裝',
+    noMods: '無',
+  },
 };
