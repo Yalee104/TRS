@@ -8,7 +8,14 @@
 //  rebuilding the board innerHTML continuously would destroy the element under the
 //  cursor mid-click and swallow clicks.
 //
-//  Flows:
+//  Two modes:
+//   RUN (default) — loadout picker → battle → reward → next battle … → run won/lost.
+//                   The run object (core/run.js) owns ownership + mods + persistent
+//                   HP and feeds each battle an effective config; main.js drives the
+//                   screen flow and the battle-end → reward/run-over transitions.
+//   SINGLE        — the legacy one-off battle (full ownership, no run).
+//
+//  Battle flows (same in both modes):
 //   ATTACK build  — click your weapon → solve TRS → click an enemy part to apply the
 //                   status (valid only) → repeat → Resolve → click the enemy Focus.
 //   DEFENSE build — click your part → solve TRS → click the part to protect → repeat
@@ -20,16 +27,22 @@ import { createState, PHASES } from './core/state.js';
 import { startAttackBuild, commitAttack, commitDefense } from './core/phases.js';
 import { finalizeAttackTarget } from './combat/attack.js';
 import { finalizeDefenseTarget } from './combat/defense.js';
+import {
+  createRun, effectiveConfig, buildBattleUi, applyOwnership, applyPersistentHp,
+  captureBattleResult, advanceBattle, isFinalBattle, rollRewardOffer, applyRewardChoice,
+} from './core/run.js';
 import { createBridge } from './puzzle/bridge.js';
 import { createRenderer } from './view/render.js';
 import { createConfigPanel } from './view/configPanel.js';
+import { createLoadoutPicker } from './view/loadoutPicker.js';
+import { createRewardScreen } from './view/rewardScreen.js';
 import { createInfoBar } from './view/infoBar.js';
 import { createTooltip } from './view/tooltip.js';
 import { createComboPanel } from './view/comboInfo.js';
 import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, isOwned, isEffectValidOn } from './core/components.js';
 import { t, onLocaleChange } from './i18n/index.js';
 
-const app = { state: createState(config), started: false };
+const app = { state: createState(config), run: null, mode: 'run', started: false };
 app.state.phase = PHASES.CONFIG;
 const getState = () => app.state;
 
@@ -40,14 +53,17 @@ const overlayEl = document.getElementById('puzzle-overlay');
 const leftEl = document.getElementById('left');
 const infoEl = document.getElementById('infobar');
 const controlsEl = document.getElementById('controls');
+const runScreenEl = document.getElementById('run-screen');
 
 const bridge = createBridge({ getState, overlayEl, onChange: () => draw() });
 const renderer = createRenderer(centerEl, { enemy: enemyEl, player: playerEl }, onComponentClick, onBreak);
 const tooltip = createTooltip(centerEl, getState);
 const comboPanel = createComboPanel(document.getElementById('combo-panel'), getState);
 const infobar = createInfoBar(infoEl);
-const panel = createConfigPanel(leftEl, { onStart, onRestart, defaults: config.ui, archetypes: config.archetypes });
-panel.showConfig();
+const panel = createConfigPanel(leftEl, { onStart, onRestart, onMode, onNewRun, defaults: config.ui, archetypes: config.archetypes, config });
+const loadout = createLoadoutPicker(runScreenEl, { config, onBegin: onBeginRun });
+const reward = createRewardScreen(runScreenEl, { onPick: onPickReward });
+panel.showRunSetup();
 
 // Language change → re-render the whole UI (every view reads text at render time).
 document.title = t('ui.pageTitle');
@@ -89,7 +105,10 @@ function onBreak(side, id, eid) {
   draw();
 }
 
+// --- single-battle (legacy) --------------------------------------------------
 function onStart(ui) {
+  app.run = null;
+  app.mode = 'single';
   app.state = createState(config, ui);
   startAttackBuild(app.state);
   app.started = true;
@@ -99,11 +118,101 @@ function onStart(ui) {
 
 function onRestart() {
   bridge.abort();
+  app.run = null;
   app.state = createState(config);
   app.state.phase = PHASES.CONFIG;
   app.started = false;
   panel.showConfig();
   draw();
+}
+
+// --- run mode ----------------------------------------------------------------
+function onMode(mode) {
+  bridge.abort();
+  app.mode = mode;
+  app.run = null;
+  app.started = false;
+  app.state = createState(config);
+  app.state.phase = PHASES.CONFIG;
+  if (mode === 'run') panel.showRunSetup(); else panel.showConfig();
+  draw();
+}
+
+function onBeginRun({ components, loadout: loadoutKey, seed }) {
+  app.mode = 'run';
+  app.run = createRun(config, { components, loadout: loadoutKey, seed });
+  startBattle();
+  draw();
+}
+
+function onPickReward(choice) {
+  const r = app.run;
+  if (!r) return;
+  applyRewardChoice(r, choice);
+  advanceBattle(r);
+  startBattle();
+  draw();
+}
+
+function onNewRun() {
+  bridge.abort();
+  app.run = null;
+  app.started = false;
+  app.mode = 'run';
+  app.state = createState(config);
+  app.state.phase = PHASES.CONFIG;
+  panel.showRunSetup();
+  draw();
+}
+
+/** Start (or restart) the current battle of the run from the run's effective state. */
+function startBattle() {
+  const r = app.run;
+  app.state = createState(effectiveConfig(r), buildBattleUi(r, config.ui));
+  applyOwnership(app.state, r);
+  applyPersistentHp(app.state, r);
+  startAttackBuild(app.state);
+  r.status = 'inBattle';
+  app.started = true;
+  panel.setRun(r);
+  panel.showRunStatus();
+}
+
+/** A battle just ended → fold the result into the run (reward / next / run-won / run-over). */
+function maybeAdvanceRun() {
+  const r = app.run;
+  if (!r || r.status !== 'inBattle') return;
+  const s = app.state;
+  if (s.phase === PHASES.LOST) {
+    r.status = 'lost';
+  } else if (s.phase === PHASES.WON) {
+    captureBattleResult(r, s);
+    if (isFinalBattle(r)) r.status = 'won';
+    else { rollRewardOffer(r); r.status = 'reward'; }
+  }
+}
+
+/** Which centre screen is active right now. */
+function currentScreen() {
+  const r = app.run;
+  if (r) {
+    if (r.status === 'reward') return 'reward';
+    if (r.status === 'won') return 'runWon';
+    if (r.status === 'lost') return 'runLost';
+    return 'battle';
+  }
+  return app.mode === 'run' ? 'loadout' : 'battle';
+}
+
+function renderRunOver(won) {
+  runScreenEl.innerHTML = `
+    <div class="rs-wrap" style="text-align:center">
+      <h2 class="rs-title">${won ? t('run.won') : t('run.lost')}</h2>
+      <p class="rs-sub">${won ? t('run.wonDesc') : t('run.lostDesc')}</p>
+      <div class="rs-foot"><button class="rs-btn" id="rs-newrun">${t('run.newRun')}</button></div>
+    </div>`;
+  const b = runScreenEl.querySelector('#rs-newrun');
+  if (b) b.onclick = () => onNewRun();
 }
 
 function renderControls() {
@@ -132,11 +241,24 @@ function renderControls() {
 }
 
 function draw() {
-  renderer(app.state);
-  if (app.started) panel.update(app.state);
-  infobar(app.state);
-  comboPanel(app.state);
-  renderControls();
+  maybeAdvanceRun();
+  const screen = currentScreen();
+
+  // Centre run-screen overlays (loadout / reward / run-over).
+  if (screen === 'loadout') loadout.render();
+  else if (screen === 'reward') reward.render(app.run);
+  else if (screen === 'runWon') renderRunOver(true);
+  else if (screen === 'runLost') renderRunOver(false);
+  centerEl.classList.toggle('screen-open', screen !== 'battle');
+
+  if (screen === 'battle') {
+    renderer(app.state);
+    if (app.started) panel.update(app.state);
+    infobar(app.state);
+    comboPanel(app.state);
+    renderControls();
+  }
+
   // While a puzzle is open: hide the boards (full-column puzzle) and dismiss the hover
   // dossier (on touch it lingers after the tap and would block the puzzle).
   const puzzleOpen = !!app.state.activePuzzle;
@@ -144,13 +266,17 @@ function draw() {
   if (puzzleOpen) tooltip.hide();
 }
 
-draw(); // initial paint (config screen)
+draw(); // initial paint (loadout picker in run mode)
 
 window.__strategy = {
   get state() { return app.state; },
+  get run() { return app.run; },
   bridge,
   start: (ui) => onStart(ui || config.ui),
   restart: onRestart,
+  beginRun: (opts) => onBeginRun(opts || { components: (config.run.loadouts.burst.components), loadout: 'burst', seed: 0 }),
+  pickReward: (choice) => onPickReward(choice),
+  newRun: onNewRun,
   redraw: draw,
   commitAttack: (eid, focusId) => { commitAttack(app.state, eid, focusId); draw(); },
   commitDefense: () => { commitDefense(app.state); draw(); },

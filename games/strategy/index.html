@@ -40,6 +40,63 @@
       #center.puzzle-open .board-wrap,
       #center.puzzle-open #controls { display: none; }
       #center.puzzle-open #puzzle-overlay .trs-panel { max-width: clamp(240px, calc(100vh - 180px), 680px); }
+
+      /* run meta-layer screens (loadout / reward / run-over) cover the whole centre */
+      #run-screen { display: none; position: absolute; inset: 0; z-index: 30; overflow: auto;
+        background: #0e0f13; padding: 26px clamp(16px, 4vw, 56px); }
+      #center.screen-open .board-wrap,
+      #center.screen-open #controls,
+      #center.screen-open #combo-panel,
+      #center.screen-open #puzzle-overlay { display: none; }
+      #center.screen-open #run-screen { display: block; }
+      .rs-wrap { max-width: 880px; margin: 0 auto; }
+      .rs-title { font-size: 26px; font-weight: 800; color: #f0e9b6; margin: 0 0 6px; text-align: center; }
+      .rs-sub { color: #9aa0aa; text-align: center; margin: 0 0 22px; }
+      .rs-section-label { color: #8a90a0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin: 18px 0 8px; }
+      /* preset cards */
+      .rs-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+      .rs-preset { background: #181b23; border: 2px solid #2a2e3a; border-radius: 12px; padding: 14px;
+        cursor: pointer; transition: border-color .12s, transform .1s; }
+      .rs-preset:hover { transform: translateY(-2px); border-color: #4a5570; }
+      .rs-preset.active { border-color: #3a6df0; box-shadow: 0 0 0 2px #3a6df055; }
+      .rs-preset .rs-pname { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+      .rs-preset .rs-pdesc { color: #9aa0aa; font-size: 12px; line-height: 1.5; }
+      /* component chips (pick-2) */
+      .rs-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+      .rs-chip { background: #181b23; border: 2px solid #2a2e3a; border-radius: 10px; padding: 10px 14px;
+        cursor: pointer; transition: border-color .12s, transform .1s; min-width: 120px; }
+      .rs-chip:hover { transform: translateY(-2px); border-color: #4a5570; }
+      .rs-chip.selected { border-color: #3ad17a; box-shadow: 0 0 0 2px #3ad17a55; }
+      .rs-chip.locked { opacity: .6; cursor: default; border-style: dashed; }
+      .rs-chip.locked:hover { transform: none; border-color: #2a2e3a; }
+      .rs-chip .rs-cname { font-weight: 700; font-size: 13px; }
+      .rs-chip .rs-crole { color: #8a90a0; font-size: 11px; margin-top: 3px; }
+      /* reward cards */
+      .rs-rewards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+      .rs-reward { background: #181b23; border: 2px solid #2a2e3a; border-radius: 12px; padding: 16px;
+        cursor: pointer; transition: border-color .12s, transform .1s; display: flex; flex-direction: column; gap: 6px; }
+      .rs-reward:hover { transform: translateY(-3px); border-color: #d05bff; box-shadow: 0 0 0 2px #d05bff44; }
+      .rs-reward .rs-rtype { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #c98bff; font-weight: 700; }
+      .rs-reward .rs-rname { font-weight: 700; font-size: 15px; }
+      .rs-reward .rs-rdesc { color: #aeb4c0; font-size: 12px; line-height: 1.5; }
+      .rs-foot { display: flex; justify-content: center; gap: 12px; margin-top: 26px; }
+      .rs-btn { padding: 11px 26px; border: 0; border-radius: 9px; background: #3a6df0; color: #fff;
+        font-weight: 700; font-size: 15px; cursor: pointer; }
+      .rs-btn:disabled { opacity: .4; cursor: default; }
+      .rs-btn.secondary { background: #3a3f4d; }
+      .rs-counter { text-align: center; color: #9aa0aa; margin-top: 14px; font-size: 13px; }
+
+      /* left-rail run additions: mode toggle + run HUD */
+      .mode-toggle { display: flex; gap: 6px; margin: 10px 0; }
+      .mode-toggle button { flex: 1; margin: 0; padding: 7px; background: #2a2e3a; font-size: 12px; }
+      .mode-toggle button.active { background: #3a6df0; }
+      .run-hud { margin: 10px 0; line-height: 1.7; }
+      .run-hud .rh-battle { font-weight: 700; color: #f0e9b6; }
+      .run-hud .rh-row { margin-top: 6px; }
+      .run-hud .rh-k { color: #8a90a0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+      .run-hud .rh-chip { display: inline-block; background: #20242f; border: 1px solid #2e3340; border-radius: 5px;
+        padding: 1px 6px; margin: 2px 3px 0 0; font-size: 11px; color: #c5cbd6; }
+      .run-hud .rh-chip.mod { border-color: #c98bff55; color: #d8b6ff; }
       #infobar { grid-area: info; background: #14161d; border-top: 1px solid #262a36;
         padding: 14px 22px; display: flex; align-items: center; line-height: 1.75; overflow: auto; }
       #infobar b { margin: 0 .45em; }
@@ -102,6 +159,10 @@
       .comp.invalid-target { opacity: .35; }
       .comp.focus-candidate { border-color: #ff5566; box-shadow: 0 0 0 2px #ff556666; animation: pulse 1s infinite; }
       .comp.noclick { cursor: default; }
+      /* run meta-layer: a component the player hasn't acquired yet (locked) */
+      .comp.unowned { opacity: .4; border-style: dashed; cursor: default; background: #15161c; }
+      .comp.unowned .hpfill { background: #3a3f4d; }
+      .comp.unowned:hover { transform: none; border-color: #2a2e3a; }
       @keyframes pulse { 50% { box-shadow: 0 0 0 4px #ff556633; } }
       #controls .hint { color: #9aa0aa; margin-left: 10px; font-size: 13px; }
       .cn { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
@@ -200,6 +261,7 @@
         <div id="player-wrap" class="board-wrap"></div>
         <div id="controls"></div>
         <div id="combo-panel"></div>
+        <div id="run-screen"></div>
       </div>
       <div id="infobar"></div>
     </div>
