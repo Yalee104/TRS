@@ -32,6 +32,9 @@ import {
   captureBattleResult, advanceBattle, isFinalBattle, rollRewardOffer, applyRewardChoice,
   rewardPools, deepMerge, moddedMaxHp,
 } from '../core/run.js';
+import { generateMap, validateMap, reachableNext, nodeById, isBossNode, bandForRow } from '../core/map.js';
+
+const allNodes = (map) => Object.values(map.byId);
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const CONFIG = JSON.parse(readFileSync(resolve(__dir, '../config/game.json'), 'utf8'));
@@ -936,4 +939,65 @@ test('rewards: an all-owned, all-repaired, all-modded run still yields a non-emp
 test('back-compat: a plain createState leaves every component owned (gating is a no-op)', () => {
   const s = createState(CONFIG);
   assert(COMPONENT_IDS.every((id) => isOwned(s.player.components[id])), 'all owned by default');
+});
+
+// =============================================================================
+//  node map (core/map.js)
+// =============================================================================
+test('map: a generated map is a connected DAG whose boss is reachable', () => {
+  const v = validateMap(generateMap(CONFIG, 3), CONFIG);
+  assert(v.connected, 'every node reachable from start');
+  assert(v.bossReachable, 'boss reachable');
+});
+
+test('map: every non-start node has at least one inbound edge (coverage pass)', () => {
+  const map = generateMap(CONFIG, 11);
+  const inbound = new Set(allNodes(map).flatMap((n) => n.next));
+  for (const n of allNodes(map)) {
+    if (n.id === map.startId) continue;
+    assert(inbound.has(n.id), `${n.id} has an inbound edge`);
+  }
+});
+
+test('map: guarantees met — first content row all enemy, single boss last, battle before boss, >=1 shop & heal, >=minElites', () => {
+  const v = validateMap(generateMap(CONFIG, 7), CONFIG);
+  assert(v.guaranteesMet, `guarantees: ${JSON.stringify(v)}`);
+  assert(v.elites >= CONFIG.run.map.act1.minElites, 'min elites');
+});
+
+test('map: deterministic by seed; differs across seeds', () => {
+  assert(JSON.stringify(generateMap(CONFIG, 5)) === JSON.stringify(generateMap(CONFIG, 5)), 'same seed → identical');
+  assert(JSON.stringify(generateMap(CONFIG, 5)) !== JSON.stringify(generateMap(CONFIG, 6)), 'different seed → different');
+});
+
+test('map: row count and per-row width respect config bounds', () => {
+  const map = generateMap(CONFIG, 9);
+  assert(map.rows.length === CONFIG.run.map.act1.rows, 'row count = config rows');
+  const [mn, mx] = CONFIG.run.map.act1.nodesPerRow;
+  for (let r = 1; r <= map.rows.length - 2; r++) {
+    assert(map.rows[r].length >= mn && map.rows[r].length <= mx, `row ${r} width in [${mn},${mx}]`);
+  }
+  assert(map.rows[0].length === 1 && map.rows[map.rows.length - 1].length === 1, 'single start + single boss');
+});
+
+test('map: battle nodes carry an encounter drawn from the right pool', () => {
+  const map = generateMap(CONFIG, 4);
+  const mc = CONFIG.run.map;
+  for (const n of allNodes(map)) {
+    if (n.type === 'enemy' || n.type === 'elite' || n.type === 'boss') {
+      assert(n.encounter && n.encounter.enemies.length > 0, `${n.id} has a roster`);
+      const pool = n.type === 'boss' ? mc.bossPool : (n.type === 'elite' ? mc.enemyPools.elite : mc.enemyPools[bandForRow(n.row, CONFIG)]);
+      assert(n.encounter.enemies.every((e) => pool.includes(e)), `${n.id} roster from its pool`);
+    } else {
+      assert(n.encounter === null, `${n.id} (non-battle) has no encounter`);
+    }
+  }
+});
+
+test('map: reachableNext returns the current node forward links; boss has none', () => {
+  const map = generateMap(CONFIG, 2);
+  const fromStart = reachableNext(map, map.startId).map((n) => n.id);
+  assert(fromStart.length >= 1 && fromStart.every((id) => nodeById(map, id).row === 1), 'start → row 1 nodes');
+  assert(reachableNext(map, map.bossId).length === 0, 'boss is terminal');
+  assert(isBossNode(nodeById(map, map.bossId)), 'boss node flagged');
 });

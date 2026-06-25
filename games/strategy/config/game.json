@@ -164,6 +164,24 @@
       "spread": 0.3,
       "statusChance": 0.9,
       "statusPool": ["freeze", "drain", "confuse"]
+    },
+    "dreadnought": {
+      "_comment": "Act boss — heavy, status-rich, spreads across your kit. priority 'highestHp' makes it adaptive (the weight fallback handles any loadout).",
+      "label": "Dreadnought",
+      "damageBudget": 150,
+      "priority": "highestHp",
+      "spread": 0.4,
+      "statusChance": 0.6,
+      "statusPool": ["freeze", "burning", "drain"]
+    },
+    "siegebreaker": {
+      "_comment": "Alternate boss (reserved for variety / later acts) — focused single-target shatter.",
+      "label": "Siegebreaker",
+      "damageBudget": 140,
+      "priority": ["generator", "weapon", "engine"],
+      "spread": 0.1,
+      "statusChance": 0.3,
+      "status": "shatter"
     }
   },
 
@@ -209,6 +227,47 @@
       "burst":   { "components": ["weapon", "engine"] },
       "sustain": { "components": ["generator", "tower"] },
       "custom":  { "components": [] }
+    },
+
+    "map": {
+      "_comment": "StS-style node map (core/map.js). A run is a seeded branching DAG of rows ending in a boss; the player picks a path. Node types: start/enemy/elite/boss/shop/heal/upgrade. Battle rosters come from enemyPools by row band; difficulty escalates by row + tier (economy.tierBudgetMult). The legacy `battles` list above is ignored when a map is present.",
+      "act1": {
+        "rows": 6,
+        "nodesPerRow": [2, 3],
+        "minElites": 2,
+        "minBattlesBeforeBoss": 4,
+        "typeWeights": {
+          "early": { "enemy": 6, "shop": 1, "heal": 1 },
+          "mid":   { "enemy": 4, "elite": 2, "shop": 2, "heal": 1, "upgrade": 2 },
+          "late":  { "enemy": 3, "elite": 3, "shop": 1, "heal": 1, "upgrade": 1 }
+        },
+        "guarantees": { "firstRowAllEnemy": true, "requireShop": true, "requireHeal": true }
+      },
+      "bands": { "early": [0, 1], "mid": [2, 3], "late": [4, 5] },
+      "rosterSize": { "early": 1, "mid": 2, "late": 3, "elite": 2, "boss": 1 },
+      "enemyPools": {
+        "early": ["saboteur", "hunter"],
+        "mid":   ["brute", "hunter", "swarm", "saboteur"],
+        "late":  ["disruptor", "brute", "swarm", "hunter"],
+        "elite": ["disruptor", "brute"]
+      },
+      "bossPool": ["dreadnought"],
+      "creditSeconds": { "normal": 16, "elite": 16, "boss": 18 },
+      "heal": { "percent": 0.4, "fullCore": false },
+      "upgrade": { "allowComponent": false, "size": 3 }
+    },
+
+    "economy": {
+      "_comment": "Scrap currency. Earned on each battle win (more from elite/boss + per-row bonus); spent at shop nodes. tierBudgetMult multiplies archetype damageBudget for elite/boss nodes ON TOP of per-row escalation. Prices scale with map depth via priceRowMult.",
+      "startScrap": 0,
+      "scrapReward": { "normal": 25, "elite": 60, "boss": 0 },
+      "scrapPerRow": 4,
+      "perRowBudgetMult": 1.08,
+      "tierBudgetMult": { "normal": 1.0, "elite": 1.4, "boss": 2.0 },
+      "eliteRewardBonus": true,
+      "prices": { "component": 110, "comboMod": 70, "componentMod": 70, "repair": 30, "repairAll": 80 },
+      "priceRowMult": 0.12,
+      "shop": { "size": 5 }
     }
   },
 

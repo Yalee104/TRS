@@ -70,6 +70,8 @@ export const en = {
     hunter: 'Hunter',
     swarm: 'Swarm',
     disruptor: 'Disruptor',
+    dreadnought: 'Dreadnought',
+    siegebreaker: 'Siegebreaker',
     random: 'Random',
   },
 
@@ -221,6 +223,7 @@ export const en = {
       componentMod: 'Component mod',
       repair: 'Repair',
     },
+    upgradeTitle: 'Free upgrade',
     component: { desc: ({ name }) => `Acquire ${name} — unlocks its attack effect and defense verb (and new combos).` },
     repair: { desc: ({ name }) => `Repair ${name} to full HP.` },
     comboMod: {
@@ -243,5 +246,32 @@ export const en = {
     owned: 'Owned',
     mods: 'Mods',
     noMods: 'none',
+    scrap: 'Scrap',
+    actRow: 'Act {act} · row {row}',
+  },
+
+  map: {
+    title: 'Choose your path',
+    pickNode: 'Pick a connected node to advance.',
+    node: {
+      start: 'Start',
+      enemy: 'Enemy',
+      elite: 'Elite',
+      boss: 'Boss',
+      shop: 'Shop',
+      heal: 'Repair Bay',
+      upgrade: 'Upgrade',
+    },
+  },
+
+  shop: {
+    title: 'Salvage Shop',
+    leave: '▶ Leave',
+    buy: 'Buy',
+    cantAfford: 'Not enough Scrap',
+    sold: 'Sold',
+    balance: 'Scrap: {n}',
+    price: '{n} Scrap',
+    repairAll: 'Full repair (all parts)',
   },
 };

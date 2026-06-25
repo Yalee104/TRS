@@ -70,6 +70,8 @@ export const zhHant = {
     hunter: '獵人',
     swarm: '蜂群',
     disruptor: '干擾者',
+    dreadnought: '無畏艦',
+    siegebreaker: '破城者',
     random: '隨機',
   },
 
@@ -221,6 +223,7 @@ export const zhHant = {
       componentMod: '部件改裝',
       repair: '修復',
     },
+    upgradeTitle: '免費升級',
     component: { desc: ({ name }) => `取得${name} — 解鎖其攻擊效果與防禦動作（以及新的連段）。` },
     repair: { desc: ({ name }) => `將${name}修復至滿生命。` },
     comboMod: {
@@ -243,5 +246,32 @@ export const zhHant = {
     owned: '持有',
     mods: '改裝',
     noMods: '無',
+    scrap: '廢料',
+    actRow: '第 {act} 幕 · 第 {row} 列',
+  },
+
+  map: {
+    title: '選擇你的路徑',
+    pickNode: '選擇一個相連的節點以前進。',
+    node: {
+      start: '起點',
+      enemy: '敵人',
+      elite: '精英',
+      boss: '首領',
+      shop: '商店',
+      heal: '維修站',
+      upgrade: '升級',
+    },
+  },
+
+  shop: {
+    title: '廢料商店',
+    leave: '▶ 離開',
+    buy: '購買',
+    cantAfford: '廢料不足',
+    sold: '已售',
+    balance: '廢料：{n}',
+    price: '{n} 廢料',
+    repairAll: '完全修復（所有部件）',
   },
 };
