@@ -25,8 +25,16 @@
 import { COMPONENT_IDS, ATTACK_EFFECT, DEFENSE_VERB } from './components.js';
 import { makeRng } from './state.js';
 import { OFFENSE_COMBOS, DEFENSE_COMBOS } from '../combat/combos.js';
+import { generateMap, nodeById, reachableNext, isBossNode } from './map.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+/** The node the player is currently resolving (or null off-map / legacy). */
+const currentNode = (run) => (run.map ? nodeById(run.map, run.currentNodeId) : null);
+/** Map depth driving escalation: the current node's row (fallback to battleIndex). */
+const depthOf = (run) => { const n = currentNode(run); return n ? n.row : (run.battleIndex || 0); };
+/** Deterministic per-node seed salt for offers/shops. */
+const nodeSeed = (run) => { const n = currentNode(run); return n ? (n.row * 131 + n.col * 17) : (run.battleIndex || 0); };
 
 /** Deep clone a pure-JSON value (the config has no functions). */
 export const deepClone = (o) => JSON.parse(JSON.stringify(o));
@@ -63,19 +71,30 @@ export function createRun(config, { loadout = 'custom', components = null, seed 
   const owned = { core: true };
   for (const id of picked) if (COMPONENT_IDS.includes(id)) owned[id] = true;
 
+  const hasMap = !!(rc.map && rc.map.act1);
   const run = {
     config,
     seed: seed || 0,
     loadout: components ? 'custom' : loadout,
     battleIndex: 0,
-    status: 'inBattle',           // 'inBattle' | 'reward' | 'won' | 'lost'
+    // 'map' | 'inBattle' | 'reward' | 'shop' | 'won' | 'lost'. With a map, a run OPENS on the map.
+    status: hasMap ? 'map' : 'inBattle',
     owned,
     comboMods: {},                // comboId -> merged patch
     componentMods: {},            // componentId -> merged patch ({ hpBonus, armor, effect, verb })
     persistentHp: {},             // componentId -> carried HP
-    offer: null,                  // current reward offer awaiting a pick
+    offer: null,                  // current reward/upgrade offer awaiting a pick
+    offerFree: false,             // true for upgrade-node offers (no scrap cost; titled differently)
     rewardsTaken: [],             // [{ type, modId?, id? }]
+    // --- map + economy ---
+    map: hasMap ? generateMap(config, (seed || 0) * 7919 + 101) : null,
+    mapPos: null,                 // id of the node the player stands on (start, then resolved nodes)
+    currentNodeId: null,          // id of the node being resolved right now
+    scrap: (rc.economy && rc.economy.startScrap) || 0,
+    shop: null,                   // built when a shop node is entered
+    act: 1,
   };
+  if (run.map) run.mapPos = run.map.startId;
   // Owned parts enter the first battle at full (modded) HP.
   for (const id of Object.keys(owned)) run.persistentHp[id] = moddedMaxHp(run, id);
   return run;
@@ -95,8 +114,13 @@ export function moddedMaxHp(run, id) {
 export function effectiveConfig(run) {
   const cfg = deepClone(run.config);
 
-  // Per-battle escalation: later battles hit harder (damageBudget scales).
-  const mult = (run.config.run?.escalation?.perBattleBudgetMult ?? 1) ** run.battleIndex;
+  // Escalation: deeper rows hit harder, and elite/boss nodes get a tier multiplier on top.
+  const eco = run.config.run?.economy || {};
+  const esc = run.config.run?.escalation || {};
+  const rowMult = (eco.perRowBudgetMult ?? esc.perBattleBudgetMult ?? 1) ** depthOf(run);
+  const tier = (currentNode(run) && currentNode(run).tier) || 'normal';
+  const tierMult = (eco.tierBudgetMult && eco.tierBudgetMult[tier]) ?? 1;
+  const mult = rowMult * tierMult;
   if (mult !== 1) {
     for (const [k, a] of Object.entries(cfg.archetypes || {})) {
       if (k === '_comment' || !a || typeof a.damageBudget !== 'number') continue;
@@ -122,14 +146,26 @@ export function effectiveConfig(run) {
   return cfg;
 }
 
-/** UI overrides for createState() for the current battle (roster, credit, seed). */
+/** The encounter to fight: the current node's, or a row-0 fallback (legacy/no node selected). */
+function currentEncounter(run) {
+  const node = currentNode(run);
+  if (node && node.encounter) return node.encounter;
+  if (run.map && run.map.rows[1]) {
+    const firstBattle = run.map.rows[1].find((n) => n.encounter);
+    if (firstBattle) return firstBattle.encounter;
+  }
+  return (run.config.run?.battles || [])[run.battleIndex] || {};   // legacy battles[] fallback
+}
+
+/** UI overrides for createState() for the current battle (node-driven roster, credit, seed). */
 export function buildBattleUi(run, baseUi = {}) {
-  const battle = (run.config.run?.battles || [])[run.battleIndex] || {};
+  const enc = currentEncounter(run);
+  const node = currentNode(run);
   return {
     ...baseUi,
-    enemies: battle.enemies || baseUi.enemies,
-    creditSeconds: battle.creditSeconds != null ? battle.creditSeconds : baseUi.creditSeconds,
-    seed: (run.seed || 0) + run.battleIndex,
+    enemies: enc.enemies || baseUi.enemies,
+    creditSeconds: enc.creditSeconds != null ? enc.creditSeconds : baseUi.creditSeconds,
+    seed: (run.seed || 0) + ((node?.row ?? 0) * 101) + ((node?.col ?? 0) * 7),
   };
 }
 
@@ -165,15 +201,71 @@ export function captureBattleResult(run, state) {
 }
 
 export function isFinalBattle(run) {
-  const battles = run.config.run?.battles || [];
+  if (run.map) return isBossNode(currentNode(run));
+  const battles = run.config.run?.battles || [];                  // legacy (no map)
   const b = battles[run.battleIndex];
   return !!(b && b.isFinal) || run.battleIndex >= battles.length - 1;
 }
 
-/** Step to the next battle (clears the spent offer). */
+/** Step to the next battle (clears the spent offer). Legacy linear-run helper. */
 export function advanceBattle(run) {
   run.battleIndex += 1;
   run.offer = null;
+  return run;
+}
+
+// --- node map navigation + economy -------------------------------------------
+
+/** Enter a reachable node from the current map position; dispatch by node type. */
+export function enterNode(run, id) {
+  if (!run.map) return run;
+  const reachable = reachableNext(run.map, run.mapPos).map((n) => n.id);
+  if (!reachable.includes(id)) return run;            // ignore an unreachable pick
+  const node = nodeById(run.map, id);
+  node.visited = true;
+  run.currentNodeId = id;
+  if (node.type === 'enemy' || node.type === 'elite' || node.type === 'boss') run.status = 'inBattle';
+  else if (node.type === 'shop') { buildShop(run); run.status = 'shop'; }
+  else if (node.type === 'heal') { applyHeal(run); advanceFromNode(run); }   // auto-resolve → back to map
+  else if (node.type === 'upgrade') { rollUpgradeOffer(run); run.status = 'reward'; }
+  else advanceFromNode(run);
+  return run;
+}
+
+/** Finish the current node: stand on it, clear transient state, return to the map (or win). */
+export function advanceFromNode(run) {
+  const node = currentNode(run);
+  run.battleIndex += 1;                               // kept only for reward-seed variety
+  run.mapPos = run.currentNodeId || run.mapPos;
+  run.currentNodeId = null;
+  run.offer = null;
+  run.offerFree = false;
+  run.shop = null;
+  run.status = isBossNode(node) ? 'won' : 'map';
+  return run;
+}
+
+/** Award Scrap for clearing a battle node (tier reward + per-row bonus). */
+export function awardScrap(run, node) {
+  const eco = run.config.run?.economy || {};
+  const tier = (node && node.tier) || 'normal';
+  const base = (eco.scrapReward && eco.scrapReward[tier]) || 0;
+  const perRow = (eco.scrapPerRow || 0) * ((node && node.row) || 0);
+  run.scrap = (run.scrap || 0) + base + perRow;
+  return run.scrap;
+}
+
+/** Repair-bay node: restore a % of (modded) max HP to every owned component, incl. Core. */
+export function applyHeal(run) {
+  const h = (run.config.run?.map && run.config.run.map.heal) || {};
+  const pct = h.percent ?? 0.4;
+  for (const id of COMPONENT_IDS) {
+    if (!run.owned[id]) continue;
+    const max = moddedMaxHp(run, id);
+    const cur = run.persistentHp[id] ?? max;
+    run.persistentHp[id] = Math.min(max, cur + Math.round(max * pct));
+  }
+  if (h.fullCore) run.persistentHp.core = moddedMaxHp(run, 'core');
   return run;
 }
 
@@ -226,49 +318,108 @@ export function rewardPools(run) {
 }
 
 /**
- * Roll a reward offer. Deterministic for a given (seed, battleIndex) so an offer is
- * reproducible. Guarantees at least one component while unowned parts remain, and is
- * never empty (repair fallback).
+ * Shared weighted offer draw — distinct entries from the given pools, optionally leading
+ * with a guaranteed component. Used by both the reward and upgrade offers.
  */
-export function rollRewardOffer(run, rng) {
-  const rc = run.config.run || {};
-  const reward = rc.reward || {};
-  const size = reward.offerSize || 3;
-  const weights = reward.weights || {};
-  const r = rng || makeRng((run.seed || 0) * 100003 + run.battleIndex * 31 + 17);
-
-  const pools = rewardPools(run);
+function drawOffer(rng, { pools, weights, size, guaranteeComponent }) {
   const offer = [];
   const used = new Set();
   const keyOf = (x) => `${x.type}:${x.id || x.modId || ''}`;
-
   const drawFrom = (poolName) => {
-    const pool = pools[poolName].filter((x) => !used.has(keyOf(x)));
+    const pool = (pools[poolName] || []).filter((x) => !used.has(keyOf(x)));
     if (!pool.length) return null;
-    const pick = pool[Math.floor(r() * pool.length)];
+    const pick = pool[Math.floor(rng() * pool.length)];
     used.add(keyOf(pick));
     offer.push(pick);
     return pick;
   };
-
-  // Pity: always lead with a component while any remain (so a run can finish its kit).
-  if (reward.guaranteeComponentUntilOwned && pools.component.length) drawFrom('component');
-
+  if (guaranteeComponent && pools.component && pools.component.length) drawFrom('component');
   while (offer.length < size) {
     const available = Object.keys(weights).filter((p) => pools[p] && pools[p].some((x) => !used.has(keyOf(x))));
     if (!available.length) break;
     const total = available.reduce((s, p) => s + (weights[p] || 0), 0);
-    let roll = r() * total;
+    if (total <= 0) break;
+    let roll = rng() * total;
     let chosen = available[available.length - 1];
     for (const p of available) { roll -= (weights[p] || 0); if (roll <= 0) { chosen = p; break; } }
     if (!drawFrom(chosen)) break;
   }
-
-  // Never empty: offer a Core repair (a no-op if already full) as the floor.
-  if (!offer.length) offer.push({ type: 'repair', id: 'core', amount: 'full' });
-
-  run.offer = offer;
   return offer;
+}
+
+/**
+ * Roll a post-battle reward offer. Deterministic for a given (seed, node) so it's
+ * reproducible. Guarantees a component while unowned parts remain; never empty.
+ */
+export function rollRewardOffer(run, rng) {
+  const reward = (run.config.run && run.config.run.reward) || {};
+  const r = rng || makeRng((run.seed || 0) * 100003 + nodeSeed(run) * 31 + 17);
+  const offer = drawOffer(r, {
+    pools: rewardPools(run),
+    weights: reward.weights || {},
+    size: reward.offerSize || 3,
+    guaranteeComponent: reward.guaranteeComponentUntilOwned,
+  });
+  if (!offer.length) offer.push({ type: 'repair', id: 'core', amount: 'full' });  // floor
+  run.offer = offer;
+  run.offerFree = false;
+  return offer;
+}
+
+/** Roll a FREE upgrade-node offer: mods only (and optionally a component). */
+export function rollUpgradeOffer(run, rng) {
+  const uc = (run.config.run?.map && run.config.run.map.upgrade) || {};
+  const r = rng || makeRng((run.seed || 0) * 777 + nodeSeed(run) + 5);
+  const all = rewardPools(run);
+  const pools = { comboMod: all.comboMod, componentMod: all.componentMod };
+  const weights = { comboMod: 2, componentMod: 2 };
+  if (uc.allowComponent) { pools.component = all.component; weights.component = 2; }
+  let offer = drawOffer(r, { pools, weights, size: uc.size || 3, guaranteeComponent: false });
+  if (!offer.length) offer = [{ type: 'repair', id: 'core', amount: 'full' }];  // free heal fallback
+  run.offer = offer;
+  run.offerFree = true;
+  return offer;
+}
+
+/** Build a priced shop inventory from the reward pools (+ a full-repair option). */
+export function buildShop(run) {
+  const eco = run.config.run?.economy || {};
+  const prices = eco.prices || {};
+  const node = currentNode(run);
+  const rowMult = 1 + (eco.priceRowMult || 0) * ((node && node.row) || 0);
+  const r = makeRng((run.seed || 0) * 331 + nodeSeed(run) + 13);
+  const px = (key, fallback) => Math.round(((prices[key] != null ? prices[key] : fallback)) * rowMult);
+  const pools = rewardPools(run);
+  const cands = [
+    ...pools.component.map((x) => ({ ...x, price: px('component', 110) })),
+    ...pools.comboMod.map((x) => ({ ...x, price: px('comboMod', 70) })),
+    ...pools.componentMod.map((x) => ({ ...x, price: px('componentMod', 70) })),
+  ];
+  for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
+  const size = (eco.shop && eco.shop.size) || 5;
+  const items = cands.slice(0, Math.max(0, size - 1));
+  items.push({ type: 'repairAll', price: px('repairAll', 80) });   // always offer a full repair
+  run.shop = { items, sold: [] };
+  return run.shop;
+}
+
+const shopKey = (item) => `${item.type}:${item.id || item.modId || ''}`;
+
+/** Spend Scrap on a shop item. Routes mutation through applyRewardChoice; rejects if unaffordable/sold. */
+export function applyShopPurchase(run, item) {
+  if (!item) return { ok: false, reason: 'none' };
+  const price = item.price || 0;
+  if ((run.scrap || 0) < price) return { ok: false, reason: 'afford' };
+  const key = shopKey(item);
+  if (run.shop && run.shop.sold.includes(key)) return { ok: false, reason: 'sold' };
+  run.scrap -= price;
+  if (item.type === 'repairAll') {
+    for (const id of COMPONENT_IDS) if (run.owned[id]) run.persistentHp[id] = moddedMaxHp(run, id);
+  } else {
+    applyRewardChoice(run, item);   // component / comboMod / componentMod / repair
+  }
+  if (run.shop) run.shop.sold.push(key);
+  return { ok: true };
 }
 
 /** Apply a chosen reward to the run. */

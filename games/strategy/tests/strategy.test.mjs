@@ -31,6 +31,7 @@ import {
   createRun, effectiveConfig, buildBattleUi, applyOwnership, applyPersistentHp,
   captureBattleResult, advanceBattle, isFinalBattle, rollRewardOffer, applyRewardChoice,
   rewardPools, deepMerge, moddedMaxHp,
+  enterNode, advanceFromNode, awardScrap, applyHeal, buildShop, applyShopPurchase, rollUpgradeOffer,
 } from '../core/run.js';
 import { generateMap, validateMap, reachableNext, nodeById, isBossNode, bandForRow } from '../core/map.js';
 
@@ -715,14 +716,17 @@ test('comboPotency sums item values', () => {
 //  run meta-layer (core/run.js) — ownership, mods, progression, rewards
 // =============================================================================
 
-// Build a fresh battle state from a run exactly as main.js would.
-const battleFrom = (run) => {
+// Build a fresh battle state from a run exactly as main.js would. Optionally enter a node first.
+const battleFrom = (run, nodeId) => {
+  if (nodeId) run.currentNodeId = nodeId;
   const s = createState(effectiveConfig(run), buildBattleUi(run, CONFIG.ui));
   applyOwnership(s, run);
   applyPersistentHp(s, run);
   startAttackBuild(s);
   return s;
 };
+// first reachable battle node id from the run's start (handy for tests)
+const firstBattleNodeId = (run) => reachableNext(run.map, run.mapPos).find((n) => n.encounter)?.id;
 const bridgeFor = (s) => createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
 
 // --- deepMerge helper --------------------------------------------------------
@@ -872,11 +876,12 @@ test('progression: HP persists between battles; Core is clamped to >=1', () => {
   assert(battleFrom(run).player.components.core.hp === 1, 'core clamped to >=1');
 });
 
-test('progression: isFinalBattle is true only on the last battle', () => {
+test('progression: isFinalBattle is true only on the boss node', () => {
   const run = createRun(CONFIG, { loadout: 'burst' });
-  assert(isFinalBattle(run) === false, 'battle 0 is not final');
-  run.battleIndex = CONFIG.run.battles.length - 1;
-  assert(isFinalBattle(run) === true, 'last battle is final');
+  run.currentNodeId = firstBattleNodeId(run);
+  assert(isFinalBattle(run) === false, 'a row-1 battle is not final');
+  run.currentNodeId = run.map.bossId;
+  assert(isFinalBattle(run) === true, 'the boss node is final');
 });
 
 test('progression: a destroyed owned part is dead next battle until repaired', () => {
@@ -1000,4 +1005,103 @@ test('map: reachableNext returns the current node forward links; boss has none',
   assert(fromStart.length >= 1 && fromStart.every((id) => nodeById(map, id).row === 1), 'start → row 1 nodes');
   assert(reachableNext(map, map.bossId).length === 0, 'boss is terminal');
   assert(isBossNode(nodeById(map, map.bossId)), 'boss node flagged');
+});
+
+// =============================================================================
+//  run: map navigation + economy + node resolution
+// =============================================================================
+test('run: a run with a map opens on the map at the start node', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  assert(run.status === 'map', 'status map');
+  assert(run.mapPos === run.map.startId && run.currentNodeId === null, 'standing on start');
+  assert(run.scrap === (CONFIG.run.economy.startScrap || 0), 'start scrap');
+});
+
+test('node: enterNode rejects an unreachable node, accepts a reachable one', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  enterNode(run, run.map.bossId);                 // not reachable from start
+  assert(run.currentNodeId === null && run.status === 'map', 'unreachable ignored');
+  const id = reachableNext(run.map, run.mapPos)[0].id;
+  enterNode(run, id);
+  assert(run.currentNodeId === id, 'reachable accepted');
+});
+
+test('node: entering a battle node sets inBattle and buildBattleUi pulls that node roster', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const id = firstBattleNodeId(run);
+  enterNode(run, id);
+  assert(run.status === 'inBattle', 'inBattle');
+  const ui = buildBattleUi(run, CONFIG.ui);
+  assert(JSON.stringify(ui.enemies) === JSON.stringify(nodeById(run.map, id).encounter.enemies), 'roster from node');
+});
+
+test('node: advanceFromNode returns to the map; boss node wins the run', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const id = firstBattleNodeId(run);
+  enterNode(run, id); advanceFromNode(run);
+  assert(run.status === 'map' && run.mapPos === id, 'back on the map, standing on the cleared node');
+  run.currentNodeId = run.map.bossId; advanceFromNode(run);
+  assert(run.status === 'won', 'boss → won');
+});
+
+test('node: heal restores percent HP to all owned parts incl. core, clamped to max', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.persistentHp.core = 10; run.persistentHp.weapon = 5;
+  applyHeal(run);
+  const pct = CONFIG.run.map.heal.percent;
+  assert(run.persistentHp.core === Math.min(moddedMaxHp(run, 'core'), 10 + Math.round(moddedMaxHp(run, 'core') * pct)), 'core healed');
+  assert(run.persistentHp.weapon === 5 + Math.round(moddedMaxHp(run, 'weapon') * pct), 'weapon healed');
+  run.persistentHp.engine = moddedMaxHp(run, 'engine'); applyHeal(run);
+  assert(run.persistentHp.engine === moddedMaxHp(run, 'engine'), 'clamped at max');
+});
+
+test('node: upgrade offer is free and mod-only', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'engine', 'launchpad'] });
+  rollUpgradeOffer(run);
+  assert(run.offerFree === true, 'flagged free');
+  assert(run.offer.every((o) => o.type === 'comboMod' || o.type === 'componentMod' || o.type === 'repair'), 'mods only');
+});
+
+test('economy: awardScrap adds tier reward + per-row bonus', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const eco = CONFIG.run.economy;
+  const node = { tier: 'elite', row: 3 };
+  const before = run.scrap;
+  awardScrap(run, node);
+  assert(run.scrap === before + eco.scrapReward.elite + eco.scrapPerRow * 3, 'elite + row bonus');
+});
+
+test('economy: shop purchase deducts price and applies; rejects when unaffordable or sold', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // launchpad/tower/generator unowned
+  buildShop(run);
+  const comp = run.shop.items.find((i) => i.type === 'component');
+  assert(comp, 'a component is for sale');
+  run.scrap = comp.price - 1;
+  assert(applyShopPurchase(run, comp).ok === false, 'rejected: unaffordable');
+  assert(!run.owned[comp.id], 'not acquired');
+  run.scrap = comp.price + 5;
+  assert(applyShopPurchase(run, comp).ok === true, 'bought');
+  assert(run.owned[comp.id] && run.scrap === 5, 'acquired + scrap deducted');
+  assert(applyShopPurchase(run, comp).ok === false, 'cannot buy the same item twice');
+});
+
+test('economy: shop prices scale with map depth', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.currentNodeId = run.map.bossId; // deepest row
+  buildShop(run);
+  const deepRepair = run.shop.items.find((i) => i.type === 'repairAll').price;
+  run.currentNodeId = firstBattleNodeId(run); // row 1
+  buildShop(run);
+  const shallowRepair = run.shop.items.find((i) => i.type === 'repairAll').price;
+  assert(deepRepair > shallowRepair, `deeper shop dearer (${deepRepair} > ${shallowRepair})`);
+});
+
+test('escalation: damage budget scales by node row and tier multiplier', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const eco = CONFIG.run.economy;
+  // find an elite node to read its row + tier mult
+  const elite = Object.values(run.map.byId).find((n) => n.type === 'elite');
+  run.currentNodeId = elite.id;
+  const expected = Math.round(CONFIG.archetypes.brute.damageBudget * (eco.perRowBudgetMult ** elite.row) * eco.tierBudgetMult.elite);
+  assert(effectiveConfig(run).archetypes.brute.damageBudget === expected, `elite budget = row^mult × tier, got ${effectiveConfig(run).archetypes.brute.damageBudget} want ${expected}`);
 });
