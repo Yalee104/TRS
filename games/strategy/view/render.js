@@ -101,10 +101,13 @@ function enemyBoard(state, enemy) {
 }
 
 function playerHtml(state) {
+  // Render only the components the player actually owns (unowned parts don't exist yet — they're
+  // not on the board). Size the grid to the owned count so the row isn't sparse.
+  const owned = COMPONENT_IDS.filter((id) => isOwned(state.player.components[id]));
   return `
     <div class="board player-board">
       <div class="board-label">${t('ui.you')}</div>
-      <div class="cards">${COMPONENT_IDS.map((id) => cardHtml(state, 'player', id, null)).join('')}</div>
+      <div class="cards" style="grid-template-columns:repeat(${Math.max(1, owned.length)},1fr)">${owned.map((id) => cardHtml(state, 'player', id, null)).join('')}</div>
     </div>`;
 }
 

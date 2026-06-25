@@ -71,16 +71,28 @@ function launchpadBonus(launchpad, casc) {
 export function coreShieldStatus(aircraft, config) {
   const cfg = (config && config.coreShield) || null;
   const contributors = (cfg && cfg.contributors) || {};
-  const threshold = (cfg && cfg.threshold) != null ? cfg.threshold : 100;
+  const baseThreshold = (cfg && cfg.threshold) != null ? cfg.threshold : 100;
+  // Scale the threshold to the contributor mass the aircraft actually OWNS, so a small
+  // (few-component) aircraft's Core is still exposable (its owned parts may never sum to the
+  // absolute threshold). Full-6 → activeMass = totalMass → threshold unchanged. Tunable off.
+  const scaleToOwned = !cfg || cfg.scaleToOwned !== false;
   let downSum = 0;
+  let activeMass = 0;
+  let totalMass = 0;
   const remaining = [];
   for (const [id, pct] of Object.entries(contributors)) {
+    totalMass += pct;
     const c = aircraft.components[id];
-    if (c && !isAlive(c)) downSum += pct;
+    if (!c || !isOwned(c)) continue;            // a part you don't own isn't part of the shield
+    activeMass += pct;
+    if (!isAlive(c)) downSum += pct;
     else remaining.push({ id, pct });
   }
-  const up = !!cfg && downSum < threshold;
-  return { up, downSum, threshold, remaining, contributors };
+  const threshold = (scaleToOwned && totalMass > 0)
+    ? Math.round(baseThreshold * (activeMass / totalMass))
+    : baseThreshold;
+  const up = !!cfg && activeMass > 0 && downSum < threshold;
+  return { up, downSum, threshold, scaledThreshold: threshold, activeMass, remaining, contributors };
 }
 
 /** Convenience boolean: is this aircraft's Core shield currently UP? */

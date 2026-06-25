@@ -8,7 +8,7 @@
 //  crippling its offence in your attack makes the telegraphed blow land softer.
 // =============================================================================
 
-import { isAlive, hasStatus } from '../core/components.js';
+import { isAlive, isOwned, hasStatus } from '../core/components.js';
 import { combatCondition, firepowerMult } from '../core/firepower.js';
 import { systemState, coreShieldUp, towerActive, effectiveAim } from '../core/cascade.js';
 
@@ -47,28 +47,43 @@ function shuffle(arr, rng) {
   return a;
 }
 
-/** Can the enemy meaningfully target this player part right now? (never the SHIELDED Core). */
+/** Can the enemy meaningfully target this player part right now? Must EXIST (owned), be alive,
+ *  and never the SHIELDED Core. Ownership matters in the roguelike: a part the player hasn't
+ *  acquired isn't on the board, so the enemy must never aim at it. */
 function canTarget(id, player, coreShielded) {
-  if (!isAlive(player.components[id])) return false;
+  const c = player.components[id];
+  if (!c || !isOwned(c) || !isAlive(c)) return false;
   if (id === 'core' && coreShielded) return false; // wasted — shield blocks all direct damage
   return true;
 }
 
+/** Owned, alive, non-core player parts ordered by firepower weight (biggest contributor first).
+ *  The graceful fallback so an enemy always strikes a part that actually EXISTS, whatever the
+ *  player's loadout. */
+function fallbackOrder(player, config) {
+  const weights = (config && config.firepower && config.firepower.weights) || {};
+  return Object.keys(player.components)
+    .filter((id) => id !== 'core' && isOwned(player.components[id]) && isAlive(player.components[id]))
+    .sort((a, b) => (weights[b] || 0) - (weights[a] || 0));
+}
+
 /**
- * Ordered list of player target ids for this archetype. While the Core is shielded it
- * is excluded entirely (the AI goes after the shield-linked parts instead, e.g. the
- * Saboteur's Generator); the Core re-enters targeting only once its shield is down.
+ * Ordered list of player target ids for this archetype. Archetype `priority` lists are
+ * PREFERENCES; when none of them are owned/alive we fall back to the player's biggest owned
+ * part (fallbackOrder) so the strike always lands on something real. While the Core is shielded
+ * it's excluded (the AI goes after shield-linked parts first); the Core re-enters only when exposed.
  */
-function targetOrder(arch, player, coreShielded) {
+function targetOrder(arch, player, coreShielded, config) {
   const comps = player.components;
   let ids;
   if (arch.priority === 'highestHp') {
     ids = Object.keys(comps)
-      .filter((id) => id !== 'core' && isAlive(comps[id]))
+      .filter((id) => id !== 'core' && isOwned(comps[id]) && isAlive(comps[id]))
       .sort((a, b) => comps[b].hp - comps[a].hp);
   } else {
     ids = (arch.priority || []).filter((id) => canTarget(id, player, coreShielded));
   }
+  if (!ids.length) ids = fallbackOrder(player, config);            // adaptive: hit a part that exists
   if (!ids.length && canTarget('core', player, coreShielded)) ids = ['core']; // only when exposed
   return ids;
 }
@@ -89,7 +104,7 @@ export function planAttack(state, enemy) {
     const share = picks.length ? 1 / picks.length : 0;
     for (const id of picks) entries.push({ component: id, share });
   } else {
-    const order = targetOrder(arch, state.player, coreShielded);
+    const order = targetOrder(arch, state.player, coreShielded, state.config);
     if (order.length) {
       if (spread > 0 && order.length > 1) {
         entries.push({ component: order[0], share: 1 - spread });
@@ -122,7 +137,7 @@ export function planAttack(state, enemy) {
 function fuzzedDisplay(state, entries) {
   const rng = () => (state.rng ? state.rng() : Math.random());
   const falseChance = state.config.telegraph.confuseFalseChance ?? 0.5;
-  const parts = Object.keys(state.player.components).filter((id) => isAlive(state.player.components[id]));
+  const parts = Object.keys(state.player.components).filter((id) => isOwned(state.player.components[id]) && isAlive(state.player.components[id]));
   return entries.map((e) => {
     if (rng() >= falseChance) return { component: e.component, status: e.status, uncertain: true }; // truthful but flagged
     const others = parts.filter((id) => id !== e.component);

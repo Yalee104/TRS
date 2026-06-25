@@ -11,7 +11,7 @@
 //  next defense resolve.
 // =============================================================================
 
-import { DEFENSE_VERB, isAlive } from '../core/components.js';
+import { DEFENSE_VERB, isAlive, isOwned } from '../core/components.js';
 import { systemState, coreShieldUp, effectiveEvasion } from '../core/cascade.js';
 import { conditionReport } from '../core/firepower.js';
 import { logEvent } from '../core/state.js';
@@ -130,7 +130,7 @@ export function resolveDefense(state) {
 
     for (const entry of entries) {
       let target = player.components[entry.component];
-      if (!target || !isAlive(target)) target = (isAlive(player.components.core) && !coreShieldUp(player, config)) ? player.components.core : null;
+      if (!target || !isOwned(target) || !isAlive(target)) target = (isAlive(player.components.core) && !coreShieldUp(player, config)) ? player.components.core : null;
       if (!target) continue;
       const p = profiles[target.id];
       const incoming = entry.share * budget;

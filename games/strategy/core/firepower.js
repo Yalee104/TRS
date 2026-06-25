@@ -28,14 +28,22 @@ function debuffFactorOf(component, config) {
   return factor;
 }
 
-/** Combat Condition in [0,1]: Σ weight × hpFrac × debuffFactor over weighted parts. */
+/** Combat Condition in [0,1]: weighted blend of OWNED parts' hp×debuff, renormalized so a
+ *  small (few-component) aircraft fights at full per-hit strength — owning fewer parts costs
+ *  you BREADTH (fewer attacks/combos/buffer), not raw per-hit power. Full-6 → ownedW=1 (no-op). */
 export function combatCondition(aircraft, config) {
   const weights = config.firepower.weights || {};
+  let ownedW = 0;
+  for (const [id, w] of Object.entries(weights)) {
+    const comp = aircraft.components[id];
+    if (comp && isOwned(comp)) ownedW += w;
+  }
+  if (ownedW <= 0) return 0;
   let cond = 0;
   for (const [id, w] of Object.entries(weights)) {
     const comp = aircraft.components[id];
-    if (!comp || !isOwned(comp)) continue;   // an unowned part contributes nothing (like a missing one)
-    cond += w * hpFrac(comp) * debuffFactorOf(comp, config);
+    if (!comp || !isOwned(comp)) continue;
+    cond += (w / ownedW) * hpFrac(comp) * debuffFactorOf(comp, config);
   }
   return Math.max(0, Math.min(1, cond));
 }
