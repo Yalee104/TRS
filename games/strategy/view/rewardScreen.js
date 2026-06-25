@@ -10,8 +10,8 @@
 
 import { t, componentLabel } from '../i18n/index.js';
 
-/** { typeLabel, name, desc } for one reward, all localized. */
-function describe(r) {
+/** { typeLabel, name, desc } for one reward / shop item, all localized. Shared with the shop. */
+export function describe(r) {
   switch (r.type) {
     case 'component':
       return { type: t('reward.type.component'), name: componentLabel(r.id), desc: t('reward.component.desc', { name: componentLabel(r.id) }) };
@@ -21,6 +21,8 @@ function describe(r) {
       return { type: t('reward.type.componentMod'), name: t(`reward.componentMod.${r.modId}.name`), desc: t(`reward.componentMod.${r.modId}.desc`) };
     case 'repair':
       return { type: t('reward.type.repair'), name: componentLabel(r.id), desc: t('reward.repair.desc', { name: componentLabel(r.id) }) };
+    case 'repairAll':
+      return { type: t('reward.type.repair'), name: t('shop.repairAll'), desc: '' };
     default:
       return { type: '', name: r.type, desc: '' };
   }
@@ -31,7 +33,7 @@ export function createRewardScreen(root, { onPick }) {
     const offer = run.offer || [];
     root.innerHTML = `
       <div class="rs-wrap">
-        <h2 class="rs-title">${t('reward.title')}</h2>
+        <h2 class="rs-title">${run.offerFree ? t('reward.upgradeTitle') : t('reward.title')}</h2>
         <p class="rs-sub">${t('reward.pickOne')}</p>
         <div class="rs-rewards">
           ${offer.map((r, i) => {

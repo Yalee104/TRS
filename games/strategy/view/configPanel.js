@@ -135,8 +135,13 @@ export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, 
     const mods = run.rewardsTaken
       .filter((r) => r.type === 'comboMod' || r.type === 'componentMod')
       .map((r) => `<span class="rh-chip mod">${t(`reward.${r.type}.${r.modId}.name`)}</span>`).join('');
+    // Map-run header: act/row + Scrap. (Falls back to the legacy battle counter if no map.)
+    const header = run.map
+      ? `<div class="rh-battle">${t('hud.actRow', { act: run.act || 1, row: (run.map.byId[run.mapPos]?.row ?? 0) })}</div>
+         <div class="rh-row"><span class="rh-chip mod">${t('hud.scrap')}: ${run.scrap || 0}</span></div>`
+      : `<div class="rh-battle">${t('hud.battle', { n: run.battleIndex + 1, total: totalBattles })}</div>`;
     runHudEl.innerHTML = `
-      <div class="rh-battle">${t('hud.battle', { n: run.battleIndex + 1, total: totalBattles })}</div>
+      ${header}
       <div class="rh-row"><div class="rh-k">${t('hud.owned')}</div>${owned}</div>
       <div class="rh-row"><div class="rh-k">${t('hud.mods')}</div>${mods || `<span class="rh-chip">${t('hud.noMods')}</span>`}</div>`;
   }

@@ -18,13 +18,17 @@ import { finalizeAttackTarget } from '../strategy/combat/attack.js';
 import { finalizeDefenseTarget } from '../strategy/combat/defense.js';
 import {
   createRun, effectiveConfig, buildBattleUi, applyOwnership, applyPersistentHp,
-  captureBattleResult, advanceBattle, isFinalBattle, rollRewardOffer, applyRewardChoice,
+  captureBattleResult, isFinalBattle, rollRewardOffer, applyRewardChoice,
+  enterNode, advanceFromNode, awardScrap, applyShopPurchase,
 } from '../strategy/core/run.js';
+import { nodeById } from '../strategy/core/map.js';
 import { createBridge } from '../strategy/puzzle/bridge.js';
 import { createRenderer } from '../strategy/view/render.js';
 import { createConfigPanel } from '../strategy/view/configPanel.js';
 import { createLoadoutPicker } from '../strategy/view/loadoutPicker.js';
 import { createRewardScreen } from '../strategy/view/rewardScreen.js';
+import { createMapScreen } from '../strategy/view/mapScreen.js';
+import { createShopScreen } from '../strategy/view/shopScreen.js';
 import { createInfoBar } from '../strategy/view/infoBar.js';
 import { createTooltip } from '../strategy/view/tooltip.js';
 import { createComboPanel } from '../strategy/view/comboInfo.js';
@@ -52,6 +56,8 @@ const infobar = createInfoBar(infoEl);
 const panel = createConfigPanel(leftEl, { onNewRun, defaults: config.ui, archetypes: config.archetypes, config });
 const loadout = createLoadoutPicker(runScreenEl, { config, onBegin: onBeginRun });
 const reward = createRewardScreen(runScreenEl, { onPick: onPickReward });
+const mapScreen = createMapScreen(runScreenEl, { onPickNode, getRun: () => app.run });
+const shopScreen = createShopScreen(runScreenEl, { onBuy: onBuyShop, onLeave: onLeaveShop, getRun: () => app.run });
 panel.showRunSetup();
 
 // Language change → re-render the whole UI (every view reads text at render time).
@@ -96,16 +102,38 @@ function onBreak(side, id, eid) {
 
 function onBeginRun({ components, loadout: loadoutKey, seed }) {
   app.run = createRun(config, { components, loadout: loadoutKey, seed });
-  startBattle();
-  draw();
+  app.started = false;
+  panel.setRun(app.run);
+  panel.showRunStatus();
+  draw();                          // a run opens on the MAP (run.status === 'map')
+}
+
+/** Player chose a node on the map. */
+function onPickNode(id) {
+  const r = app.run;
+  if (!r) return;
+  enterNode(r, id);
+  if (r.status === 'inBattle') startBattle();
+  else draw();                     // shop / upgrade-reward / (heal auto-resolved → map)
 }
 
 function onPickReward(choice) {
   const r = app.run;
   if (!r) return;
   applyRewardChoice(r, choice);
-  advanceBattle(r);
-  startBattle();
+  advanceFromNode(r);              // back to the map; the next map pick starts the next battle
+  draw();
+}
+
+function onBuyShop(item) {
+  if (!app.run) return;
+  applyShopPurchase(app.run, item);
+  draw();                          // refresh balances / sold state
+}
+
+function onLeaveShop() {
+  if (!app.run) return;
+  advanceFromNode(app.run);
   draw();
 }
 
@@ -141,6 +169,7 @@ function maybeAdvanceRun() {
     r.status = 'lost';
   } else if (s.phase === PHASES.WON) {
     captureBattleResult(r, s);
+    awardScrap(r, nodeById(r.map, r.currentNodeId));   // Scrap for clearing the node
     if (isFinalBattle(r)) r.status = 'won';
     else { rollRewardOffer(r); r.status = 'reward'; }
   }
@@ -150,6 +179,8 @@ function maybeAdvanceRun() {
 function currentScreen() {
   const r = app.run;
   if (!r) return 'loadout';
+  if (r.status === 'map') return 'map';
+  if (r.status === 'shop') return 'shop';
   if (r.status === 'reward') return 'reward';
   if (r.status === 'won') return 'runWon';
   if (r.status === 'lost') return 'runLost';
@@ -195,8 +226,11 @@ function renderControls() {
 function draw() {
   maybeAdvanceRun();
   const screen = currentScreen();
+  if (app.run) panel.setRun(app.run);   // keep the left-rail HUD (scrap/owned/mods) live on every screen
 
   if (screen === 'loadout') loadout.render();
+  else if (screen === 'map') mapScreen.render();
+  else if (screen === 'shop') shopScreen.render();
   else if (screen === 'reward') reward.render(app.run);
   else if (screen === 'runWon') renderRunOver(true);
   else if (screen === 'runLost') renderRunOver(false);
@@ -222,7 +256,9 @@ window.__strategyRun = {
   get run() { return app.run; },
   bridge,
   beginRun: (opts) => onBeginRun(opts || { components: config.run.loadouts.burst.components, loadout: 'burst', seed: 0 }),
+  pickNode: (id) => onPickNode(id),
   pickReward: (choice) => onPickReward(choice),
+  buyShop: (item) => onBuyShop(item),
   newRun: onNewRun,
   redraw: draw,
   commitAttack: (eid, focusId) => { commitAttack(app.state, eid, focusId); draw(); },
