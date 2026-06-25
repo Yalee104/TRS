@@ -114,7 +114,7 @@ function onPickNode(id) {
   if (!r) return;
   enterNode(r, id);
   if (r.status === 'inBattle') startBattle();
-  else draw();                     // shop / upgrade-reward / (heal auto-resolved → map)
+  draw();                          // re-render for every node type (battle / shop / upgrade / heal)
 }
 
 function onPickReward(choice) {
