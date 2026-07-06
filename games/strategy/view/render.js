@@ -10,6 +10,7 @@
 import { COMPONENT_IDS, ATTACK_EFFECT, DEFENSE_VERB, isAlive, isOwned, isEffectValidOn } from '../core/components.js';
 import { PHASES } from '../core/state.js';
 import { coreShieldUp } from '../core/cascade.js';
+import { overheatMult } from '../combat/enemyAI.js';
 import { OFFENSE_COMBOS, DEFENSE_COMBOS, lookupCombo } from '../combat/combos.js';
 import { t, componentLabel, effectLabel, verbLabel, comboLabel, skillLabel, enemyLabel } from '../i18n/index.js';
 
@@ -112,14 +113,23 @@ function playerHtml(state) {
 }
 
 function phaseBanner(state) {
-  switch (state.phase) {
-    case PHASES.CONFIG: return t('ui.banner.config');
-    case PHASES.ATTACK_BUILD: return t('ui.banner.attack', { n: state.round });
-    case PHASES.DEFENSE_BUILD: return t('ui.banner.defense', { n: state.round });
-    case PHASES.WON: return t('ui.banner.won');
-    case PHASES.LOST: return t('ui.banner.lost');
-    default: return t('ui.banner.round', { n: state.round });
-  }
+  const base = (() => {
+    switch (state.phase) {
+      case PHASES.CONFIG: return t('ui.banner.config');
+      case PHASES.ATTACK_BUILD: return t('ui.banner.attack', { n: state.round });
+      case PHASES.DEFENSE_BUILD: return t('ui.banner.defense', { n: state.round });
+      case PHASES.WON: return t('ui.banner.won');
+      case PHASES.LOST: return t('ui.banner.lost');
+      default: return t('ui.banner.round', { n: state.round });
+    }
+  })();
+  // Overheat clock (run battles only): warn at par, show the live ramp past it.
+  const oh = state.overheat;
+  const inBuild = state.phase === PHASES.ATTACK_BUILD || state.phase === PHASES.DEFENSE_BUILD;
+  if (!oh || !inBuild) return base;
+  if (state.round === oh.par) return `${base} · ${t('ui.banner.overheatSoon')}`;
+  if (state.round > oh.par) return `${base} · ${t('ui.banner.overheat', { mult: overheatMult(state).toFixed(2) })}`;
+  return base;
 }
 
 function cardHtml(state, side, id, eid) {

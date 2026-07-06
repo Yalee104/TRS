@@ -29,6 +29,8 @@ export const zhHant = {
       won: '🏆 勝利',
       lost: '💀 失敗',
       round: '第 {n} 回合',
+      overheatSoon: '⚠ 即將過熱 — 盡快結束這場戰鬥！',
+      overheat: '🔥 過熱 ×{mult} — 敵方攻擊增幅中',
     },
     combos: {
       attackTitle: '⚔️ 攻擊連段',
@@ -169,6 +171,7 @@ export const zhHant = {
     remove: '移除',
     readout: {
       round: '回合',
+      roundPar: '{n} / 標準 {par}',
       credit: '額度',
       creditLeft: '剩餘 {n}秒',
       enemies: '敵人',
@@ -216,6 +219,8 @@ export const zhHant = {
   reward: {
     title: '選擇獎勵',
     pickOne: '選擇一項帶入下一場戰鬥。',
+    pickTwo: '精英戰利品 — 選擇 {n} 項帶入下一場戰鬥。',
+    fastWin: '快速獲勝！以 {rounds} 回合完成（標準 {par}）— 獲得額外廢料。',
     type: {
       component: '新部件',
       comboMod: '連段改裝',

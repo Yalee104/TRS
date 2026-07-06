@@ -29,6 +29,8 @@ export const en = {
       won: '🏆 VICTORY',
       lost: '💀 DEFEAT',
       round: 'Round {n}',
+      overheatSoon: '⚠ OVERHEAT IMMINENT — finish this fight!',
+      overheat: '🔥 OVERHEAT ×{mult} — enemy strikes amplified',
     },
     combos: {
       attackTitle: '⚔️ Attack combos',
@@ -169,6 +171,7 @@ export const en = {
     remove: 'remove',
     readout: {
       round: 'Round',
+      roundPar: '{n} / par {par}',
       credit: 'Credit',
       creditLeft: '{n}s left',
       enemies: 'Enemies',
@@ -216,6 +219,8 @@ export const en = {
   reward: {
     title: 'Choose a reward',
     pickOne: 'Pick one to carry into the next battle.',
+    pickTwo: 'Elite spoils — pick {n} to carry into the next battle.',
+    fastWin: 'Fast win! Finished in {rounds} rounds (par {par}) — bonus Scrap earned.',
     type: {
       component: 'New component',
       comboMod: 'Combo mod',

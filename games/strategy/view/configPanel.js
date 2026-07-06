@@ -152,8 +152,11 @@ export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, 
       [PHASES.WON]: t('config.phase.won'), [PHASES.LOST]: t('config.phase.lost'),
     }[state.phase] || state.phase;
     const enemyList = state.enemies.map((e) => `${enemyLabel(e)}${e.components.core.hp <= 0 ? ' ☠️' : ''}`).join(', ');
+    const roundLine = state.overheat
+      ? t('config.readout.roundPar', { n: state.round, par: state.overheat.par })
+      : `${state.round}`;
     $('#cfg-readout').innerHTML = `
-      <div><b>${t('config.readout.round')}</b> ${state.round} · ${phaseName}</div>
+      <div><b>${t('config.readout.round')}</b> ${roundLine} · ${phaseName}</div>
       <div><b>${t('config.readout.credit')}</b> ${t('config.readout.creditLeft', { n: credit })}</div>
       <div><b>${t('config.readout.enemies')}</b> ${enemyList}</div>
       <div><b>${t('config.readout.queued')}</b> ${t('config.readout.queuedActions', { n: state.queue.length })}</div>`;

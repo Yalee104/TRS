@@ -31,10 +31,16 @@ export function describe(r) {
 export function createRewardScreen(root, { onPick }) {
   function render(run) {
     const offer = run.offer || [];
+    const multi = (run.offerPicks || 0) > 1;
+    const report = run.lastBattleReport;
+    const fastWinLine = (!run.offerFree && report && report.fastWin)
+      ? `<p class="rs-sub">⚡ ${t('reward.fastWin', { rounds: report.rounds, par: report.par })}</p>`
+      : '';
     root.innerHTML = `
       <div class="rs-wrap">
         <h2 class="rs-title">${run.offerFree ? t('reward.upgradeTitle') : t('reward.title')}</h2>
-        <p class="rs-sub">${t('reward.pickOne')}</p>
+        ${fastWinLine}
+        <p class="rs-sub">${multi ? t('reward.pickTwo', { n: run.offerPicks }) : t('reward.pickOne')}</p>
         <div class="rs-rewards">
           ${offer.map((r, i) => {
             const d = describe(r);
