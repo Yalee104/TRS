@@ -230,6 +230,10 @@ export function enterNode(run, id) {
   const node = nodeById(run.map, id);
   node.visited = true;
   run.currentNodeId = id;
+  // Final staging: entering the boss fully restores the owned kit (config-gated).
+  if (node.type === 'boss' && run.config.run?.map?.bossStaging?.fullRepair) {
+    for (const cid of COMPONENT_IDS) if (run.owned[cid]) run.persistentHp[cid] = moddedMaxHp(run, cid);
+  }
   if (node.type === 'enemy' || node.type === 'elite' || node.type === 'boss') run.status = 'inBattle';
   else if (node.type === 'shop') { buildShop(run); run.status = 'shop'; }
   else if (node.type === 'heal') { applyHeal(run); advanceFromNode(run); }   // auto-resolve → back to map
@@ -268,6 +272,22 @@ export function awardScrap(run, node, rounds = null) {
   run.scrap = (run.scrap || 0) + base + perRow + bonus;
   run.lastBattleReport = { rounds, par, fastWin, scrapGained: base + perRow + bonus };
   return run.scrap;
+}
+
+/** Post-battle field repair: every SURVIVING owned part patches up a % of max HP
+ *  between sorties. Destroyed parts stay destroyed — reviving one takes a real
+ *  repair (reward, shop or heal bay), so attrition stays a threat without being
+ *  a death spiral. */
+export function applyPostBattleRepair(run) {
+  const pct = run.config.run?.postBattleRepair?.percent ?? 0;
+  if (!pct) return run;
+  for (const id of COMPONENT_IDS) {
+    if (!run.owned[id]) continue;
+    const cur = run.persistentHp[id];
+    if (cur == null || cur <= 0) continue;
+    run.persistentHp[id] = Math.min(moddedMaxHp(run, id), cur + Math.round(moddedMaxHp(run, id) * pct));
+  }
+  return run;
 }
 
 /** Repair-bay node: restore a % of (modded) max HP to every owned component, incl. Core. */

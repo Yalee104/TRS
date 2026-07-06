@@ -18,7 +18,7 @@ import { finalizeAttackTarget } from '../strategy/combat/attack.js';
 import { finalizeDefenseTarget } from '../strategy/combat/defense.js';
 import {
   createRun, effectiveConfig, buildBattleUi, applyOwnership, applyPersistentHp,
-  captureBattleResult, isFinalBattle, rollRewardOffer, applyRewardChoice,
+  captureBattleResult, applyPostBattleRepair, isFinalBattle, rollRewardOffer, applyRewardChoice,
   enterNode, advanceFromNode, awardScrap, applyShopPurchase,
 } from '../strategy/core/run.js';
 import { nodeById } from '../strategy/core/map.js';
@@ -169,6 +169,7 @@ function maybeAdvanceRun() {
     r.status = 'lost';
   } else if (s.phase === PHASES.WON) {
     captureBattleResult(r, s);
+    applyPostBattleRepair(r);                                   // field repairs between sorties
     awardScrap(r, nodeById(r.map, r.currentNodeId), s.round);   // Scrap (+ fast-win bonus at/under par)
     if (isFinalBattle(r)) r.status = 'won';
     else { rollRewardOffer(r); r.status = 'reward'; }

@@ -208,7 +208,7 @@ export const zhHant = {
     chosen: '已選：{n}/{max}',
     preset: {
       burst: '爆發',
-      burstDesc: '武器庫 + 引擎 + 發射台 — 玻璃化集中火力，加上可穿透核心護盾的燃燒。',
+      burstDesc: '武器庫 + 引擎 + 發電機 — 反應爐全功率下的玻璃化集中火力。',
       sustain: '續航',
       sustainDesc: '發電機 + 感測塔 + 引擎 — 修復／淨化中樞，兼具碎裂傷害。',
       custom: '自訂',

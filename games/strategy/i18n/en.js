@@ -208,7 +208,7 @@ export const en = {
     chosen: 'Chosen: {n}/{max}',
     preset: {
       burst: 'Burst',
-      burstDesc: 'Weapon + Engine + Launch Pad — Glass focus-fire plus Burning that slips past Core shields.',
+      burstDesc: 'Weapon + Engine + Generator — Glass focus-fire at full reactor power.',
       sustain: 'Sustain',
       sustainDesc: 'Generator + Tower + Engine — a Repair/Cleanse backbone with Shatter damage.',
       custom: 'Custom',

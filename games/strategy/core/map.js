@@ -84,7 +84,8 @@ function assignTypes(rows, config, rng) {
   const lastContent = rows.length - 2;
   for (let r = firstContent; r <= lastContent; r++) {
     const band = bandForRow(r, config);
-    const weights = a.typeWeights[band] || { enemy: 1 };
+    const weights = { ...(a.typeWeights[band] || { enemy: 1 }) };
+    if (r < (a.eliteMinRow || 0)) delete weights.elite;   // no elites before the player has a kit
     for (const node of rows[r]) {
       if (r === firstContent && a.guarantees?.firstRowAllEnemy) node.type = 'enemy';
       else node.type = weightedPick(weights, rng);
@@ -126,10 +127,10 @@ function enforceGuarantees(rows, config, rng) {
     convertOne(rows, (n, r) => midOnly(n, r) && n.type !== 'shop', 'heal', rng)
       || convertOne(rows, (n, r) => midOnly(n, r) && countType(rows, 'shop') > 1, 'heal', rng);
   }
-  // ≥ minElites elites (mid/late battle nodes)
+  // ≥ minElites elites (mid/late battle nodes, at or past eliteMinRow)
   let guard = 0;
   while (countType(rows, 'elite') < (a.minElites || 0) && guard++ < 20) {
-    const ok = convertOne(rows, (n, r) => r > 1 && bandForRow(r, config) !== 'early' && n.type === 'enemy', 'elite', rng);
+    const ok = convertOne(rows, (n, r) => r > 1 && r >= (a.eliteMinRow || 0) && bandForRow(r, config) !== 'early' && n.type === 'enemy', 'elite', rng);
     if (!ok) break;
   }
 }
@@ -154,7 +155,7 @@ function minBattlesByNode(rows) {
  *  (contentRows − 1) battles — enough for the configured 3. A unique shop/heal that
  *  lives outside the utility row is relocated into it, never destroyed. Runs after
  *  enforceGuarantees and before assignEncounters. */
-function enforceMinBattles(rows, config) {
+function enforceMinBattles(rows, config, rng) {
   const a = config.run.map.act1;
   const need = a.minBattlesBeforeBoss || 0;
   if (!need) return;
@@ -176,7 +177,8 @@ function enforceMinBattles(rows, config) {
           || rows[utility].find((m) => isBattleType(m.type))
           || rows[utility].find((m) => m.type !== n.type && !isBattleType(m.type) && countType(rows, m.type) > 1);
         if (spot) {
-          const displaced = isBattleType(spot.type) ? spot.type : 'enemy';
+          let displaced = isBattleType(spot.type) ? spot.type : 'enemy';
+          if (displaced === 'elite' && r < (a.eliteMinRow || 0)) displaced = 'enemy'; // never push an elite too early
           spot.type = n.type; spot.tier = null;
           n.type = displaced; n.tier = tierOf(displaced);
           continue;
@@ -184,6 +186,13 @@ function enforceMinBattles(rows, config) {
       }
       n.type = 'enemy'; n.tier = 'normal';
     }
+  }
+  // an elite demotion above may have dropped the count — top back up (battle→battle
+  // conversions never reduce a path's battle count)
+  let guard = 0;
+  while (countType(rows, 'elite') < (a.minElites || 0) && guard++ < 20) {
+    const ok = convertOne(rows, (n, r) => r > 1 && r >= (a.eliteMinRow || 0) && bandForRow(r, config) !== 'early' && n.type === 'enemy', 'elite', rng);
+    if (!ok) break;
   }
 }
 
@@ -228,7 +237,7 @@ export function generateMap(config, seed) {
   for (let r = 0; r < rows.length - 1; r++) linkRows(rows[r], rows[r + 1], rng);
   assignTypes(rows, config, rng);
   enforceGuarantees(rows, config, rng);
-  enforceMinBattles(rows, config);
+  enforceMinBattles(rows, config, rng);
   assignEncounters(rows, config, seed);
 
   const byId = {};

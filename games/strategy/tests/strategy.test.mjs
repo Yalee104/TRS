@@ -31,7 +31,7 @@ import {
   createRun, effectiveConfig, buildBattleUi, applyOwnership, applyPersistentHp,
   captureBattleResult, isFinalBattle, rollRewardOffer, applyRewardChoice,
   rewardPools, deepMerge, moddedMaxHp,
-  enterNode, advanceFromNode, awardScrap, applyHeal, buildShop, applyShopPurchase, rollUpgradeOffer,
+  enterNode, advanceFromNode, awardScrap, applyHeal, applyPostBattleRepair, buildShop, applyShopPurchase, rollUpgradeOffer,
 } from '../core/run.js';
 import { generateMap, validateMap, reachableNext, nodeById, isBossNode, bandForRow } from '../core/map.js';
 import { CATALOGS_FOR_TEST } from '../i18n/index.js';
@@ -1320,5 +1320,40 @@ test('pacing: scripted player lands in the tier round bands (regression net for 
     assert(elite.won && elite.rounds <= 8, `elite won in <=8 rounds (got ${elite.won ? elite.rounds : 'loss'})`);
     const boss = simBattle(KIT5, BOSS_NODE, seed);
     assert(boss.won && boss.rounds >= 5 && boss.rounds <= 10, `boss won in 5..10 rounds (got ${boss.won ? boss.rounds : 'loss'})`);
+  }
+});
+
+test('run: post-battle field repair heals surviving parts and never revives dead ones', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const pct = CONFIG.run.postBattleRepair.percent;
+  run.persistentHp.weapon = 10;
+  run.persistentHp.engine = 0;                                  // destroyed stays destroyed
+  applyPostBattleRepair(run);
+  assert(run.persistentHp.weapon === 10 + Math.round(moddedMaxHp(run, 'weapon') * pct), 'damaged part patched up');
+  assert(run.persistentHp.engine === 0, 'destroyed part not revived');
+  run.persistentHp.core = moddedMaxHp(run, 'core');
+  applyPostBattleRepair(run);
+  assert(run.persistentHp.core === moddedMaxHp(run, 'core'), 'clamped at max');
+});
+
+test('run: entering the boss node fully restores the owned kit (staging)', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  // walk the map graph to a last-content-row node, then step onto the boss
+  const lastContent = run.map.rows.length - 2;
+  run.mapPos = run.map.rows[lastContent][0].id;
+  run.persistentHp.weapon = 5;
+  run.persistentHp.engine = 0;
+  enterNode(run, run.map.bossId);
+  assert(run.status === 'inBattle', 'boss battle starts');
+  assert(run.persistentHp.weapon === moddedMaxHp(run, 'weapon'), 'damaged part restored');
+  assert(run.persistentHp.engine === moddedMaxHp(run, 'engine'), 'destroyed part revived for the final battle');
+});
+
+test('map: no elite ever spawns before eliteMinRow', () => {
+  for (let seed = 0; seed <= 60; seed++) {
+    const map = generateMap(CONFIG, seed);
+    for (const n of allNodes(map)) {
+      assert(!(n.type === 'elite' && n.row < CONFIG.run.map.act1.eliteMinRow), `seed ${seed}: elite at row ${n.row}`);
+    }
   }
 });

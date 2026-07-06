@@ -193,8 +193,12 @@
     "enemyShieldThreshold": 60,
     "overheat": {
       "_comment": "Anti-stall clock (run battles only). Each tier has a PAR round; past par every enemy's damageBudget compounds by rampPerRound each extra round (telegraphed one round early in the banner/log). Winning at or under par pays economy.fastWinScrap.",
-      "parRounds": { "normal": 4, "elite": 6, "boss": 8 },
+      "parRounds": { "normal": 4, "elite": 6, "boss": 9 },
       "rampPerRound": 1.25
+    },
+    "postBattleRepair": {
+      "_comment": "Field repairs between sorties: every SURVIVING owned part recovers this fraction of max HP after a battle win. Destroyed parts stay destroyed until a real repair (reward/shop/heal bay), so losing a part still stings without becoming a death spiral.",
+      "percent": 0.3
     },
     "reward": {
       "_comment": "Between battles, offer `offerSize` choices. Each type's pool is filtered by current ownership/damage; types are weighted, empty pools skipped. guaranteeComponentUntilOwned forces at least one component offer while unowned parts remain so a run can always progress toward the full kit. A repair fallback guarantees the offer is never empty. Elite wins (economy.eliteRewardBonus) use eliteOffer: a wider spread with 2 picks.",
@@ -226,8 +230,8 @@
       "launchpadOverclock": { "component": "launchpad", "patch": { "verb": { "overclock": { "creditBonusMs": 4000 } } } }
     },
     "loadouts": {
-      "_comment": "Presets pre-select the 3 non-core starting components (the player can still go custom). burst = Glass-enabling offense plus Burning to slip past Core shields; sustain = defensive backbone (Repair+Cleanse) with Shatter damage.",
-      "burst":   { "components": ["weapon", "engine", "launchpad"] },
+      "_comment": "Presets pre-select the 3 non-core starting components (the player can still go custom). Both include the Generator — without it every attack suffers the brownout penalty (cascade.brownoutMult), which is a trap for a starting kit. burst = Glass-enabling offense; sustain = defensive backbone (Repair+Cleanse) with Shatter damage.",
+      "burst":   { "components": ["weapon", "engine", "generator"] },
       "sustain": { "components": ["generator", "tower", "engine"] },
       "custom":  { "components": [] }
     },
@@ -238,6 +242,7 @@
         "rows": 6,
         "nodesPerRow": [2, 3],
         "minElites": 2,
+        "eliteMinRow": 3,
         "minBattlesBeforeBoss": 3,
         "typeWeights": {
           "early": { "enemy": 6, "shop": 1, "heal": 1 },
@@ -257,6 +262,7 @@
       "bossPool": ["dreadnought"],
       "creditSeconds": { "normal": 16, "elite": 16, "boss": 18 },
       "heal": { "percent": 0.4, "fullCore": false },
+      "bossStaging": { "_comment": "Entering the boss node fully restores (and revives) every owned part — the final battle tests your build and your play, not the attrition you arrived with.", "fullRepair": true },
       "upgrade": { "allowComponent": false, "size": 3 }
     },
 
@@ -268,7 +274,7 @@
       "perRowBudgetMult": 1.08,
       "rosterBudgetSplit": true,
       "tierBudgetMult": { "normal": 1.0, "elite": 1.2, "boss": 0.9 },
-      "tierHpMult": { "normal": 0.35, "elite": 0.6, "boss": 1.6 },
+      "tierHpMult": { "normal": 0.35, "elite": 0.6, "boss": 1.4 },
       "eliteRewardBonus": true,
       "fastWinScrap": { "normal": 15, "elite": 30, "boss": 0 },
       "prices": { "component": 110, "comboMod": 70, "componentMod": 70, "repair": 30, "repairAll": 80 },
