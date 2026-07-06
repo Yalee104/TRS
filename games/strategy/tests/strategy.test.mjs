@@ -114,14 +114,19 @@ test('cascade cliffs: tower→blind, engine→no initiative, launchpad→congest
   assert(sys.trsMods.blockerBonus > 0, 'launchpad dead → more blockers');
 });
 
-test('a healthy Launch Pad EASES the TRS grid (size only); damaged fades to baseline', () => {
+test('Launch Pad TRS steps: healthy baseline, damaged +1, destroyed +2, unowned neutral', () => {
   const s = fresh();
-  const full = systemState(s.player, CONFIG).trsMods;
-  assert(full.sizeDelta === CONFIG.cascade.launchpadFullBonus.sizeDelta, 'full HP → smaller grid');
-  assert(full.blockerBonus === 0 && full.trapBonus === 0, 'healthy easing is size-only (density easing was too strong)');
-  s.player.components.launchpad.hp = s.player.components.launchpad.maxHp * 0.4;
-  const half = systemState(s.player, CONFIG).trsMods;
-  assert(half.sizeDelta === 0, 'damaged → the size bonus fades to baseline');
+  const lp = s.player.components.launchpad;
+  assert(systemState(s.player, CONFIG).trsMods.sizeDelta === CONFIG.cascade.launchpadHealthy.sizeDelta, 'healthy → baseline grid');
+  lp.hp = lp.maxHp * 0.4;                              // below launchpadDamagedBelow (0.5)
+  assert(systemState(s.player, CONFIG).trsMods.sizeDelta === CONFIG.cascade.launchpadDamaged.sizeDelta, 'damaged → congested one step');
+  lp.hp = lp.maxHp * 0.6;                              // back above the threshold
+  assert(systemState(s.player, CONFIG).trsMods.sizeDelta === CONFIG.cascade.launchpadHealthy.sizeDelta, 'above threshold → healthy again');
+  lp.hp = 0;
+  assert(systemState(s.player, CONFIG).trsMods.sizeDelta === CONFIG.cascade.launchpadDestroyed.sizeDelta, 'destroyed → the cliff');
+  lp.hp = lp.maxHp; lp.owned = false;                  // run mode: never acquired
+  const un = systemState(s.player, CONFIG).trsMods;
+  assert(un.sizeDelta === 0 && un.blockerBonus === 0 && un.trapBonus === 0, 'unowned → neutral base grid (no phantom cliff)');
 });
 
 test('Launch Pad now carries attack strength: destroying it drops Combat Condition', () => {
@@ -1382,7 +1387,7 @@ test('defense replay: plays are counted per part and reset each defense phase', 
   assert(Object.keys(s.defensePlays).length === 0, 'fresh defense phase resets the counter');
 });
 
-test('bridge: replaying the same part congests its TRS (+size per repeat, capped; attack untouched)', () => {
+test('bridge: replaying the same part congests its TRS (+size per repeat, clamped to maxSize; attack untouched)', () => {
   const s = fresh({ creditSeconds: 500 });
   startDefenseBuild(s);
   const bridge = createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
@@ -1390,17 +1395,19 @@ test('bridge: replaying the same part congests its TRS (+size per repeat, capped
   const solveShield = () => { s.activePuzzle.instance.fireComplete([{ typeKey: 'shield' }]); finalizeDefenseTarget(s, 'core'); };
   const sizes = [];
   const blockers = [];
-  for (let i = 0; i < rp.maxExtra + 2; i++) {
+  for (let i = 0; i < 7; i++) {
     assert(bridge.open('weapon') === true, `defense replay ${i + 1} can open`);
     sizes.push(s.activePuzzle.instance.opts.generate.size);
     blockers.push(s.activePuzzle.instance.opts.generate.routePlan.blockerDensity);
     solveShield();
   }
-  for (let i = 1; i <= rp.maxExtra; i++) {
-    assert(sizes[i] === sizes[0] + i * rp.sizePerRepeat, `replay ${i + 1} grid +${i * rp.sizePerRepeat} (got ${sizes[i]} vs base ${sizes[0]})`);
-    assert(near(blockers[i], blockers[0] + i * rp.blockerPerRepeat, 0.001), `replay ${i + 1} denser blockers`);
+  for (let i = 1; i < 7; i++) {
+    const expected = Math.min(sizes[0] + i * rp.sizePerRepeat, rp.maxSize);
+    assert(sizes[i] === expected, `replay ${i + 1} grid ${expected} (got ${sizes[i]}, base ${sizes[0]})`);
+    const effRepeats = (expected - sizes[0]) / rp.sizePerRepeat;
+    assert(near(blockers[i], blockers[0] + effRepeats * rp.blockerPerRepeat, 0.001), `replay ${i + 1} denser blockers`);
   }
-  assert(sizes[rp.maxExtra + 1] === sizes[0] + rp.maxExtra * rp.sizePerRepeat, 'penalty caps at maxExtra');
+  assert(sizes[6] === rp.maxSize, `grid never exceeds ${rp.maxSize}×${rp.maxSize}`);
   // a DIFFERENT part is unaffected by weapon's replays
   assert(bridge.open('generator') === true, 'other part opens');
   assert(s.activePuzzle.instance.opts.generate.size === sizes[0], 'other part gets the base grid');
@@ -1419,6 +1426,6 @@ test('mods: the launchpadGridPlus cascade patch merges into the effective config
   const entry = CONFIG.run.componentModCatalog.launchpadGridPlus;
   applyRewardChoice(run, { type: 'componentMod', modId: 'launchpadGridPlus', id: entry.component, patch: entry.patch });
   const cfg = effectiveConfig(run);
-  assert(cfg.cascade.launchpadFullBonus.sizeDelta === -2, 'modded pad eases the grid by 2');
-  assert(CONFIG.cascade.launchpadFullBonus.sizeDelta === -1, 'base config untouched');
+  assert(cfg.cascade.launchpadHealthy.sizeDelta === -1, 'modded healthy pad eases the grid by 1 (5×5)');
+  assert(CONFIG.cascade.launchpadHealthy.sizeDelta === 0, 'base config untouched');
 });

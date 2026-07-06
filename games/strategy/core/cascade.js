@@ -27,7 +27,6 @@ export function systemState(aircraft, config) {
   const weaponAlive = works(c.weapon);
   const towerAlive = works(c.tower);
   const engineAlive = works(c.engine);
-  const launchpadAlive = works(c.launchpad);
 
   return {
     // Generator → Core armor (gradient) + brownout (cliff)
@@ -45,21 +44,25 @@ export function systemState(aircraft, config) {
     evasion: engineAlive ? casc.evasionAtFullEngine * hpFrac(c.engine) : 0,
     hasInitiative: engineAlive,
 
-    // Launch Pad → TRS quality (GRADIENT while alive, cliff when destroyed):
-    //   healthy → eased grid (bonus × HP); damaged → fades to baseline; dead → congested.
-    trsMods: launchpadAlive ? launchpadBonus(c.launchpad, casc) : { ...casc.launchpadDestroyed },
+    // Launch Pad → TRS quality, STEPPED (see launchpadTrsMods):
+    //   never owned → neutral; healthy → launchpadHealthy; below the damage
+    //   threshold → launchpadDamaged; destroyed → launchpadDestroyed cliff.
+    trsMods: launchpadTrsMods(c.launchpad, casc),
   };
 }
 
-/** Eased-grid bonus from a living Launch Pad, scaled by its HP (full HP = full bonus). */
-function launchpadBonus(launchpad, casc) {
-  const full = casc.launchpadFullBonus || {};
-  const f = hpFrac(launchpad);
-  return {
-    sizeDelta: Math.round((full.sizeDelta || 0) * f),
-    blockerBonus: (full.blockerBonus || 0) * f,
-    trapBonus: (full.trapBonus || 0) * f,
-  };
+/**
+ * The Launch Pad's TRS grid contribution, as HP steps rather than a gradient:
+ *   • not OWNED   → neutral (you can't lose a system you never had)
+ *   • > damagedBelow HP → casc.launchpadHealthy   (baseline 6×6 by default)
+ *   • ≤ damagedBelow HP → casc.launchpadDamaged   (congests to 7×7)
+ *   • destroyed         → casc.launchpadDestroyed (the 8×8 cliff)
+ */
+function launchpadTrsMods(launchpad, casc) {
+  if (!isOwned(launchpad)) return { sizeDelta: 0, blockerBonus: 0, trapBonus: 0 };
+  if (!isAlive(launchpad)) return { ...casc.launchpadDestroyed };
+  const threshold = casc.launchpadDamagedBelow ?? 0.5;
+  return hpFrac(launchpad) > threshold ? { ...(casc.launchpadHealthy || {}) } : { ...(casc.launchpadDamaged || {}) };
 }
 
 /**

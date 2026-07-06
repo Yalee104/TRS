@@ -112,18 +112,22 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     delete knobs._comment;
     knobs.burningDensity = burningOn ? (pmods.burningDensity ?? 0) : 0;
     // Defense replay penalty: each repeated play of the SAME part this phase congests
-    // its TRS — bigger grid + denser blockers (config.puzzle.repeatPenalty). Attack
+    // its TRS — +sizePerRepeat grid per repeat, clamped to an absolute maxSize grid,
+    // plus denser blockers per effective repeat (config.puzzle.repeatPenalty). Attack
     // parts are one-use per phase, so this only ever applies to defense.
+    const baseSize = state.config.puzzle.size + (trsMods.sizeDelta || 0);
     const rp = state.config.puzzle.repeatPenalty || null;
-    const repeats = (!isAttack && rp) ? Math.min(state.defensePlays?.[componentId] || 0, rp.maxExtra ?? 3) : 0;
+    const plays = (!isAttack && rp) ? (state.defensePlays?.[componentId] || 0) : 0;
+    const cap = Math.max(baseSize, rp?.maxSize ?? Infinity);
+    const size = Math.min(baseSize + plays * (rp?.sizePerRepeat || 0), cap);
+    const repeats = (rp?.sizePerRepeat || 0) > 0 ? Math.round((size - baseSize) / rp.sizePerRepeat) : 0;
     if (repeats > 0) {
       knobs.blockerDensity = (knobs.blockerDensity ?? 0.4) + repeats * (rp.blockerPerRepeat || 0);
-      logEvent(state, `Repeated ${component.name} play — TRS congested (+${repeats * (rp.sizePerRepeat || 0)} grid).`);
+      logEvent(state, `Repeated ${component.name} play — TRS congested (${size}×${size} grid).`);
     }
     const cfg = isAttack
       ? offensivePalette(componentId, trsMods, state.config.potency, knobs)
       : defensivePalette(componentId, trsMods, state.config.potency, knobs);
-    const size = state.config.puzzle.size + (trsMods.sizeDelta || 0) + repeats * (rp?.sizePerRepeat || 0);
 
     const nt = catalogFromConfig(cfg);
     // Localize the in-grid node labels host-side (the shared module is not modified).

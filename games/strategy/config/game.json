@@ -14,9 +14,9 @@
     "size": 6,
     "timeLimitMs": 10000,
     "repeatPenalty": {
-      "_comment": "Defense-phase replay tax: the 2nd+ play of the SAME part in one defense phase gets +sizePerRepeat grid per repeat (capped at maxExtra repeats) and +blockerPerRepeat blocker density — spamming one verb (e.g. Shield) gets progressively harder. Attack parts are one-use per phase, so this never applies to attacks.",
+      "_comment": "Defense-phase replay tax: the 2nd+ play of the SAME part in one defense phase gets +sizePerRepeat grid per repeat (grid clamped to maxSize) and +blockerPerRepeat blocker density per effective repeat — spamming one verb (e.g. Shield) gets progressively harder. Attack parts are one-use per phase, so this never applies to attacks.",
       "sizePerRepeat": 1,
-      "maxExtra": 3,
+      "maxSize": 10,
       "blockerPerRepeat": 0.04
     },
     "trapEntryMode": "failFast",
@@ -125,8 +125,10 @@
     "evasionAtFullEngine": 0.15,
     "weaponDestroyedBaseMult": 0.4,
     "towerDestroyedAimMult": 0.6,
-    "_lpComment": "Launch Pad governs its owner's TRS quality on a GRADIENT: at full HP it EASES the grid (smaller grid = bonus scaled by HP); as it's damaged the bonus fades to baseline; DESTROYED it congests past baseline (the cliff). blockerBonus/trapBonus are added to densities; sizeDelta adjusts grid size. The healthy bonus is size-only (-1) — density easing stacked into trivial puzzles; the launchpadGridPlus mod upgrades it to -2.",
-    "launchpadFullBonus": { "sizeDelta": -1, "blockerBonus": 0, "trapBonus": 0 },
+    "_lpComment": "Launch Pad governs its owner's TRS quality in HP STEPS (core/cascade.js launchpadTrsMods): never owned → neutral base grid; above launchpadDamagedBelow HP → launchpadHealthy (baseline 6×6); at/below it → launchpadDamaged (7×7); destroyed → launchpadDestroyed (the 8×8 congested cliff). blockerBonus/trapBonus add to densities; sizeDelta adjusts grid size. The launchpadGridPlus mod patches launchpadHealthy.sizeDelta to -1 (5×5 while healthy).",
+    "launchpadDamagedBelow": 0.5,
+    "launchpadHealthy": { "sizeDelta": 0, "blockerBonus": 0, "trapBonus": 0 },
+    "launchpadDamaged": { "sizeDelta": 1, "blockerBonus": 0, "trapBonus": 0 },
     "launchpadDestroyed": { "sizeDelta": 2, "blockerBonus": 0.12, "trapBonus": 0.1 }
   },
 
@@ -235,7 +237,7 @@
       "weaponShield":    { "component": "weapon",    "patch": { "verb": { "shield": { "absorbPerPotency": 11 } } } },
       "generatorRepair": { "component": "generator", "patch": { "verb": { "repair": { "hpPerPotency": 8 } } } },
       "launchpadOverclock": { "component": "launchpad", "patch": { "verb": { "overclock": { "creditBonusMs": 4000 } } } },
-      "launchpadGridPlus": { "component": "launchpad", "patch": { "cascade": { "launchpadFullBonus": { "sizeDelta": -2 } } } }
+      "launchpadGridPlus": { "component": "launchpad", "patch": { "cascade": { "launchpadHealthy": { "sizeDelta": -1 } } } }
     },
     "loadouts": {
       "_comment": "Presets pre-select the 3 non-core starting components (the player can still go custom). Both include the Generator — without it every attack suffers the brownout penalty (cascade.brownoutMult), which is a trap for a starting kit. burst = Glass-enabling offense; sustain = defensive backbone (Repair+Cleanse) with Shatter damage.",

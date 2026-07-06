@@ -610,10 +610,12 @@ base config, so TRS Command single battles are untouched):
 
 Defense is deliberately tighter than attack: the defense build gets
 `phase.defenseCreditMult` (0.6) of the phase budget, and **replaying the same part within one
-defense phase congests its TRS** — +1 grid size per repeat (capped) plus denser blockers
-(`puzzle.repeatPenalty`) — so spamming Shield is a diminishing loop, not a wall. The healthy
-Launch Pad easing is size-only (−1; the `launchpadGridPlus` mod upgrades it to −2 via a
-`cascade` component-mod patch).
+defense phase congests its TRS** — +1 grid size per repeat, clamped to a 10×10 grid, plus
+denser blockers (`puzzle.repeatPenalty`) — so spamming Shield is a diminishing loop, not a
+wall. The Launch Pad's grid contribution is stepped by HP (`cascade.launchpad*`): never owned
+→ neutral 6×6; healthy (>50% HP) → 6×6; damaged (≤50%) → 7×7; destroyed → the 8×8 congested
+cliff. The `launchpadGridPlus` mod patches the healthy step to 5×5 via a `cascade`
+component-mod patch.
 
 Momentum features: winning **at or under par** pays `economy.fastWinScrap`; elite wins offer a
 4-card spread with **2 picks** (`reward.eliteOffer`, gated on `economy.eliteRewardBonus`);

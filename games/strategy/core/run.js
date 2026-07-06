@@ -146,7 +146,7 @@ export function effectiveConfig(run) {
     if (patch.armor) cfg.components[id].armor = (cfg.components[id].armor || 0) + patch.armor;
     if (patch.effect) deepMerge(cfg.effects, patch.effect);     // e.g. { freeze: { dmgPerPotency } }
     if (patch.verb) deepMerge(cfg.defense, patch.verb);         // e.g. { shield: { absorbPerPotency } }
-    if (patch.cascade) deepMerge(cfg.cascade, patch.cascade);   // e.g. { launchpadFullBonus: { sizeDelta } }
+    if (patch.cascade) deepMerge(cfg.cascade, patch.cascade);   // e.g. { launchpadHealthy: { sizeDelta } }
   }
 
   // Breach (run-only): enemy Cores use a weaker shield threshold so fights close out.
