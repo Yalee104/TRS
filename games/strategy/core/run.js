@@ -114,12 +114,15 @@ export function moddedMaxHp(run, id) {
 export function effectiveConfig(run) {
   const cfg = deepClone(run.config);
 
-  // Escalation: deeper rows hit harder, and elite/boss nodes get a tier multiplier on top.
+  // Escalation: deeper rows hit harder, and elite/boss nodes get a tier multiplier on
+  // top. With rosterBudgetSplit the budget is divided across the roster, so TOTAL
+  // incoming pressure is set by the tier — and killing one enemy visibly relieves it.
   const eco = run.config.run?.economy || {};
   const rowMult = (eco.perRowBudgetMult ?? 1) ** depthOf(run);
   const tier = (currentNode(run) && currentNode(run).tier) || 'normal';
   const tierMult = (eco.tierBudgetMult && eco.tierBudgetMult[tier]) ?? 1;
-  const mult = rowMult * tierMult;
+  const split = eco.rosterBudgetSplit ? Math.max(1, (currentEncounter(run).enemies || []).length) : 1;
+  const mult = rowMult * tierMult / split;
   if (mult !== 1) {
     for (const [k, a] of Object.entries(cfg.archetypes || {})) {
       if (k === '_comment' || !a || typeof a.damageBudget !== 'number') continue;
@@ -142,6 +145,10 @@ export function effectiveConfig(run) {
     if (patch.effect) deepMerge(cfg.effects, patch.effect);     // e.g. { freeze: { dmgPerPotency } }
     if (patch.verb) deepMerge(cfg.defense, patch.verb);         // e.g. { shield: { absorbPerPotency } }
   }
+
+  // Breach (run-only): enemy Cores use a weaker shield threshold so fights close out.
+  const breach = run.config.run?.enemyShieldThreshold;
+  if (breach != null && cfg.coreShield) cfg.coreShield.enemyThreshold = breach;
   return cfg;
 }
 
@@ -156,15 +163,23 @@ function currentEncounter(run) {
   return {};
 }
 
-/** UI overrides for createState() for the current battle (node-driven roster, credit, seed). */
+/** UI overrides for createState() for the current battle (node-driven roster, credit,
+ *  seed + run pacing: tier HP scaling and the Overheat par clock). */
 export function buildBattleUi(run, baseUi = {}) {
   const enc = currentEncounter(run);
   const node = currentNode(run);
+  const tier = (node && node.tier) || 'normal';
+  const eco = run.config.run?.economy || {};
+  const oh = run.config.run?.overheat || null;
   return {
     ...baseUi,
     enemies: enc.enemies || baseUi.enemies,
     creditSeconds: enc.creditSeconds != null ? enc.creditSeconds : baseUi.creditSeconds,
     seed: (run.seed || 0) + ((node?.row ?? 0) * 101) + ((node?.col ?? 0) * 7),
+    enemyHpMult: (eco.tierHpMult && eco.tierHpMult[tier]) ?? 1,
+    overheat: (oh && oh.parRounds && oh.parRounds[tier])
+      ? { par: oh.parRounds[tier], rampPerRound: oh.rampPerRound || 1 }
+      : null,
   };
 }
 

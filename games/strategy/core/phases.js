@@ -12,7 +12,7 @@ import { PHASES, logEvent } from './state.js';
 import { isAlive } from './components.js';
 import { resolveAttack } from '../combat/attack.js';
 import { resolveDefense } from '../combat/defense.js';
-import { planAttack } from '../combat/enemyAI.js';
+import { planAttack, overheatMult } from '../combat/enemyAI.js';
 import { tickAircraftStatuses } from '../combat/statuses.js';
 
 export function startAttackBuild(state) {
@@ -28,6 +28,10 @@ export function startAttackBuild(state) {
   // each living enemy declares its next strike (visible if your Tower lives)
   for (const e of state.enemies) e.telegraph = isAlive(e.components.core) ? planAttack(state, e) : null;
   logEvent(state, `=== Round ${state.round} — ATTACK. Play a weapon's TRS, then apply its status to an enemy part.`);
+  if (state.overheat) {
+    if (state.round === state.overheat.par) logEvent(state, `⚠ Overheat imminent — enemy systems ramp up next round. Finish this fight!`);
+    else if (state.round > state.overheat.par) logEvent(state, `🔥 OVERHEAT — enemy strikes amplified ×${overheatMult(state).toFixed(2)}.`);
+  }
 }
 
 export function commitAttack(state, eid, focusId) {

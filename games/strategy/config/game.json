@@ -190,6 +190,12 @@
   "run": {
     "_comment": "Roguelike run meta-layer (core/run.js + core/map.js). A run walks the act map from start to boss; win the boss battle to win the run, lose any battle to end it. The player owns Core + `startComponents.pickCount` parts at the start and acquires the rest as rewards. All tuning is data-driven: combo-mods/component-mods are catalog `patch` objects deep-merged over the base config at battle time (no base mutation). Component (incl. Core) HP persists between battles.",
     "startComponents": { "core": true, "pickCount": 2 },
+    "enemyShieldThreshold": 60,
+    "overheat": {
+      "_comment": "Anti-stall clock (run battles only). Each tier has a PAR round; past par every enemy's damageBudget compounds by rampPerRound each extra round (telegraphed one round early in the banner/log). Winning at or under par pays economy.fastWinScrap.",
+      "parRounds": { "normal": 4, "elite": 6, "boss": 8 },
+      "rampPerRound": 1.25
+    },
     "reward": {
       "_comment": "Between battles, offer `offerSize` choices. Each type's pool is filtered by current ownership/damage; types are weighted, empty pools skipped. guaranteeComponentUntilOwned forces at least one component offer while unowned parts remain so a run can always progress toward the full kit. A repair fallback guarantees the offer is never empty.",
       "offerSize": 3,
@@ -252,7 +258,9 @@
       "scrapReward": { "normal": 25, "elite": 60, "boss": 0 },
       "scrapPerRow": 4,
       "perRowBudgetMult": 1.08,
-      "tierBudgetMult": { "normal": 1.0, "elite": 1.4, "boss": 2.0 },
+      "rosterBudgetSplit": true,
+      "tierBudgetMult": { "normal": 1.0, "elite": 1.2, "boss": 0.9 },
+      "tierHpMult": { "normal": 0.35, "elite": 0.6, "boss": 1.6 },
       "eliteRewardBonus": true,
       "prices": { "component": 110, "comboMod": 70, "componentMod": 70, "repair": 30, "repairAll": 80 },
       "priceRowMult": 0.12,

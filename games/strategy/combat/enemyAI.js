@@ -149,6 +149,17 @@ function fuzzedDisplay(state, entries) {
 }
 
 /**
+ * Overheat (run mode): past the fight's par round, every enemy's budget compounds
+ * per extra round — the anti-stall clock. 1 when at/under par or when the battle
+ * has no overheat configured (single battle).
+ */
+export function overheatMult(state) {
+  const oh = state.overheat;
+  if (!oh || !oh.rampPerRound || state.round <= oh.par) return 1;
+  return oh.rampPerRound ** (state.round - oh.par);
+}
+
+/**
  * ONE enemy's attack budget scaled by its CURRENT condition (called at defense-resolve).
  * A destroyed/frozen enemy Tower also costs it accuracy (aimMult), so its blow lands softer.
  */
@@ -157,5 +168,5 @@ export function currentBudget(state, enemy) {
   const sys = systemState(enemy, state.config);
   const aim = effectiveAim(enemy, state.config); // tower dead OR frozen → softer
   const scale = firepowerMult(combatCondition(enemy, state.config), state.config) * sys.brownout * aim;
-  return arch.damageBudget * scale;
+  return arch.damageBudget * scale * overheatMult(state);
 }

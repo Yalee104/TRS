@@ -1098,12 +1098,13 @@ test('economy: shop prices scale with map depth', () => {
   assert(deepRepair > shallowRepair, `deeper shop dearer (${deepRepair} > ${shallowRepair})`);
 });
 
-test('escalation: damage budget scales by node row and tier multiplier', () => {
+test('escalation: damage budget scales by row and tier, split across the roster', () => {
   const run = createRun(CONFIG, { loadout: 'burst' });
   const eco = CONFIG.run.economy;
-  // find an elite node to read its row + tier mult
+  // find an elite node to read its row + tier mult; its budget splits over the roster
   const elite = Object.values(run.map.byId).find((n) => n.type === 'elite');
   run.currentNodeId = elite.id;
-  const expected = Math.round(CONFIG.archetypes.brute.damageBudget * (eco.perRowBudgetMult ** elite.row) * eco.tierBudgetMult.elite);
-  assert(effectiveConfig(run).archetypes.brute.damageBudget === expected, `elite budget = row^mult × tier, got ${effectiveConfig(run).archetypes.brute.damageBudget} want ${expected}`);
+  const split = eco.rosterBudgetSplit ? elite.encounter.enemies.length : 1;
+  const expected = Math.round(CONFIG.archetypes.brute.damageBudget * (eco.perRowBudgetMult ** elite.row) * eco.tierBudgetMult.elite / split);
+  assert(effectiveConfig(run).archetypes.brute.damageBudget === expected, `elite budget = row^mult × tier / roster, got ${effectiveConfig(run).archetypes.brute.damageBudget} want ${expected}`);
 });

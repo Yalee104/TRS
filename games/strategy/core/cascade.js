@@ -71,7 +71,12 @@ function launchpadBonus(launchpad, casc) {
 export function coreShieldStatus(aircraft, config) {
   const cfg = (config && config.coreShield) || null;
   const contributors = (cfg && cfg.contributors) || {};
-  const baseThreshold = (cfg && cfg.threshold) != null ? cfg.threshold : 100;
+  // Run-mode "Breach": enemy Cores may use a weaker threshold (cfg.enemyThreshold,
+  // injected by effectiveConfig) so fights close out faster. Absent from the base
+  // config, so single-battle behaviour is unchanged.
+  const baseThreshold = (aircraft.side === 'enemy' && cfg && cfg.enemyThreshold != null)
+    ? cfg.enemyThreshold
+    : ((cfg && cfg.threshold) != null ? cfg.threshold : 100);
   // Scale the threshold to the contributor mass the aircraft actually OWNS, so a small
   // (few-component) aircraft's Core is still exposable (its owned parts may never sum to the
   // absolute threshold). Full-6 → activeMass = totalMass → threshold unchanged. Tunable off.
