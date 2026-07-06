@@ -19,7 +19,7 @@ import { systemState, coreShieldStatus, coreShieldUp } from '../core/cascade.js'
 import { applyStatus, tickAircraftStatuses, attackSynergyMult, resolveOffenseChains } from '../combat/statuses.js';
 import { makePendingAttack, finalizeAttackTarget, validAttackTargets, resolveAttack, comboPotency } from '../combat/attack.js';
 import { makePendingDefense, finalizeDefenseTarget, resolveDefense } from '../combat/defense.js';
-import { planAttack, currentBudget } from '../combat/enemyAI.js';
+import { planAttack, currentBudget, overheatMult } from '../combat/enemyAI.js';
 import { resolveChain, OFFENSE_COMBOS, pairKey } from '../combat/combos.js';
 import { offensivePalette, defensivePalette, catalogFromConfig } from '../puzzle/palettes.js';
 import { createBridge, statusFriction } from '../puzzle/bridge.js';
@@ -34,6 +34,7 @@ import {
   enterNode, advanceFromNode, awardScrap, applyHeal, buildShop, applyShopPurchase, rollUpgradeOffer,
 } from '../core/run.js';
 import { generateMap, validateMap, reachableNext, nodeById, isBossNode, bandForRow } from '../core/map.js';
+import { CATALOGS_FOR_TEST } from '../i18n/index.js';
 
 const allNodes = (map) => Object.values(map.byId);
 
@@ -1109,4 +1110,215 @@ test('escalation: damage budget scales by row and tier, split across the roster'
   const split = eco.rosterBudgetSplit ? elite.encounter.enemies.length : 1;
   const expected = Math.round(CONFIG.archetypes.brute.damageBudget * (eco.perRowBudgetMult ** elite.row) * eco.tierBudgetMult.elite / split);
   assert(effectiveConfig(run).archetypes.brute.damageBudget === expected, `elite budget = row^mult × tier / roster, got ${effectiveConfig(run).archetypes.brute.damageBudget} want ${expected}`);
+});
+
+// =============================================================================
+//  run pacing: Breach + tier HP scaling + Overheat + fast-win economy
+// =============================================================================
+
+// plant a synthetic node in a run's map so buildBattleUi/effectiveConfig read it
+const plantNode = (run, node) => {
+  run.map.byId.__test = { id: '__test', ...node };
+  run.currentNodeId = '__test';
+  return run;
+};
+const NORMAL_NODE = { row: 1, col: 0, tier: 'normal', type: 'enemy', encounter: { enemies: ['saboteur'], creditSeconds: 16 } };
+const ELITE_NODE = { row: 3, col: 0, tier: 'elite', type: 'elite', encounter: { enemies: ['disruptor', 'brute'], creditSeconds: 16 } };
+const BOSS_NODE = { row: 5, col: 0, tier: 'boss', type: 'boss', encounter: { enemies: ['dreadnought'], creditSeconds: 18 } };
+
+test('overheat: multiplier is 1 at/under par, compounds past it, off when unset', () => {
+  const s = createState(CONFIG, { overheat: { par: 4, rampPerRound: 1.25 } });
+  s.round = 3; assert(overheatMult(s) === 1, 'under par → 1');
+  s.round = 4; assert(overheatMult(s) === 1, 'at par → 1');
+  s.round = 5; assert(near(overheatMult(s), 1.25, 0.001), '1 past par → ×1.25');
+  s.round = 7; assert(near(overheatMult(s), 1.25 ** 3, 0.001), '3 past par compounds');
+  const single = createState(CONFIG);
+  single.round = 20;
+  assert(single.overheat === null && overheatMult(single) === 1, 'single battle → no overheat ever');
+});
+
+test('overheat: currentBudget scales with the ramp', () => {
+  const s = createState(CONFIG, { overheat: { par: 2, rampPerRound: 1.5 } });
+  const base = currentBudget(s, s.enemies[0]);
+  s.round = 3;
+  assert(near(currentBudget(s, s.enemies[0]), base * 1.5, 0.01), 'budget ×1.5 one round past par');
+});
+
+test('enemyHpMult: scales enemy components only; player untouched; default 1', () => {
+  const s = createState(CONFIG, { enemyHpMult: 0.5 });
+  assert(s.enemies[0].components.core.maxHp === Math.round(CONFIG.components.core.hp * 0.5), 'enemy core halved');
+  assert(s.enemies[0].components.generator.hp === Math.round(CONFIG.components.generator.hp * 0.5), 'enemy generator halved');
+  assert(s.player.components.core.maxHp === CONFIG.components.core.hp, 'player core untouched');
+  const plain = createState(CONFIG);
+  assert(plain.enemies[0].components.core.maxHp === CONFIG.components.core.hp, 'default 1 → unscaled');
+});
+
+test('breach: enemy Core is exposed by the generator alone in run battles; player threshold unchanged', () => {
+  const run = plantNode(createRun(CONFIG, { loadout: 'burst' }), NORMAL_NODE);
+  const s = battleFrom(run);
+  const cfg = s.config;
+  assert(cfg.coreShield.enemyThreshold === CONFIG.run.enemyShieldThreshold, 'threshold injected');
+  const foe = s.enemies[0];
+  assert(coreShieldUp(foe, cfg) === true, 'enemy shield up at start');
+  foe.components.generator.hp = 0;
+  assert(coreShieldUp(foe, cfg) === false, 'generator kill breaches the enemy Core');
+  // the player still uses the full threshold (scaled to owned mass)
+  const st = coreShieldStatus(s.player, cfg);
+  const ownedMass = CONFIG.run.loadouts.burst.components.reduce((sum, id) => sum + (CONFIG.coreShield.contributors[id] || 0), 0);
+  const totalMass = Object.values(CONFIG.coreShield.contributors).reduce((a, b) => a + b, 0);
+  assert(st.threshold === Math.round(CONFIG.coreShield.threshold * (ownedMass / totalMass)), 'player threshold from base 100, not 60');
+});
+
+test('breach: single-battle (TRS Command) core shield is unchanged', () => {
+  const s = createState(CONFIG);
+  s.enemies[0].components.generator.hp = 0;
+  assert(coreShieldUp(s.enemies[0], CONFIG) === true, 'generator alone does not breach at threshold 100');
+});
+
+test('map: every path to the boss crosses >= minBattlesBeforeBoss battles; no crossing edges (seeds 0..60)', () => {
+  for (let seed = 0; seed <= 60; seed++) {
+    const v = validateMap(generateMap(CONFIG, seed), CONFIG);
+    assert(v.minBattlesMet, `seed ${seed}: min battles ${v.minBattles}`);
+    assert(v.noCrossings, `seed ${seed}: edges cross`);
+    assert(v.guaranteesMet, `seed ${seed}: guarantees`);
+  }
+});
+
+test('map: late-band normal battles field at most the elite roster size', () => {
+  assert(CONFIG.run.map.rosterSize.late <= CONFIG.run.map.rosterSize.elite, 'late normals never out-crowd elites');
+});
+
+test('rewards: elite win offers a wider spread with 2 picks; offer closes after the last pick', () => {
+  const run = plantNode(createRun(CONFIG, { loadout: 'burst' }), ELITE_NODE);
+  const offer = rollRewardOffer(run);
+  assert(offer.length === CONFIG.run.reward.eliteOffer.size, 'elite offer size 4');
+  assert(run.offerPicks === CONFIG.run.reward.eliteOffer.picks, '2 picks granted');
+  const first = run.offer[0];
+  applyRewardChoice(run, first);
+  assert(Array.isArray(run.offer) && run.offer.length === offer.length - 1, 'offer stays open minus the taken card');
+  assert(run.offerPicks === 1, 'one pick left');
+  applyRewardChoice(run, run.offer[0]);
+  assert(run.offer === null && run.offerPicks === 0, 'offer closes after the second pick');
+});
+
+test('rewards: a normal win still offers offerSize cards with a single pick', () => {
+  const run = plantNode(createRun(CONFIG, { loadout: 'burst' }), NORMAL_NODE);
+  const offer = rollRewardOffer(run);
+  assert(offer.length === CONFIG.run.reward.offerSize, 'normal offer size 3');
+  assert(run.offerPicks === 1, 'single pick');
+  applyRewardChoice(run, offer[0]);
+  assert(run.offer === null, 'offer closes after one pick');
+});
+
+test('economy: fast-win bonus pays at/under par and not above; boss pays nothing', () => {
+  const eco = CONFIG.run.economy;
+  const par = CONFIG.run.overheat.parRounds.normal;
+  let run = createRun(CONFIG, { loadout: 'burst' });
+  awardScrap(run, { tier: 'normal', row: 2 }, par);            // at par → bonus
+  assert(run.scrap === eco.scrapReward.normal + eco.scrapPerRow * 2 + eco.fastWinScrap.normal, 'fast win adds bonus');
+  assert(run.lastBattleReport.fastWin === true && run.lastBattleReport.par === par, 'report records the fast win');
+  run = createRun(CONFIG, { loadout: 'burst' });
+  awardScrap(run, { tier: 'normal', row: 2 }, par + 1);        // over par → no bonus
+  assert(run.scrap === eco.scrapReward.normal + eco.scrapPerRow * 2, 'no bonus over par');
+  assert(run.lastBattleReport.fastWin === false, 'report records the slow win');
+  run = createRun(CONFIG, { loadout: 'burst' });
+  awardScrap(run, { tier: 'boss', row: 5 }, 3);
+  assert(run.scrap === 0, 'boss win pays nothing (the run ends)');
+});
+
+test('shop: sells single-part repairs priced from prices.repair × depth', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.persistentHp.weapon = 10;                                 // damage something
+  const shopNode = Object.values(run.map.byId).find((n) => n.type === 'shop');
+  run.currentNodeId = shopNode.id;
+  buildShop(run);
+  const repair = run.shop.items.find((i) => i.type === 'repair');
+  assert(repair, 'a single-part repair is on sale');
+  const rowMult = 1 + CONFIG.run.economy.priceRowMult * shopNode.row;
+  assert(repair.price === Math.round(CONFIG.run.economy.prices.repair * rowMult), 'priced from prices.repair × row');
+});
+
+test('rewards: hpBonus mod on a damaged part heals by the bonus and clamps to modded max', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.persistentHp.core = 100;                                  // damaged core
+  applyRewardChoice(run, { type: 'componentMod', modId: 'coreHp', id: 'core', patch: { hpBonus: 40 } });
+  assert(run.persistentHp.core === 140, 'heals by exactly the bonus');
+  assert(moddedMaxHp(run, 'core') === CONFIG.components.core.hp + 40, 'max reflects the mod');
+});
+
+test('mods: the new catalog entries merge into the effective config', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'generator', 'tower', 'launchpad'] });
+  const cat = CONFIG.run.comboModCatalog;
+  applyRewardChoice(run, { type: 'comboMod', modId: 'feedbackArc', combo: 'feedback', table: 'offense', patch: cat.feedbackArc.patch });
+  applyRewardChoice(run, { type: 'comboMod', modId: 'reactiveMirror', combo: 'reactivePlating', table: 'defense', patch: cat.reactiveMirror.patch });
+  applyRewardChoice(run, { type: 'componentMod', modId: 'weaponShield', id: 'weapon', patch: CONFIG.run.componentModCatalog.weaponShield.patch });
+  const cfg = effectiveConfig(run);
+  assert(cfg.effects.synergy.combos.feedback.chainFrac === 0.75, 'feedback arc merged');
+  assert(cfg.defense.combos.reactivePlating.reflectFrac === 0.8, 'reactive mirror merged');
+  assert(cfg.defense.shield.absorbPerPotency === 11, 'weapon shield verb merged');
+  assert(CONFIG.defense.shield.absorbPerPotency === 8, 'base config untouched');
+});
+
+test('rewards: every catalog mod has i18n name+desc in the catalogs (offer-render safety)', () => {
+  for (const [group, cat] of [['comboMod', CONFIG.run.comboModCatalog], ['componentMod', CONFIG.run.componentModCatalog]]) {
+    for (const modId of Object.keys(cat)) {
+      if (modId === '_comment') continue;
+      for (const loc of ['en', 'zh-Hant']) {
+        const c = CATALOGS_FOR_TEST[loc];
+        const entry = c.reward?.[group]?.[modId];
+        assert(entry && entry.name && entry.desc, `${loc}: reward.${group}.${modId} has name+desc`);
+      }
+    }
+  }
+});
+
+// --- pacing simulation: a scripted competent player must land in the round bands
+const simCombo = (v) => ({ items: [{ value: v }] });
+function simBattle(owned, node, seed) {
+  const run = plantNode(createRun(CONFIG, { components: owned, seed }), node);
+  const s = createState(effectiveConfig(run), buildBattleUi(run, CONFIG.ui));
+  applyOwnership(s, run);
+  applyPersistentHp(s, run);
+  startAttackBuild(s);
+  const attackParts = owned.filter((id) => ATTACK_EFFECT[id]);
+  while (s.phase !== PHASES.WON && s.phase !== PHASES.LOST && s.round <= 20) {
+    const foe = s.enemies.find((e) => isAlive2(e.components.core));
+    const tgt = () => (isAlive2(foe.components.generator) ? 'generator' : 'core');
+    let solves = 0;
+    for (const part of attackParts) {
+      if (solves >= 3 || !isAlive2(s.player.components[part]) || s.cooldowns[part] > 0) continue;
+      makePendingAttack(s, part, simCombo(6));
+      if (s.pendingAction) { finalizeAttackTarget(s, foe.eid, tgt()); solves++; }
+    }
+    commitAttack(s, foe.eid, tgt());
+    if (s.phase === PHASES.WON || s.phase === PHASES.LOST) break;
+    let d = 0;
+    for (const part of owned.filter((id) => DEFENSE_VERB[id] && isAlive2(s.player.components[id]) && !(s.cooldowns[id] > 0))) {
+      if (d >= 3) break;
+      makePendingDefense(s, part, simCombo(6));
+      if (s.pendingDefense) {
+        const weakest = Object.entries(s.player.components)
+          .filter(([, c]) => c.owned !== false && c.hp < c.maxHp && c.hp > 0)
+          .sort((a, b) => a[1].hp / a[1].maxHp - b[1].hp / b[1].maxHp)[0];
+        finalizeDefenseTarget(s, DEFENSE_VERB[part] === 'repair' && weakest ? weakest[0] : 'core');
+        d++;
+      }
+    }
+    commitDefense(s);
+  }
+  return { rounds: s.round, won: s.phase === PHASES.WON };
+}
+const isAlive2 = (c) => c.hp > 0;
+
+test('pacing: scripted player lands in the tier round bands (regression net for tuning)', () => {
+  const KIT3 = ['weapon', 'engine', 'generator'];
+  const KIT5 = ['weapon', 'engine', 'generator', 'tower', 'launchpad'];
+  for (let seed = 1; seed <= 3; seed++) {
+    const normal = simBattle(KIT3, NORMAL_NODE, seed);
+    assert(normal.won && normal.rounds <= 5, `row-1 normal won in <=5 rounds (got ${normal.won ? normal.rounds : 'loss'})`);
+    const elite = simBattle(KIT5, ELITE_NODE, seed);
+    assert(elite.won && elite.rounds <= 8, `elite won in <=8 rounds (got ${elite.won ? elite.rounds : 'loss'})`);
+    const boss = simBattle(KIT5, BOSS_NODE, seed);
+    assert(boss.won && boss.rounds >= 5 && boss.rounds <= 10, `boss won in 5..10 rounds (got ${boss.won ? boss.rounds : 'loss'})`);
+  }
 });
