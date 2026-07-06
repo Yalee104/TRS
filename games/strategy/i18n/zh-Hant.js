@@ -205,11 +205,11 @@ export const zhHant = {
     chosen: '已選：{n}/{max}',
     preset: {
       burst: '爆發',
-      burstDesc: '武器庫 + 引擎 — 啟用玻璃化連段以進行重型集中火力。',
+      burstDesc: '武器庫 + 引擎 + 發射台 — 玻璃化集中火力，加上可穿透核心護盾的燃燒。',
       sustain: '續航',
-      sustainDesc: '發電機 + 感測塔 — 防禦中樞（修復 + 淨化）。',
+      sustainDesc: '發電機 + 感測塔 + 引擎 — 修復／淨化中樞，兼具碎裂傷害。',
       custom: '自訂',
-      customDesc: '自行挑選兩個部件。',
+      customDesc: '自行挑選部件。',
     },
   },
 
@@ -230,6 +230,9 @@ export const zhHant = {
       glassShatter: { name: '玻璃化：透鏡', desc: '玻璃化集中火力倍率 ×2.5（原為 ×2）。' },
       wildfireSpread: { name: '野火：上升氣流', desc: '野火將 75% 的燃燒蔓延至鄰近部件（原為 50%）。' },
       bastionCap: { name: '堡壘：強化', desc: '堡壘將傷害上限壓至最大生命的 35%（原為 25%）。' },
+      collapseRupture: { name: '崩塌：裂解', desc: '崩塌處決生命低於 35% 的部件（原為 20%）。' },
+      feedbackArc: { name: '回饋：電弧', desc: '回饋串流將 75% 的傷害鏈結至另一架敵機（原為 50%）。' },
+      reactiveMirror: { name: '反應裝甲：鏡面', desc: '反應裝甲反彈 80% 已吸收的傷害（原為 50%）。' },
     },
     componentMod: {
       weaponFreeze: { name: '武器庫：低溫線圈', desc: '凍結每點威力造成 2.0 傷害（原為 1.5）。' },
@@ -237,6 +240,10 @@ export const zhHant = {
       engineShatter: { name: '引擎：斷裂', desc: '碎裂每點威力造成 3.0 傷害（原為 2.0）。' },
       launchpadBurn: { name: '發射台：助燃劑', desc: '燃燒每點威力造成 1.6 持續傷害（原為 1.2）。' },
       coreHp: { name: '核心：強化裝甲', desc: '反應爐核心最大生命 +40。' },
+      towerConfuse: { name: '感測塔：干擾器', desc: '混亂每點威力造成 2.0 傷害（原為 1.0）。' },
+      weaponShield: { name: '武器庫：屏障電池', desc: '護盾每點威力吸收 11（原為 8）。' },
+      generatorRepair: { name: '發電機：奈米焊接', desc: '修復每點威力恢復 8 生命（原為 6）。' },
+      launchpadOverclock: { name: '發射台：渦輪供給', desc: '超頻儲存 4.0 秒建構額度（原為 2.5 秒）。' },
     },
   },
 

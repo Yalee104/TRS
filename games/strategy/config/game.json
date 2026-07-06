@@ -189,7 +189,7 @@
 
   "run": {
     "_comment": "Roguelike run meta-layer (core/run.js + core/map.js). A run walks the act map from start to boss; win the boss battle to win the run, lose any battle to end it. The player owns Core + `startComponents.pickCount` parts at the start and acquires the rest as rewards. All tuning is data-driven: combo-mods/component-mods are catalog `patch` objects deep-merged over the base config at battle time (no base mutation). Component (incl. Core) HP persists between battles.",
-    "startComponents": { "core": true, "pickCount": 2 },
+    "startComponents": { "core": true, "pickCount": 3 },
     "enemyShieldThreshold": 60,
     "overheat": {
       "_comment": "Anti-stall clock (run battles only). Each tier has a PAR round; past par every enemy's damageBudget compounds by rampPerRound each extra round (telegraphed one round early in the banner/log). Winning at or under par pays economy.fastWinScrap.",
@@ -197,17 +197,21 @@
       "rampPerRound": 1.25
     },
     "reward": {
-      "_comment": "Between battles, offer `offerSize` choices. Each type's pool is filtered by current ownership/damage; types are weighted, empty pools skipped. guaranteeComponentUntilOwned forces at least one component offer while unowned parts remain so a run can always progress toward the full kit. A repair fallback guarantees the offer is never empty.",
+      "_comment": "Between battles, offer `offerSize` choices. Each type's pool is filtered by current ownership/damage; types are weighted, empty pools skipped. guaranteeComponentUntilOwned forces at least one component offer while unowned parts remain so a run can always progress toward the full kit. A repair fallback guarantees the offer is never empty. Elite wins (economy.eliteRewardBonus) use eliteOffer: a wider spread with 2 picks.",
       "offerSize": 3,
       "weights": { "component": 3, "comboMod": 2, "componentMod": 2, "repair": 1 },
-      "guaranteeComponentUntilOwned": true
+      "guaranteeComponentUntilOwned": true,
+      "eliteOffer": { "size": 4, "picks": 2 }
     },
     "comboModCatalog": {
       "_comment": "patch keys mirror effects.synergy.combos[combo] (offense) or defense.combos[combo] (defense). `needs` = the two components that must be owned for the combo to be formable (offer-gating).",
       "meltdownCore":    { "combo": "meltdown",        "table": "offense", "needs": ["launchpad", "engine"], "patch": { "coreFrac": 0.7 } },
       "glassShatter":    { "combo": "glass",           "table": "offense", "needs": ["weapon", "engine"],    "patch": { "mult": 2.5 } },
       "wildfireSpread":  { "combo": "wildfire",        "table": "offense", "needs": ["launchpad", "tower"],  "patch": { "spreadFrac": 0.75 } },
-      "bastionCap":      { "combo": "bastion",         "table": "defense", "needs": ["engine", "weapon"],    "patch": { "capFrac": 0.35 } }
+      "bastionCap":      { "combo": "bastion",         "table": "defense", "needs": ["engine", "weapon"],    "patch": { "capFrac": 0.35 } },
+      "collapseRupture": { "combo": "collapse",        "table": "offense", "needs": ["generator", "engine"], "patch": { "hpThreshold": 0.35 } },
+      "feedbackArc":     { "combo": "feedback",        "table": "offense", "needs": ["tower", "generator"],  "patch": { "chainFrac": 0.75 } },
+      "reactiveMirror":  { "combo": "reactivePlating", "table": "defense", "needs": ["launchpad", "weapon"], "patch": { "reflectFrac": 0.8 } }
     },
     "componentModCatalog": {
       "_comment": "patch shape mirrors the component-mod merge in effectiveConfig: hpBonus/armor on components[id], `effect` over effects[ATTACK_EFFECT[id]], `verb` over defense[DEFENSE_VERB[id]]. `component` must be owned to be offered.",
@@ -215,12 +219,16 @@
       "generatorDrain":  { "component": "generator", "patch": { "effect": { "drain": { "healPerPotency": 3.0 } } } },
       "engineShatter":   { "component": "engine",    "patch": { "effect": { "shatter": { "dmgPerPotency": 3.0 } } } },
       "launchpadBurn":   { "component": "launchpad", "patch": { "effect": { "burning": { "dotPerPotency": 1.6 } } } },
-      "coreHp":          { "component": "core",      "patch": { "hpBonus": 40 } }
+      "coreHp":          { "component": "core",      "patch": { "hpBonus": 40 } },
+      "towerConfuse":    { "component": "tower",     "patch": { "effect": { "confuse": { "dmgPerPotency": 2.0 } } } },
+      "weaponShield":    { "component": "weapon",    "patch": { "verb": { "shield": { "absorbPerPotency": 11 } } } },
+      "generatorRepair": { "component": "generator", "patch": { "verb": { "repair": { "hpPerPotency": 8 } } } },
+      "launchpadOverclock": { "component": "launchpad", "patch": { "verb": { "overclock": { "creditBonusMs": 4000 } } } }
     },
     "loadouts": {
-      "_comment": "Presets pre-select the 2 non-core starting components (the player can still go custom). burst = Glass-enabling offense (Freeze+Shatter); sustain = defensive backbone (Repair+Cleanse).",
-      "burst":   { "components": ["weapon", "engine"] },
-      "sustain": { "components": ["generator", "tower"] },
+      "_comment": "Presets pre-select the 3 non-core starting components (the player can still go custom). burst = Glass-enabling offense plus Burning to slip past Core shields; sustain = defensive backbone (Repair+Cleanse) with Shatter damage.",
+      "burst":   { "components": ["weapon", "engine", "launchpad"] },
+      "sustain": { "components": ["generator", "tower", "engine"] },
       "custom":  { "components": [] }
     },
 
@@ -262,6 +270,7 @@
       "tierBudgetMult": { "normal": 1.0, "elite": 1.2, "boss": 0.9 },
       "tierHpMult": { "normal": 0.35, "elite": 0.6, "boss": 1.6 },
       "eliteRewardBonus": true,
+      "fastWinScrap": { "normal": 15, "elite": 30, "boss": 0 },
       "prices": { "component": 110, "comboMod": 70, "componentMod": 70, "repair": 30, "repairAll": 80 },
       "priceRowMult": 0.12,
       "shop": { "size": 5 }

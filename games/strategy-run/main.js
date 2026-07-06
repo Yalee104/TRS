@@ -121,7 +121,7 @@ function onPickReward(choice) {
   const r = app.run;
   if (!r) return;
   applyRewardChoice(r, choice);
-  advanceFromNode(r);              // back to the map; the next map pick starts the next battle
+  if (r.offer === null) advanceFromNode(r); // elite offers stay open until every pick is spent
   draw();
 }
 
@@ -169,7 +169,7 @@ function maybeAdvanceRun() {
     r.status = 'lost';
   } else if (s.phase === PHASES.WON) {
     captureBattleResult(r, s);
-    awardScrap(r, nodeById(r.map, r.currentNodeId));   // Scrap for clearing the node
+    awardScrap(r, nodeById(r.map, r.currentNodeId), s.round);   // Scrap (+ fast-win bonus at/under par)
     if (isFinalBattle(r)) r.status = 'won';
     else { rollRewardOffer(r); r.status = 'reward'; }
   }

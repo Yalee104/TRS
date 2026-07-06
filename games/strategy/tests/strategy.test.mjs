@@ -738,10 +738,12 @@ test('deepMerge: nested objects merge, scalars/arrays overwrite, no shared refs'
 });
 
 // --- ownership gating --------------------------------------------------------
-test('run: a burst loadout owns exactly Core + Weapon + Engine', () => {
+test('run: a burst loadout owns exactly Core + its preset components', () => {
   const run = createRun(CONFIG, { loadout: 'burst' });
-  assert(run.owned.core && run.owned.weapon && run.owned.engine, 'burst owns core/weapon/engine');
-  assert(!run.owned.generator && !run.owned.tower && !run.owned.launchpad, 'others not owned');
+  assert(run.owned.core, 'burst owns the core');
+  for (const id of CONFIG.run.loadouts.burst.components) assert(run.owned[id], `burst owns ${id}`);
+  const preset = new Set(CONFIG.run.loadouts.burst.components);
+  for (const id of COMPONENT_IDS) if (id !== 'core' && !preset.has(id)) assert(!run.owned[id], `${id} not owned`);
 });
 
 test('ownership: only owned components can open their TRS (the keystone gate)', () => {
@@ -766,20 +768,20 @@ test('ownership: a combo cannot form when a source component is unowned', () => 
 });
 
 test('condition: renormalized over owned parts — a small aircraft fights at full strength', () => {
-  const run = createRun(CONFIG, { loadout: 'burst' }); // owns weapon(.35)+engine(.10) only
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // owns weapon(.35)+engine(.10) only
   const s = battleFrom(run);
   assert(near(combatCondition(s.player, s.config), 1.0, 0.001), 'full HP + all owned alive → 1.0');
   // The denominator is OWNED weight (fixed for the battle): a destroyed part you OWN still drags
   // condition — losing a part of your kit hurts; not-owning a part is neutral.
   s.player.components.weapon.hp = 0; // weapon destroyed → engine = .10/.45 of the blend
   assert(near(combatCondition(s.player, s.config), 0.10 / 0.45, 0.01), 'destroyed owned part drags condition');
-  const s2 = battleFrom(createRun(CONFIG, { loadout: 'burst' }));
+  const s2 = battleFrom(createRun(CONFIG, { components: ['weapon', 'engine'] }));
   s2.player.components.weapon.hp = s2.player.components.weapon.maxHp * 0.5; // half HP weapon
   assert(near(combatCondition(s2.player, s2.config), 1 - 0.5 * (0.35 / 0.45), 0.01), 'damaged part scales by renorm weight');
 });
 
 test('ownership: an unowned Generator gives no brownout protection (systemState)', () => {
-  const run = createRun(CONFIG, { loadout: 'burst' }); // no generator
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // no generator
   const s = battleFrom(run);
   assert(systemState(s.player, s.config).brownout === CONFIG.cascade.brownoutMult, 'unowned generator → brownout');
   assert(systemState(s.player, s.config).coreArmor === 0, 'unowned generator → no core armor');
@@ -816,7 +818,7 @@ test('coreShield: full-6 keeps the absolute threshold (100)', () => {
 });
 
 test('coreShield: a partial aircraft has a reachable, scaled threshold and is exposable', () => {
-  const run = createRun(CONFIG, { loadout: 'burst' }); // core + weapon(40) + engine(40)
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // core + weapon(40) + engine(40)
   const s = battleFrom(run);
   const st = coreShieldStatus(s.player, s.config);
   assert(st.threshold > 0 && st.threshold < 100, `scaled below 100, got ${st.threshold}`);
@@ -910,7 +912,7 @@ test('rewards: offer honors size, never offers an owned component, and is determ
 });
 
 test('rewards: combo-mods are only offered for currently-formable combos', () => {
-  const run = createRun(CONFIG, { loadout: 'burst' }); // owns weapon+engine, not launchpad
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // not launchpad
   const ids = rewardPools(run).comboMod.map((m) => m.modId);
   assert(ids.includes('glassShatter'), 'Glass (weapon+engine) is formable → offerable');
   assert(!ids.includes('meltdownCore'), 'Meltdown (launchpad+engine) not formable → not offered');

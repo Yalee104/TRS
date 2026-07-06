@@ -84,7 +84,9 @@ export function createRun(config, { loadout = 'custom', components = null, seed 
     componentMods: {},            // componentId -> merged patch ({ hpBonus, armor, effect, verb })
     persistentHp: {},             // componentId -> carried HP
     offer: null,                  // current reward/upgrade offer awaiting a pick
+    offerPicks: 0,                // picks remaining from the current offer (elites grant 2)
     offerFree: false,             // true for upgrade-node offers (no scrap cost; titled differently)
+    lastBattleReport: null,       // { rounds, par, fastWin, scrapGained } for the reward screen
     rewardsTaken: [],             // [{ type, modId?, id? }]
     // --- map + economy ---
     map: hasMap ? generateMap(config, (seed || 0) * 7919 + 101) : null,
@@ -243,21 +245,28 @@ export function advanceFromNode(run) {
   run.mapPos = run.currentNodeId || run.mapPos;
   run.currentNodeId = null;
   run.offer = null;
+  run.offerPicks = 0;
   run.offerFree = false;
   run.shop = null;
   run.status = isBossNode(node) ? 'won' : 'map';
   return run;
 }
 
-/** Award Scrap for clearing a battle node (tier reward + per-row bonus). Boss wins
- *  end the run immediately, so they pay nothing. */
-export function awardScrap(run, node) {
+/** Award Scrap for clearing a battle node: tier reward + per-row bonus + a fast-win
+ *  bonus when the fight ended at or under its Overheat par (`rounds` from the battle
+ *  state). Boss wins end the run immediately, so they pay nothing. Also records
+ *  run.lastBattleReport for the reward screen. */
+export function awardScrap(run, node, rounds = null) {
   const eco = run.config.run?.economy || {};
   const tier = (node && node.tier) || 'normal';
   if (tier === 'boss') return run.scrap || 0;
   const base = (eco.scrapReward && eco.scrapReward[tier]) || 0;
   const perRow = (eco.scrapPerRow || 0) * ((node && node.row) || 0);
-  run.scrap = (run.scrap || 0) + base + perRow;
+  const par = run.config.run?.overheat?.parRounds?.[tier] ?? null;
+  const fastWin = rounds != null && par != null && rounds <= par;
+  const bonus = fastWin ? ((eco.fastWinScrap && eco.fastWinScrap[tier]) || 0) : 0;
+  run.scrap = (run.scrap || 0) + base + perRow + bonus;
+  run.lastBattleReport = { rounds, par, fastWin, scrapGained: base + perRow + bonus };
   return run.scrap;
 }
 
@@ -356,18 +365,23 @@ function drawOffer(rng, { pools, weights, size, guaranteeComponent }) {
 /**
  * Roll a post-battle reward offer. Deterministic for a given (seed, node) so it's
  * reproducible. Guarantees a component while unowned parts remain; never empty.
+ * Elite wins (economy.eliteRewardBonus) present a bigger spread and grant 2 picks.
  */
 export function rollRewardOffer(run, rng) {
   const reward = (run.config.run && run.config.run.reward) || {};
+  const eco = run.config.run?.economy || {};
+  const elite = !!eco.eliteRewardBonus && (currentNode(run)?.tier === 'elite');
+  const eliteOffer = reward.eliteOffer || {};
   const r = rng || makeRng((run.seed || 0) * 100003 + nodeSeed(run) * 31 + 17);
   const offer = drawOffer(r, {
     pools: rewardPools(run),
     weights: reward.weights || {},
-    size: reward.offerSize || 3,
+    size: elite ? (eliteOffer.size || 4) : (reward.offerSize || 3),
     guaranteeComponent: reward.guaranteeComponentUntilOwned,
   });
   if (!offer.length) offer.push({ type: 'repair', id: 'core', amount: 'full' });  // floor
   run.offer = offer;
+  run.offerPicks = elite ? Math.min(eliteOffer.picks || 2, offer.length) : 1;
   run.offerFree = false;
   return offer;
 }
@@ -383,6 +397,7 @@ export function rollUpgradeOffer(run, rng) {
   let offer = drawOffer(r, { pools, weights, size: uc.size || 3, guaranteeComponent: false });
   if (!offer.length) offer = [{ type: 'repair', id: 'core', amount: 'full' }];  // free heal fallback
   run.offer = offer;
+  run.offerPicks = 1;
   run.offerFree = true;
   return offer;
 }
@@ -463,6 +478,16 @@ export function applyRewardChoice(run, choice) {
     }
     default: break;
   }
-  run.offer = null;
+  // Multi-pick offers (elite bonus): remove the taken card and keep the offer open
+  // until every pick is spent.
+  if (run.offer && run.offerPicks > 1) {
+    const keyOf = (x) => `${x.type}:${x.id || x.modId || ''}`;
+    run.offer = run.offer.filter((x) => keyOf(x) !== keyOf(choice));
+    run.offerPicks -= 1;
+    if (!run.offer.length) { run.offer = null; run.offerPicks = 0; }
+  } else {
+    run.offer = null;
+    run.offerPicks = 0;
+  }
   return run;
 }

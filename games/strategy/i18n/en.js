@@ -205,11 +205,11 @@ export const en = {
     chosen: 'Chosen: {n}/{max}',
     preset: {
       burst: 'Burst',
-      burstDesc: 'Weapon + Engine — enables the Glass combo for heavy focus-fire.',
+      burstDesc: 'Weapon + Engine + Launch Pad — Glass focus-fire plus Burning that slips past Core shields.',
       sustain: 'Sustain',
-      sustainDesc: 'Generator + Tower — a defensive backbone (Repair + Cleanse).',
+      sustainDesc: 'Generator + Tower + Engine — a Repair/Cleanse backbone with Shatter damage.',
       custom: 'Custom',
-      customDesc: 'Choose your own two components.',
+      customDesc: 'Choose your own components.',
     },
   },
 
@@ -230,6 +230,9 @@ export const en = {
       glassShatter: { name: 'Glass: Lens', desc: 'Glass focus-fire multiplier ×2.5 (was ×2).' },
       wildfireSpread: { name: 'Wildfire: Updraft', desc: 'Wildfire spreads 75% of the burn to a neighbour (was 50%).' },
       bastionCap: { name: 'Bastion: Reinforce', desc: 'Bastion caps damage at 35% of max HP (was 25%).' },
+      collapseRupture: { name: 'Collapse: Rupture', desc: 'Collapse executes parts below 35% HP (was 20%).' },
+      feedbackArc: { name: 'Feedback: Arc', desc: 'Feedback Cascade chains 75% of the hit to another enemy (was 50%).' },
+      reactiveMirror: { name: 'Reactive Plating: Mirror', desc: 'Reactive Plating reflects 80% of absorbed damage (was 50%).' },
     },
     componentMod: {
       weaponFreeze: { name: 'Weapon: Cryo Coils', desc: 'Freeze deals 2.0 dmg / potency (was 1.5).' },
@@ -237,6 +240,10 @@ export const en = {
       engineShatter: { name: 'Engine: Fracture', desc: 'Shatter deals 3.0 dmg / potency (was 2.0).' },
       launchpadBurn: { name: 'Launch Pad: Accelerant', desc: 'Burning deals 1.6 DoT / potency (was 1.2).' },
       coreHp: { name: 'Core: Reinforced Hull', desc: 'Reactor Core max HP +40.' },
+      towerConfuse: { name: 'Tower: Scrambler', desc: 'Confuse deals 2.0 dmg / potency (was 1.0).' },
+      weaponShield: { name: 'Weapon: Barrier Cells', desc: 'Shield absorbs 11 / potency (was 8).' },
+      generatorRepair: { name: 'Generator: Nanoweld', desc: 'Repair restores 8 HP / potency (was 6).' },
+      launchpadOverclock: { name: 'Launch Pad: Turbo Feed', desc: 'Overclock banks 4.0s of build credit (was 2.5s).' },
     },
   },
 
