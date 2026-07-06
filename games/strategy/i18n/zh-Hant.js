@@ -184,7 +184,6 @@ export const zhHant = {
     title: 'TRS 征程',
     begin: '▶ 開始征程',
     newRun: '⟲ 新征程',
-    battleOf: '第 {n} / {total} 場戰鬥',
     won: '🏆 征程完成',
     wonDesc: '你通過了每一場戰鬥。按新征程以全新配置再次挑戰。',
     lost: '💀 征程結束',
@@ -242,7 +241,6 @@ export const zhHant = {
   },
 
   hud: {
-    battle: '第 {n}/{total} 場',
     owned: '持有',
     mods: '改裝',
     noMods: '無',

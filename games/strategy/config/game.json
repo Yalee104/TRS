@@ -188,19 +188,8 @@
   "telegraph": { "gated": true, "confuseFalseChance": 0.5 },
 
   "run": {
-    "_comment": "Roguelike run meta-layer (core/run.js). A run is the ordered `battles` list (escalating rosters); win the isFinal battle to win the run, lose any battle to end it. The player owns Core + `startComponents.pickCount` parts at the start and acquires the rest as rewards. All tuning is data-driven: combo-mods/component-mods are catalog `patch` objects deep-merged over the base config at battle time (no base mutation). Component (incl. Core) HP persists between battles.",
+    "_comment": "Roguelike run meta-layer (core/run.js + core/map.js). A run walks the act map from start to boss; win the boss battle to win the run, lose any battle to end it. The player owns Core + `startComponents.pickCount` parts at the start and acquires the rest as rewards. All tuning is data-driven: combo-mods/component-mods are catalog `patch` objects deep-merged over the base config at battle time (no base mutation). Component (incl. Core) HP persists between battles.",
     "startComponents": { "core": true, "pickCount": 2 },
-    "battles": [
-      { "enemies": ["saboteur"], "creditSeconds": 15 },
-      { "enemies": ["saboteur", "brute"], "creditSeconds": 15 },
-      { "enemies": ["hunter", "swarm"], "creditSeconds": 16 },
-      { "enemies": ["disruptor", "brute", "saboteur"], "creditSeconds": 16 },
-      { "enemies": ["disruptor", "swarm", "brute", "hunter"], "creditSeconds": 18, "isFinal": true }
-    ],
-    "escalation": {
-      "_comment": "perBattleBudgetMult is raised to the battleIndex power and multiplied onto every archetype's damageBudget in effectiveConfig — later battles hit harder even with the same archetypes.",
-      "perBattleBudgetMult": 1.08
-    },
     "reward": {
       "_comment": "Between battles, offer `offerSize` choices. Each type's pool is filtered by current ownership/damage; types are weighted, empty pools skipped. guaranteeComponentUntilOwned forces at least one component offer while unowned parts remain so a run can always progress toward the full kit. A repair fallback guarantees the offer is never empty.",
       "offerSize": 3,
@@ -230,12 +219,12 @@
     },
 
     "map": {
-      "_comment": "StS-style node map (core/map.js). A run is a seeded branching DAG of rows ending in a boss; the player picks a path. Node types: start/enemy/elite/boss/shop/heal/upgrade. Battle rosters come from enemyPools by row band; difficulty escalates by row + tier (economy.tierBudgetMult). The legacy `battles` list above is ignored when a map is present.",
+      "_comment": "StS-style node map (core/map.js). A run is a seeded branching DAG of rows ending in a boss; the player picks a path. Node types: start/enemy/elite/boss/shop/heal/upgrade. Battle rosters come from enemyPools by row band; difficulty escalates by row + tier (economy.tierBudgetMult). minBattlesBeforeBoss is enforced by generation: every path to the boss crosses at least that many battles.",
       "act1": {
         "rows": 6,
         "nodesPerRow": [2, 3],
         "minElites": 2,
-        "minBattlesBeforeBoss": 4,
+        "minBattlesBeforeBoss": 3,
         "typeWeights": {
           "early": { "enemy": 6, "shop": 1, "heal": 1 },
           "mid":   { "enemy": 4, "elite": 2, "shop": 2, "heal": 1, "upgrade": 2 },
@@ -244,7 +233,7 @@
         "guarantees": { "firstRowAllEnemy": true, "requireShop": true, "requireHeal": true }
       },
       "bands": { "early": [0, 1], "mid": [2, 3], "late": [4, 5] },
-      "rosterSize": { "early": 1, "mid": 2, "late": 3, "elite": 2, "boss": 1 },
+      "rosterSize": { "early": 1, "mid": 2, "late": 2, "elite": 2, "boss": 1 },
       "enemyPools": {
         "early": ["saboteur", "hunter"],
         "mid":   ["brute", "hunter", "swarm", "saboteur"],

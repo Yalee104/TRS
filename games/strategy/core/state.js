@@ -20,11 +20,6 @@ export const PHASES = {
   DEFENSE_RESOLVE: 'defenseResolve',
   WON: 'won',                // BATTLE won (run layer decides reward vs run-won)
   LOST: 'lost',              // BATTLE lost (run layer ends the run)
-  // --- run meta-layer screens (core/run.js) ---
-  LOADOUT: 'loadout',        // pre-run loadout picker
-  REWARD: 'reward',          // between-battle reward choice
-  RUN_WON: 'runWon',
-  RUN_LOST: 'runLost',
 };
 
 function makeAircraft(side, config) {

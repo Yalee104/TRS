@@ -7,7 +7,7 @@
 //    • config     — single-battle roster + phase length + seed (legacy)
 //    • runSetup   — run mode pre-run (the loadout picker drives setup in the centre)
 //    • status     — single battle in progress (readout + Restart)
-//    • runStatus  — run in progress (run HUD: battle x/total, owned, mods + New Run)
+//    • runStatus  — run in progress (run HUD: act/row + scrap, owned, mods + New Run)
 //  A language selector sits at the top in every view. rebuild() re-renders the rail
 //  in the current locale, preserving inputs/view.
 // =============================================================================
@@ -19,7 +19,6 @@ import { t, archetypeLabel, enemyLabel, componentLabel, getLocale, setLocale, LO
 export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, defaults, archetypes, config }) {
   const archList = Object.keys(archetypes || {}).filter((k) => k !== '_comment');
   const maxEnemies = defaults.maxEnemies || 4;
-  const totalBattles = (config?.run?.battles || []).length;
   let view = 'config';     // 'config'/'status' (single battle) · 'runSetup'/'runStatus' (run game)
   let run = null;
   // live single-battle values (seeded from config.ui defaults; preserved across rebuilds)
@@ -135,11 +134,9 @@ export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, 
     const mods = run.rewardsTaken
       .filter((r) => r.type === 'comboMod' || r.type === 'componentMod')
       .map((r) => `<span class="rh-chip mod">${t(`reward.${r.type}.${r.modId}.name`)}</span>`).join('');
-    // Map-run header: act/row + Scrap. (Falls back to the legacy battle counter if no map.)
-    const header = run.map
-      ? `<div class="rh-battle">${t('hud.actRow', { act: run.act || 1, row: (run.map.byId[run.mapPos]?.row ?? 0) })}</div>
-         <div class="rh-row"><span class="rh-chip mod">${t('hud.scrap')}: ${run.scrap || 0}</span></div>`
-      : `<div class="rh-battle">${t('hud.battle', { n: run.battleIndex + 1, total: totalBattles })}</div>`;
+    // Map-run header: act/row + Scrap.
+    const header = `<div class="rh-battle">${t('hud.actRow', { act: run.act || 1, row: (run.map?.byId[run.mapPos]?.row ?? 0) })}</div>
+         <div class="rh-row"><span class="rh-chip mod">${t('hud.scrap')}: ${run.scrap || 0}</span></div>`;
     runHudEl.innerHTML = `
       ${header}
       <div class="rh-row"><div class="rh-k">${t('hud.owned')}</div>${owned}</div>

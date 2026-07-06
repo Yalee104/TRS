@@ -116,8 +116,7 @@ export function effectiveConfig(run) {
 
   // Escalation: deeper rows hit harder, and elite/boss nodes get a tier multiplier on top.
   const eco = run.config.run?.economy || {};
-  const esc = run.config.run?.escalation || {};
-  const rowMult = (eco.perRowBudgetMult ?? esc.perBattleBudgetMult ?? 1) ** depthOf(run);
+  const rowMult = (eco.perRowBudgetMult ?? 1) ** depthOf(run);
   const tier = (currentNode(run) && currentNode(run).tier) || 'normal';
   const tierMult = (eco.tierBudgetMult && eco.tierBudgetMult[tier]) ?? 1;
   const mult = rowMult * tierMult;
@@ -146,7 +145,7 @@ export function effectiveConfig(run) {
   return cfg;
 }
 
-/** The encounter to fight: the current node's, or a row-0 fallback (legacy/no node selected). */
+/** The encounter to fight: the current node's, or a row-1 fallback (no node selected). */
 function currentEncounter(run) {
   const node = currentNode(run);
   if (node && node.encounter) return node.encounter;
@@ -154,7 +153,7 @@ function currentEncounter(run) {
     const firstBattle = run.map.rows[1].find((n) => n.encounter);
     if (firstBattle) return firstBattle.encounter;
   }
-  return (run.config.run?.battles || [])[run.battleIndex] || {};   // legacy battles[] fallback
+  return {};
 }
 
 /** UI overrides for createState() for the current battle (node-driven roster, credit, seed). */
@@ -201,17 +200,7 @@ export function captureBattleResult(run, state) {
 }
 
 export function isFinalBattle(run) {
-  if (run.map) return isBossNode(currentNode(run));
-  const battles = run.config.run?.battles || [];                  // legacy (no map)
-  const b = battles[run.battleIndex];
-  return !!(b && b.isFinal) || run.battleIndex >= battles.length - 1;
-}
-
-/** Step to the next battle (clears the spent offer). Legacy linear-run helper. */
-export function advanceBattle(run) {
-  run.battleIndex += 1;
-  run.offer = null;
-  return run;
+  return !!run.map && isBossNode(currentNode(run));
 }
 
 // --- node map navigation + economy -------------------------------------------
@@ -245,10 +234,12 @@ export function advanceFromNode(run) {
   return run;
 }
 
-/** Award Scrap for clearing a battle node (tier reward + per-row bonus). */
+/** Award Scrap for clearing a battle node (tier reward + per-row bonus). Boss wins
+ *  end the run immediately, so they pay nothing. */
 export function awardScrap(run, node) {
   const eco = run.config.run?.economy || {};
   const tier = (node && node.tier) || 'normal';
+  if (tier === 'boss') return run.scrap || 0;
   const base = (eco.scrapReward && eco.scrapReward[tier]) || 0;
   const perRow = (eco.scrapPerRow || 0) * ((node && node.row) || 0);
   run.scrap = (run.scrap || 0) + base + perRow;
@@ -394,6 +385,7 @@ export function buildShop(run) {
     ...pools.component.map((x) => ({ ...x, price: px('component', 110) })),
     ...pools.comboMod.map((x) => ({ ...x, price: px('comboMod', 70) })),
     ...pools.componentMod.map((x) => ({ ...x, price: px('componentMod', 70) })),
+    ...pools.repair.map((x) => ({ ...x, price: px('repair', 30) })),
   ];
   for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
   const size = (eco.shop && eco.shop.size) || 5;
@@ -439,8 +431,9 @@ export function applyRewardChoice(run, choice) {
       run.componentMods[choice.id] = deepMerge(run.componentMods[choice.id] || {}, deepClone(choice.patch));
       // Installing extra hull also heals into the new max (feels rewarding).
       if (choice.patch.hpBonus) {
-        const cur = run.persistentHp[choice.id] ?? run.config.components[choice.id].hp;
-        run.persistentHp[choice.id] = cur + choice.patch.hpBonus;
+        // the mod is already merged, so the pre-mod fallback is modded max MINUS this bonus
+        const cur = run.persistentHp[choice.id] ?? (moddedMaxHp(run, choice.id) - choice.patch.hpBonus);
+        run.persistentHp[choice.id] = Math.min(moddedMaxHp(run, choice.id), cur + choice.patch.hpBonus);
       }
       run.rewardsTaken.push({ type: 'componentMod', modId: choice.modId, id: choice.id });
       break;

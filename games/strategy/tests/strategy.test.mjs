@@ -29,7 +29,7 @@ import { generate } from '../../grid-path-puzzle/module/core/generator.js';
 import { isOwned, COMPONENT_IDS } from '../core/components.js';
 import {
   createRun, effectiveConfig, buildBattleUi, applyOwnership, applyPersistentHp,
-  captureBattleResult, advanceBattle, isFinalBattle, rollRewardOffer, applyRewardChoice,
+  captureBattleResult, isFinalBattle, rollRewardOffer, applyRewardChoice,
   rewardPools, deepMerge, moddedMaxHp,
   enterNode, advanceFromNode, awardScrap, applyHeal, buildShop, applyShopPurchase, rollUpgradeOffer,
 } from '../core/run.js';
@@ -852,22 +852,24 @@ test('mods: a component-mod raises maxHp and flows effect numbers into the confi
   assert(CONFIG.components.core.hp === 200 && CONFIG.effects.freeze.dmgPerPotency === 1.5, 'base untouched');
 });
 
-test('mods: per-battle escalation scales archetype damage budgets', () => {
+test('mods: escalation is driven by the current node row (no node → no escalation)', () => {
   const run = createRun(CONFIG, { loadout: 'burst' });
-  run.battleIndex = 2; // mult = 1.08^2
-  const expected = Math.round(CONFIG.archetypes.saboteur.damageBudget * 1.08 ** 2);
-  assert(effectiveConfig(run).archetypes.saboteur.damageBudget === expected, 'damageBudget escalates');
+  assert(effectiveConfig(run).archetypes.saboteur.damageBudget === CONFIG.archetypes.saboteur.damageBudget, 'no node → base budget');
+  run.currentNodeId = firstBattleNodeId(run); // a row-1 battle
+  const expected = Math.round(CONFIG.archetypes.saboteur.damageBudget * CONFIG.run.economy.perRowBudgetMult);
+  assert(effectiveConfig(run).archetypes.saboteur.damageBudget === expected, 'row-1 battle escalates one row step');
 });
 
 // --- run progression ---------------------------------------------------------
 test('progression: HP persists between battles; Core is clamped to >=1', () => {
   const run = createRun(CONFIG, { loadout: 'burst' });
+  enterNode(run, firstBattleNodeId(run));
   const b1 = battleFrom(run);
   b1.player.components.weapon.hp = 30;
   b1.player.components.core.hp = 50;
   captureBattleResult(run, b1);
-  advanceBattle(run);
-  assert(run.battleIndex === 1, 'advanced to battle 1');
+  advanceFromNode(run);
+  assert(run.status === 'map' && run.offer === null, 'back on the map, offer cleared');
   const b2 = battleFrom(run);
   assert(b2.player.components.weapon.hp === 30, 'weapon HP carried');
   assert(b2.player.components.core.hp === 50, 'core HP carried');

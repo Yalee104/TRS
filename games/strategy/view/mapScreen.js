@@ -44,12 +44,12 @@ export function createMapScreen(root, { onPickNode, getRun }) {
     root.querySelectorAll('.rs-mapnode.reachable').forEach((el) =>
       el.addEventListener('click', () => onPickNode(el.dataset.node)));
 
-    drawEdges(root, map, reachable);
+    drawEdges(root, map, reachable, run.mapPos);
   }
   return { render };
 }
 
-function drawEdges(root, map, reachable) {
+function drawEdges(root, map, reachable, mapPos) {
   const raf = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : (fn) => fn();
   raf(() => {
     const svg = root.querySelector('.rs-mapedges');
@@ -70,7 +70,7 @@ function drawEdges(root, map, reachable) {
         for (const nx of n.next) {
           const b = center(nx);
           if (!b) continue;
-          const hot = (n.visited && reachable.has(nx)) ? ' hot' : '';
+          const hot = (n.id === mapPos && reachable.has(nx)) ? ' hot' : '';
           lines += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" class="rs-edge${hot}" />`;
         }
       }

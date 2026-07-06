@@ -184,7 +184,6 @@ export const en = {
     title: 'TRS Run',
     begin: '▶ Begin Run',
     newRun: '⟲ New Run',
-    battleOf: 'Battle {n} / {total}',
     won: '🏆 RUN COMPLETE',
     wonDesc: 'You cleared every battle. Press New Run to start a fresh build.',
     lost: '💀 RUN OVER',
@@ -242,7 +241,6 @@ export const en = {
   },
 
   hud: {
-    battle: 'Battle {n}/{total}',
     owned: 'Owned',
     mods: 'Mods',
     noMods: 'none',
