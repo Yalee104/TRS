@@ -114,13 +114,14 @@ test('cascade cliffs: tower→blind, engine→no initiative, launchpad→congest
   assert(sys.trsMods.blockerBonus > 0, 'launchpad dead → more blockers');
 });
 
-test('a healthy Launch Pad EASES the TRS grid (fewer blockers/traps); damaged fades to baseline', () => {
+test('a healthy Launch Pad EASES the TRS grid (size only); damaged fades to baseline', () => {
   const s = fresh();
   const full = systemState(s.player, CONFIG).trsMods;
-  assert(full.blockerBonus < 0 && full.trapBonus < 0, 'full HP → eased grid (negative density bonus)');
-  s.player.components.launchpad.hp = s.player.components.launchpad.maxHp * 0.5;
+  assert(full.sizeDelta === CONFIG.cascade.launchpadFullBonus.sizeDelta, 'full HP → smaller grid');
+  assert(full.blockerBonus === 0 && full.trapBonus === 0, 'healthy easing is size-only (density easing was too strong)');
+  s.player.components.launchpad.hp = s.player.components.launchpad.maxHp * 0.4;
   const half = systemState(s.player, CONFIG).trsMods;
-  assert(half.blockerBonus > full.blockerBonus && half.blockerBonus < 0, 'damaged → bonus fades toward baseline');
+  assert(half.sizeDelta === 0, 'damaged → the size bonus fades to baseline');
 });
 
 test('Launch Pad now carries attack strength: destroying it drops Combat Condition', () => {
@@ -855,11 +856,15 @@ test('mods: a component-mod raises maxHp and flows effect numbers into the confi
   assert(CONFIG.components.core.hp === 200 && CONFIG.effects.freeze.dmgPerPotency === 1.5, 'base untouched');
 });
 
-test('mods: escalation is driven by the current node row (no node → no escalation)', () => {
+test('mods: escalation is driven by the current node row (no node → tier mult only)', () => {
   const run = createRun(CONFIG, { loadout: 'burst' });
-  assert(effectiveConfig(run).archetypes.saboteur.damageBudget === CONFIG.archetypes.saboteur.damageBudget, 'no node → base budget');
-  run.currentNodeId = firstBattleNodeId(run); // a row-1 battle
-  const expected = Math.round(CONFIG.archetypes.saboteur.damageBudget * CONFIG.run.economy.perRowBudgetMult);
+  const eco = CONFIG.run.economy;
+  const base = CONFIG.archetypes.saboteur.damageBudget;
+  assert(effectiveConfig(run).archetypes.saboteur.damageBudget === Math.round(base * eco.tierBudgetMult.normal), 'no node → base × normal tier mult');
+  run.currentNodeId = firstBattleNodeId(run); // a row-1 battle (roster of 1 → no split)
+  const node = nodeById(run.map, run.currentNodeId);
+  const split = eco.rosterBudgetSplit ? node.encounter.enemies.length : 1;
+  const expected = Math.round(base * eco.perRowBudgetMult * eco.tierBudgetMult.normal / split);
   assert(effectiveConfig(run).archetypes.saboteur.damageBudget === expected, 'row-1 battle escalates one row step');
 });
 
@@ -1280,7 +1285,11 @@ function simBattle(owned, node, seed) {
   applyOwnership(s, run);
   applyPersistentHp(s, run);
   startAttackBuild(s);
-  const attackParts = owned.filter((id) => ATTACK_EFFECT[id]);
+  // solve orders a competent player uses: Glass pair first; Shield then Repair.
+  // Defense is capped at 2 solves — the defenseCreditMult budget in real play.
+  const ATK_ORDER = ['weapon', 'engine', 'generator', 'launchpad', 'tower'];
+  const DEF_ORDER = ['weapon', 'generator', 'engine', 'tower', 'launchpad'];
+  const attackParts = ATK_ORDER.filter((id) => owned.includes(id) && ATTACK_EFFECT[id]);
   while (s.phase !== PHASES.WON && s.phase !== PHASES.LOST && s.round <= 20) {
     const foe = s.enemies.find((e) => isAlive2(e.components.core));
     const tgt = () => (isAlive2(foe.components.generator) ? 'generator' : 'core');
@@ -1293,8 +1302,8 @@ function simBattle(owned, node, seed) {
     commitAttack(s, foe.eid, tgt());
     if (s.phase === PHASES.WON || s.phase === PHASES.LOST) break;
     let d = 0;
-    for (const part of owned.filter((id) => DEFENSE_VERB[id] && isAlive2(s.player.components[id]) && !(s.cooldowns[id] > 0))) {
-      if (d >= 3) break;
+    for (const part of DEF_ORDER.filter((id) => owned.includes(id) && DEFENSE_VERB[id] && isAlive2(s.player.components[id]) && !(s.cooldowns[id] > 0))) {
+      if (d >= 2) break;
       makePendingDefense(s, part, simCombo(6));
       if (s.pendingDefense) {
         const weakest = Object.entries(s.player.components)
@@ -1356,4 +1365,60 @@ test('map: no elite ever spawns before eliteMinRow', () => {
       assert(!(n.type === 'elite' && n.row < CONFIG.run.map.act1.eliteMinRow), `seed ${seed}: elite at row ${n.row}`);
     }
   }
+});
+
+// =============================================================================
+//  playtest round 2: defense repeat penalty, defense credit, launchpad grid mod
+// =============================================================================
+
+test('defense replay: plays are counted per part and reset each defense phase', () => {
+  const s = fresh();
+  startDefenseBuild(s);
+  makePendingDefense(s, 'weapon', combo(5)); finalizeDefenseTarget(s, 'core');
+  makePendingDefense(s, 'weapon', combo(5)); finalizeDefenseTarget(s, 'core');
+  makePendingDefense(s, 'generator', combo(5)); finalizeDefenseTarget(s, 'generator');
+  assert(s.defensePlays.weapon === 2 && s.defensePlays.generator === 1, 'plays counted per part');
+  startDefenseBuild(s);
+  assert(Object.keys(s.defensePlays).length === 0, 'fresh defense phase resets the counter');
+});
+
+test('bridge: replaying the same part congests its TRS (+size per repeat, capped; attack untouched)', () => {
+  const s = fresh({ creditSeconds: 500 });
+  startDefenseBuild(s);
+  const bridge = createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+  const rp = CONFIG.puzzle.repeatPenalty;
+  const solveShield = () => { s.activePuzzle.instance.fireComplete([{ typeKey: 'shield' }]); finalizeDefenseTarget(s, 'core'); };
+  const sizes = [];
+  const blockers = [];
+  for (let i = 0; i < rp.maxExtra + 2; i++) {
+    assert(bridge.open('weapon') === true, `defense replay ${i + 1} can open`);
+    sizes.push(s.activePuzzle.instance.opts.generate.size);
+    blockers.push(s.activePuzzle.instance.opts.generate.routePlan.blockerDensity);
+    solveShield();
+  }
+  for (let i = 1; i <= rp.maxExtra; i++) {
+    assert(sizes[i] === sizes[0] + i * rp.sizePerRepeat, `replay ${i + 1} grid +${i * rp.sizePerRepeat} (got ${sizes[i]} vs base ${sizes[0]})`);
+    assert(near(blockers[i], blockers[0] + i * rp.blockerPerRepeat, 0.001), `replay ${i + 1} denser blockers`);
+  }
+  assert(sizes[rp.maxExtra + 1] === sizes[0] + rp.maxExtra * rp.sizePerRepeat, 'penalty caps at maxExtra');
+  // a DIFFERENT part is unaffected by weapon's replays
+  assert(bridge.open('generator') === true, 'other part opens');
+  assert(s.activePuzzle.instance.opts.generate.size === sizes[0], 'other part gets the base grid');
+  s.activePuzzle.instance.fireFail();
+});
+
+test('defense build gets defenseCreditMult of the budget; attack build keeps the full budget', () => {
+  const s = fresh({ creditSeconds: 20 });
+  assert(s.creditLeftMs === 20000, 'attack build: full credit');
+  startDefenseBuild(s);
+  assert(s.creditLeftMs === Math.round(20000 * CONFIG.phase.defenseCreditMult), 'defense build: reduced credit');
+});
+
+test('mods: the launchpadGridPlus cascade patch merges into the effective config only', () => {
+  const run = createRun(CONFIG, { components: ['launchpad', 'weapon'] });
+  const entry = CONFIG.run.componentModCatalog.launchpadGridPlus;
+  applyRewardChoice(run, { type: 'componentMod', modId: 'launchpadGridPlus', id: entry.component, patch: entry.patch });
+  const cfg = effectiveConfig(run);
+  assert(cfg.cascade.launchpadFullBonus.sizeDelta === -2, 'modded pad eases the grid by 2');
+  assert(CONFIG.cascade.launchpadFullBonus.sizeDelta === -1, 'base config untouched');
 });

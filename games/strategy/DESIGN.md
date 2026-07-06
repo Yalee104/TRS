@@ -608,6 +608,13 @@ base config, so TRS Command single battles are untouched):
   banner and event log. Turtling is never optimal; target fight lengths are normal 3–4,
   elite 5–6, boss 7–9 rounds (locked by the pacing-simulation test).
 
+Defense is deliberately tighter than attack: the defense build gets
+`phase.defenseCreditMult` (0.6) of the phase budget, and **replaying the same part within one
+defense phase congests its TRS** — +1 grid size per repeat (capped) plus denser blockers
+(`puzzle.repeatPenalty`) — so spamming Shield is a diminishing loop, not a wall. The healthy
+Launch Pad easing is size-only (−1; the `launchpadGridPlus` mod upgrades it to −2 via a
+`cascade` component-mod patch).
+
 Momentum features: winning **at or under par** pays `economy.fastWinScrap`; elite wins offer a
 4-card spread with **2 picks** (`reward.eliteOffer`, gated on `economy.eliteRewardBonus`);
 surviving parts patch up `postBattleRepair.percent` (30%) of max HP after every win (destroyed

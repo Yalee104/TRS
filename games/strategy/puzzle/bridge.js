@@ -111,10 +111,19 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     const knobs = { ...(state.config.puzzle.gen || {}) };
     delete knobs._comment;
     knobs.burningDensity = burningOn ? (pmods.burningDensity ?? 0) : 0;
+    // Defense replay penalty: each repeated play of the SAME part this phase congests
+    // its TRS — bigger grid + denser blockers (config.puzzle.repeatPenalty). Attack
+    // parts are one-use per phase, so this only ever applies to defense.
+    const rp = state.config.puzzle.repeatPenalty || null;
+    const repeats = (!isAttack && rp) ? Math.min(state.defensePlays?.[componentId] || 0, rp.maxExtra ?? 3) : 0;
+    if (repeats > 0) {
+      knobs.blockerDensity = (knobs.blockerDensity ?? 0.4) + repeats * (rp.blockerPerRepeat || 0);
+      logEvent(state, `Repeated ${component.name} play — TRS congested (+${repeats * (rp.sizePerRepeat || 0)} grid).`);
+    }
     const cfg = isAttack
       ? offensivePalette(componentId, trsMods, state.config.potency, knobs)
       : defensivePalette(componentId, trsMods, state.config.potency, knobs);
-    const size = state.config.puzzle.size + (trsMods.sizeDelta || 0);
+    const size = state.config.puzzle.size + (trsMods.sizeDelta || 0) + repeats * (rp?.sizePerRepeat || 0);
 
     const nt = catalogFromConfig(cfg);
     // Localize the in-grid node labels host-side (the shared module is not modified).

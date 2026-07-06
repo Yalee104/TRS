@@ -139,13 +139,14 @@ export function effectiveConfig(run) {
     else if (table === 'defense') deepMerge(cfg.defense.combos[comboId], patch);
   }
 
-  // Component-mods: hp/armor onto components[id]; effect/verb onto the shared tables.
+  // Component-mods: hp/armor onto components[id]; effect/verb/cascade onto the shared tables.
   for (const [id, patch] of Object.entries(run.componentMods)) {
     if (!cfg.components[id]) continue;
     if (patch.hpBonus) cfg.components[id].hp = (cfg.components[id].hp || 0) + patch.hpBonus;
     if (patch.armor) cfg.components[id].armor = (cfg.components[id].armor || 0) + patch.armor;
     if (patch.effect) deepMerge(cfg.effects, patch.effect);     // e.g. { freeze: { dmgPerPotency } }
     if (patch.verb) deepMerge(cfg.defense, patch.verb);         // e.g. { shield: { absorbPerPotency } }
+    if (patch.cascade) deepMerge(cfg.cascade, patch.cascade);   // e.g. { launchpadFullBonus: { sizeDelta } }
   }
 
   // Breach (run-only): enemy Cores use a weaker shield threshold so fights close out.

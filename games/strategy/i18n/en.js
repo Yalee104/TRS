@@ -249,6 +249,7 @@ export const en = {
       weaponShield: { name: 'Weapon: Barrier Cells', desc: 'Shield absorbs 11 / potency (was 8).' },
       generatorRepair: { name: 'Generator: Nanoweld', desc: 'Repair restores 8 HP / potency (was 6).' },
       launchpadOverclock: { name: 'Launch Pad: Turbo Feed', desc: 'Overclock banks 4.0s of build credit (was 2.5s).' },
+      launchpadGridPlus: { name: 'Launch Pad: Compact Router', desc: 'At full HP the Launch Pad shrinks your TRS grid by 2 (was 1).' },
     },
   },
 

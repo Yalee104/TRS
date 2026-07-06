@@ -3,6 +3,7 @@
 
   "phase": {
     "creditMs": 15000,
+    "defenseCreditMult": 0.6,
     "attackTimeModel": "realtime",
     "actionCostMs": 20000,
     "failCostMs": 10000
@@ -12,6 +13,12 @@
     "_comment": "TRS routing puzzle. `size` is the base grid (Launch Pad cascade adds its sizeDelta). `gen` knobs feed the shared preset's genPlan (grid-path-puzzle/presets/trs.js); `modifiers` tune how an ENEMY STATUS on YOUR component is FELT while you solve that component's route (the reflect-back of the puzzle-module status effects). `countdown` is the pre-start GO pause (excluded from the solve clock). `trapEntryMode:failFast` = crossing a hazard fails the run immediately.",
     "size": 6,
     "timeLimitMs": 10000,
+    "repeatPenalty": {
+      "_comment": "Defense-phase replay tax: the 2nd+ play of the SAME part in one defense phase gets +sizePerRepeat grid per repeat (capped at maxExtra repeats) and +blockerPerRepeat blocker density — spamming one verb (e.g. Shield) gets progressively harder. Attack parts are one-use per phase, so this never applies to attacks.",
+      "sizePerRepeat": 1,
+      "maxExtra": 3,
+      "blockerPerRepeat": 0.04
+    },
     "trapEntryMode": "failFast",
     "failText": "FAIL",
     "countdown": { "ms": 800, "flashStart": true, "text": "GO" },
@@ -118,8 +125,8 @@
     "evasionAtFullEngine": 0.15,
     "weaponDestroyedBaseMult": 0.4,
     "towerDestroyedAimMult": 0.6,
-    "_lpComment": "Launch Pad governs its owner's TRS quality on a GRADIENT: at full HP it EASES the grid (fewer blockers/traps, smaller grid = bonus scaled by HP); as it's damaged the bonus fades to baseline; DESTROYED it congests past baseline (the cliff). blockerBonus/trapBonus are added to densities; sizeDelta adjusts grid size.",
-    "launchpadFullBonus": { "sizeDelta": -1, "blockerBonus": -0.08, "trapBonus": -0.08 },
+    "_lpComment": "Launch Pad governs its owner's TRS quality on a GRADIENT: at full HP it EASES the grid (smaller grid = bonus scaled by HP); as it's damaged the bonus fades to baseline; DESTROYED it congests past baseline (the cliff). blockerBonus/trapBonus are added to densities; sizeDelta adjusts grid size. The healthy bonus is size-only (-1) — density easing stacked into trivial puzzles; the launchpadGridPlus mod upgrades it to -2.",
+    "launchpadFullBonus": { "sizeDelta": -1, "blockerBonus": 0, "trapBonus": 0 },
     "launchpadDestroyed": { "sizeDelta": 2, "blockerBonus": 0.12, "trapBonus": 0.1 }
   },
 
@@ -129,8 +136,8 @@
       "label": "Saboteur",
       "damageBudget": 70,
       "priority": ["generator", "weapon", "core"],
-      "spread": 0.25,
-      "statusChance": 0.4,
+      "spread": 0.45,
+      "statusChance": 0.5,
       "status": "drain"
     },
     "brute": {
@@ -138,14 +145,14 @@
       "damageBudget": 80,
       "priority": "highestHp",
       "spread": 0.0,
-      "statusChance": 0.15,
+      "statusChance": 0.25,
       "status": "freeze"
     },
     "hunter": {
       "label": "Hunter",
       "damageBudget": 65,
       "priority": ["tower", "engine", "generator", "weapon"],
-      "spread": 0.15,
+      "spread": 0.35,
       "statusChance": 0.35,
       "status": "confuse"
     },
@@ -161,7 +168,7 @@
       "label": "Disruptor",
       "damageBudget": 55,
       "priority": ["generator", "weapon", "engine"],
-      "spread": 0.3,
+      "spread": 0.45,
       "statusChance": 0.9,
       "statusPool": ["freeze", "drain", "confuse"]
     },
@@ -170,7 +177,7 @@
       "label": "Dreadnought",
       "damageBudget": 150,
       "priority": "highestHp",
-      "spread": 0.4,
+      "spread": 0.5,
       "statusChance": 0.6,
       "statusPool": ["freeze", "burning", "drain"]
     },
@@ -193,7 +200,7 @@
     "enemyShieldThreshold": 60,
     "overheat": {
       "_comment": "Anti-stall clock (run battles only). Each tier has a PAR round; past par every enemy's damageBudget compounds by rampPerRound each extra round (telegraphed one round early in the banner/log). Winning at or under par pays economy.fastWinScrap.",
-      "parRounds": { "normal": 4, "elite": 6, "boss": 9 },
+      "parRounds": { "normal": 5, "elite": 6, "boss": 9 },
       "rampPerRound": 1.25
     },
     "postBattleRepair": {
@@ -218,7 +225,7 @@
       "reactiveMirror":  { "combo": "reactivePlating", "table": "defense", "needs": ["launchpad", "weapon"], "patch": { "reflectFrac": 0.8 } }
     },
     "componentModCatalog": {
-      "_comment": "patch shape mirrors the component-mod merge in effectiveConfig: hpBonus/armor on components[id], `effect` over effects[ATTACK_EFFECT[id]], `verb` over defense[DEFENSE_VERB[id]]. `component` must be owned to be offered.",
+      "_comment": "patch shape mirrors the component-mod merge in effectiveConfig: hpBonus/armor on components[id], `effect` over effects[ATTACK_EFFECT[id]], `verb` over defense[DEFENSE_VERB[id]], `cascade` over the cascade table. `component` must be owned to be offered.",
       "weaponFreeze":    { "component": "weapon",    "patch": { "effect": { "freeze": { "dmgPerPotency": 2.0 } } } },
       "generatorDrain":  { "component": "generator", "patch": { "effect": { "drain": { "healPerPotency": 3.0 } } } },
       "engineShatter":   { "component": "engine",    "patch": { "effect": { "shatter": { "dmgPerPotency": 3.0 } } } },
@@ -227,7 +234,8 @@
       "towerConfuse":    { "component": "tower",     "patch": { "effect": { "confuse": { "dmgPerPotency": 2.0 } } } },
       "weaponShield":    { "component": "weapon",    "patch": { "verb": { "shield": { "absorbPerPotency": 11 } } } },
       "generatorRepair": { "component": "generator", "patch": { "verb": { "repair": { "hpPerPotency": 8 } } } },
-      "launchpadOverclock": { "component": "launchpad", "patch": { "verb": { "overclock": { "creditBonusMs": 4000 } } } }
+      "launchpadOverclock": { "component": "launchpad", "patch": { "verb": { "overclock": { "creditBonusMs": 4000 } } } },
+      "launchpadGridPlus": { "component": "launchpad", "patch": { "cascade": { "launchpadFullBonus": { "sizeDelta": -2 } } } }
     },
     "loadouts": {
       "_comment": "Presets pre-select the 3 non-core starting components (the player can still go custom). Both include the Generator — without it every attack suffers the brownout penalty (cascade.brownoutMult), which is a trap for a starting kit. burst = Glass-enabling offense; sustain = defensive backbone (Repair+Cleanse) with Shatter damage.",
@@ -273,7 +281,7 @@
       "scrapPerRow": 4,
       "perRowBudgetMult": 1.08,
       "rosterBudgetSplit": true,
-      "tierBudgetMult": { "normal": 1.0, "elite": 1.2, "boss": 0.9 },
+      "tierBudgetMult": { "normal": 1.05, "elite": 1.25, "boss": 0.9 },
       "tierHpMult": { "normal": 0.35, "elite": 0.6, "boss": 1.4 },
       "eliteRewardBonus": true,
       "fastWinScrap": { "normal": 15, "elite": 30, "boss": 0 },

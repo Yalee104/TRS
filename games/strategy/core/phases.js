@@ -51,7 +51,10 @@ export function startDefenseBuild(state) {
   state.pendingAction = null;
   state.pendingDefense = null;
   state.pickFocus = false;
-  state.creditLeftMs = state.creditMs;
+  state.defensePlays = {};       // fresh phase → replay penalty resets
+  // Defense gets a tighter budget than attack (config.phase.defenseCreditMult) so
+  // protection is a real choice rather than a full re-solve of every verb.
+  state.creditLeftMs = Math.round(state.creditMs * (state.config.phase.defenseCreditMult ?? 1));
   logEvent(state, '=== DEFENSE. Play a part\'s TRS, then choose which part to protect.');
 }
 

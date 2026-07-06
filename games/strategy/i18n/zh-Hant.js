@@ -249,6 +249,7 @@ export const zhHant = {
       weaponShield: { name: '武器庫：屏障電池', desc: '護盾每點威力吸收 11（原為 8）。' },
       generatorRepair: { name: '發電機：奈米焊接', desc: '修復每點威力恢復 8 生命（原為 6）。' },
       launchpadOverclock: { name: '發射台：渦輪供給', desc: '超頻儲存 4.0 秒建構額度（原為 2.5 秒）。' },
+      launchpadGridPlus: { name: '發射台：緊湊路由器', desc: '發射台滿生命時將你的 TRS 網格縮小 2（原為 1）。' },
     },
   },
 

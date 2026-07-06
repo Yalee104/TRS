@@ -98,6 +98,7 @@ export function createState(config, ui = {}) {
     focus: null,                 // attack: the firepower Focus {eid, component}, chosen at Resolve
     pickFocus: false,            // attack: true while waiting for the player to click the Focus
     usedComponents: {},          // attack: one-use-per-phase guard { weapon:true, ... }
+    defensePlays: {},            // defense: plays per part THIS phase (replays congest the TRS)
     cooldowns: {},               // per-component fail cooldown (turns remaining)
 
     activePuzzle: null,          // { component, side, mode, instance, overlay }

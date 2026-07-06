@@ -26,6 +26,9 @@ const NAME = (state, id) => state.player.components[id].name;
 export function makePendingDefense(state, componentId, combo) {
   const verb = DEFENSE_VERB[componentId];
   if (!verb) return null;
+  // count this phase's plays of the part — replays get a congested TRS (bridge reads this)
+  state.defensePlays = state.defensePlays || {};
+  state.defensePlays[componentId] = (state.defensePlays[componentId] || 0) + 1;
   state.pendingDefense = { side: 'defense', component: componentId, verb, potency: comboPotency(combo), label: combo?.label || verb, target: null };
   logEvent(state, `Solved ${state.player.components[componentId].name} TRS → ${verb} (potency ${state.pendingDefense.potency.toFixed(1)}). Pick a part to protect.`);
   return state.pendingDefense;
