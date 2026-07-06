@@ -592,6 +592,39 @@ adjacent Rests). Currency = **Salvage** (`10 + 5×parts destroyed`).
 budget forever, *Reinforced Core* +20% Core HP, *Sensor Suite* telegraphs always visible).
 Component HP carries between battles within a run (Rest heals); death loses the run, keeps Trophies.
 
+### 8.1 Run pacing & momentum ✅ implemented (all knobs under `config.run`)
+
+TRS Run tunes the shared engine per battle through three **run-gated levers** (absent from the
+base config, so TRS Command single battles are untouched):
+
+- **Breach** — enemy Cores use `run.enemyShieldThreshold` (60): destroying the **Generator
+  alone** exposes an enemy Core. The player keeps the base threshold (100, scaled to owned mass).
+- **Tier scaling** — enemy component HP × `economy.tierHpMult` (normal 0.35 / elite 0.6 /
+  boss 1.4); each enemy's `damageBudget` × row escalation × `tierBudgetMult`, **divided by the
+  roster size** (`economy.rosterBudgetSplit`) so total incoming pressure is set by the tier and
+  killing an enemy visibly relieves it.
+- **Overheat** — the anti-stall clock (`run.overheat`): each tier has a par round (4 / 6 / 9);
+  past par every enemy budget compounds ×1.25 per round, telegraphed one round early in the
+  banner and event log. Turtling is never optimal; target fight lengths are normal 3–4,
+  elite 5–6, boss 7–9 rounds (locked by the pacing-simulation test).
+
+Defense is deliberately tighter than attack: the defense build gets
+`phase.defenseCreditMult` (0.6) of the phase budget, and **replaying the same part within one
+defense phase congests its TRS** — +1 grid size per repeat, clamped to a 10×10 grid, plus
+denser blockers (`puzzle.repeatPenalty`) — so spamming Shield is a diminishing loop, not a
+wall. The Launch Pad's grid contribution is stepped by HP (`cascade.launchpad*`): never owned
+→ neutral 6×6; healthy (>50% HP) → 6×6; damaged (≤50%) → 7×7; destroyed → the 8×8 congested
+cliff. The `launchpadGridPlus` mod patches the healthy step to 5×5 via a `cascade`
+component-mod patch.
+
+Momentum features: winning **at or under par** pays `economy.fastWinScrap`; elite wins offer a
+4-card spread with **2 picks** (`reward.eliteOffer`, gated on `economy.eliteRewardBonus`);
+surviving parts patch up `postBattleRepair.percent` (30%) of max HP after every win (destroyed
+parts stay down until a real repair); entering the Boss node **fully restores the owned kit**
+(`map.bossStaging`) so the final battle tests the build, not arrival attrition. Map generation
+guarantees ≥ `act1.minBattlesBeforeBoss` (3) battles on every path and no elites before
+`act1.eliteMinRow` (3); shops also sell single-part repairs (`economy.prices.repair`).
+
 ---
 
 ## 9. How it reuses existing code (build reference, not in scope here)

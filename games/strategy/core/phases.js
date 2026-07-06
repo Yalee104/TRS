@@ -12,7 +12,7 @@ import { PHASES, logEvent } from './state.js';
 import { isAlive } from './components.js';
 import { resolveAttack } from '../combat/attack.js';
 import { resolveDefense } from '../combat/defense.js';
-import { planAttack } from '../combat/enemyAI.js';
+import { planAttack, overheatMult } from '../combat/enemyAI.js';
 import { tickAircraftStatuses } from '../combat/statuses.js';
 
 export function startAttackBuild(state) {
@@ -28,6 +28,10 @@ export function startAttackBuild(state) {
   // each living enemy declares its next strike (visible if your Tower lives)
   for (const e of state.enemies) e.telegraph = isAlive(e.components.core) ? planAttack(state, e) : null;
   logEvent(state, `=== Round ${state.round} — ATTACK. Play a weapon's TRS, then apply its status to an enemy part.`);
+  if (state.overheat) {
+    if (state.round === state.overheat.par) logEvent(state, `⚠ Overheat imminent — enemy systems ramp up next round. Finish this fight!`);
+    else if (state.round > state.overheat.par) logEvent(state, `🔥 OVERHEAT — enemy strikes amplified ×${overheatMult(state).toFixed(2)}.`);
+  }
 }
 
 export function commitAttack(state, eid, focusId) {
@@ -47,7 +51,10 @@ export function startDefenseBuild(state) {
   state.pendingAction = null;
   state.pendingDefense = null;
   state.pickFocus = false;
-  state.creditLeftMs = state.creditMs;
+  state.defensePlays = {};       // fresh phase → replay penalty resets
+  // Defense gets a tighter budget than attack (config.phase.defenseCreditMult) so
+  // protection is a real choice rather than a full re-solve of every verb.
+  state.creditLeftMs = Math.round(state.creditMs * (state.config.phase.defenseCreditMult ?? 1));
   logEvent(state, '=== DEFENSE. Play a part\'s TRS, then choose which part to protect.');
 }
 

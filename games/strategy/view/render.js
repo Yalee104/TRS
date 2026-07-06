@@ -7,9 +7,10 @@
 //  All visible text comes from the i18n catalog (view/../i18n).
 // =============================================================================
 
-import { COMPONENT_IDS, ATTACK_EFFECT, DEFENSE_VERB, isAlive, isEffectValidOn } from '../core/components.js';
+import { COMPONENT_IDS, ATTACK_EFFECT, DEFENSE_VERB, isAlive, isOwned, isEffectValidOn } from '../core/components.js';
 import { PHASES } from '../core/state.js';
 import { coreShieldUp } from '../core/cascade.js';
+import { overheatMult } from '../combat/enemyAI.js';
 import { OFFENSE_COMBOS, DEFENSE_COMBOS, lookupCombo } from '../combat/combos.js';
 import { t, componentLabel, effectLabel, verbLabel, comboLabel, skillLabel, enemyLabel } from '../i18n/index.js';
 
@@ -101,31 +102,45 @@ function enemyBoard(state, enemy) {
 }
 
 function playerHtml(state) {
+  // Render only the components the player actually owns (unowned parts don't exist yet — they're
+  // not on the board). Size the grid to the owned count so the row isn't sparse.
+  const owned = COMPONENT_IDS.filter((id) => isOwned(state.player.components[id]));
   return `
     <div class="board player-board">
       <div class="board-label">${t('ui.you')}</div>
-      <div class="cards">${COMPONENT_IDS.map((id) => cardHtml(state, 'player', id, null)).join('')}</div>
+      <div class="cards" style="grid-template-columns:repeat(${Math.max(1, owned.length)},1fr)">${owned.map((id) => cardHtml(state, 'player', id, null)).join('')}</div>
     </div>`;
 }
 
 function phaseBanner(state) {
-  switch (state.phase) {
-    case PHASES.CONFIG: return t('ui.banner.config');
-    case PHASES.ATTACK_BUILD: return t('ui.banner.attack', { n: state.round });
-    case PHASES.DEFENSE_BUILD: return t('ui.banner.defense', { n: state.round });
-    case PHASES.WON: return t('ui.banner.won');
-    case PHASES.LOST: return t('ui.banner.lost');
-    default: return t('ui.banner.round', { n: state.round });
-  }
+  const base = (() => {
+    switch (state.phase) {
+      case PHASES.CONFIG: return t('ui.banner.config');
+      case PHASES.ATTACK_BUILD: return t('ui.banner.attack', { n: state.round });
+      case PHASES.DEFENSE_BUILD: return t('ui.banner.defense', { n: state.round });
+      case PHASES.WON: return t('ui.banner.won');
+      case PHASES.LOST: return t('ui.banner.lost');
+      default: return t('ui.banner.round', { n: state.round });
+    }
+  })();
+  // Overheat clock (run battles only): warn at par, show the live ramp past it.
+  const oh = state.overheat;
+  const inBuild = state.phase === PHASES.ATTACK_BUILD || state.phase === PHASES.DEFENSE_BUILD;
+  if (!oh || !inBuild) return base;
+  if (state.round === oh.par) return `${base} · ${t('ui.banner.overheatSoon')}`;
+  if (state.round > oh.par) return `${base} · ${t('ui.banner.overheat', { mult: overheatMult(state).toFixed(2) })}`;
+  return base;
 }
 
 function cardHtml(state, side, id, eid) {
   const aircraft = side === 'player' ? state.player : state.enemies[eid];
   const c = aircraft.components[id];
   const dead = c.hp <= 0;
+  const unowned = side === 'player' && !isOwned(c);   // run meta-layer: not acquired yet
   const pct = Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100));
   const classes = ['comp', side, id];
-  if (dead) classes.push('dead', 'noclick');
+  if (unowned) classes.push('unowned', 'noclick');
+  else if (dead) classes.push('dead', 'noclick');
   if (id === 'core') {
     classes.push('core');
     if (!dead && coreShieldUp(aircraft, state.config)) classes.push('shielded');
@@ -144,7 +159,7 @@ function cardHtml(state, side, id, eid) {
     }
     if (state.focus && state.focus.eid === eid && state.focus.component === id && state.phase !== PHASES.ATTACK_BUILD) classes.push('focus');
   }
-  if (!dead && side === 'player' && state.pendingDefense) classes.push('valid-target');
+  if (!dead && !unowned && side === 'player' && state.pendingDefense) classes.push('valid-target');
   if (side === 'player' && state.cooldowns?.[id] > 0) classes.push('cooldown');
   if (!dead && side === 'player' && state.phase === PHASES.ATTACK_BUILD && state.usedComponents?.[id]) classes.push('used', 'noclick');
 
@@ -153,6 +168,9 @@ function cardHtml(state, side, id, eid) {
     .filter(([, s]) => s.turns > 0)
     .map(([k, s]) => `<span class="st" title="${t('ui.title.statusActive', { name: statusName(k), n: s.turns })}">${STATUS_ICON[k] || COMBO_ICON[k] || '•'}${s.turns}</span>`)
     .join('');
+
+  // locked badge for an unacquired component (run meta-layer)
+  const lock = unowned ? `<span class="st" title="${t('ui.locked')}">🔒</span>` : '';
 
   // carried defensive states (Sustain shield / Field Repair HoT)
   let carried = '';
@@ -166,7 +184,7 @@ function cardHtml(state, side, id, eid) {
   let breakBtn = '';
   const buildSide = (side === 'enemy' && state.phase === PHASES.ATTACK_BUILD)
     || (side === 'player' && state.phase === PHASES.DEFENSE_BUILD);
-  if (buildSide && !dead) {
+  if (buildSide && !dead && !unowned) {
     const q = queuedFor(state, side, id, eid);
     queued = queuedChainHtml(state, side, id, eid, q);
     if (q.length && !q[q.length - 1].brk) {
@@ -204,7 +222,7 @@ function cardHtml(state, side, id, eid) {
       <div class="cn">${componentLabel(id)}</div>
       <div class="hpbar"><div class="hpfill" style="width:${pct}%"></div></div>
       <div class="hpnum">${Math.max(0, Math.round(c.hp))}/${c.maxHp}</div>
-      <div class="badges">${statuses}${carried}${cd}${tel}</div>
+      <div class="badges">${lock}${statuses}${carried}${cd}${tel}</div>
       ${queuedRow}
       ${role ? `<div class="role">${role}</div>` : ''}
     </div>`;
@@ -212,6 +230,7 @@ function cardHtml(state, side, id, eid) {
 
 function roleHint(side, id, state) {
   if (id === 'core') return '';
+  if (side === 'player' && !isOwned(state.player.components[id])) return '';   // locked → no role hint
   if (side === 'player' && state.phase === PHASES.ATTACK_BUILD) return ATTACK_EFFECT[id] ? effectLabel(ATTACK_EFFECT[id]) : '';
   if (side === 'player' && state.phase === PHASES.DEFENSE_BUILD) return DEFENSE_VERB[id] ? verbLabel(DEFENSE_VERB[id]) : '';
   return '';

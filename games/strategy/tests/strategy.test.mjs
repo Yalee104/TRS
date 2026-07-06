@@ -15,17 +15,28 @@ import { createState, PHASES } from '../core/state.js';
 import { isEffectValidOn, ATTACK_EFFECT, DEFENSE_VERB } from '../core/components.js';
 import { startAttackBuild, commitAttack, startDefenseBuild, commitDefense } from '../core/phases.js';
 import { combatCondition, firepowerMult, totalFirepower } from '../core/firepower.js';
-import { systemState } from '../core/cascade.js';
+import { systemState, coreShieldStatus, coreShieldUp } from '../core/cascade.js';
 import { applyStatus, tickAircraftStatuses, attackSynergyMult, resolveOffenseChains } from '../combat/statuses.js';
 import { makePendingAttack, finalizeAttackTarget, validAttackTargets, resolveAttack, comboPotency } from '../combat/attack.js';
 import { makePendingDefense, finalizeDefenseTarget, resolveDefense } from '../combat/defense.js';
-import { planAttack, currentBudget } from '../combat/enemyAI.js';
+import { planAttack, currentBudget, overheatMult } from '../combat/enemyAI.js';
 import { resolveChain, OFFENSE_COMBOS, pairKey } from '../combat/combos.js';
 import { offensivePalette, defensivePalette, catalogFromConfig } from '../puzzle/palettes.js';
 import { createBridge, statusFriction } from '../puzzle/bridge.js';
 import { ATTACK_EFFECT as PRESET_ATTACK_EFFECT, DEFENSE_VERB as PRESET_DEFENSE_VERB } from '../../grid-path-puzzle/presets/trs.js';
 import { evaluate } from '../../grid-path-puzzle/combo/ComboEngine.js';
 import { generate } from '../../grid-path-puzzle/module/core/generator.js';
+import { isOwned, COMPONENT_IDS } from '../core/components.js';
+import {
+  createRun, effectiveConfig, buildBattleUi, applyOwnership, applyPersistentHp,
+  captureBattleResult, isFinalBattle, rollRewardOffer, applyRewardChoice,
+  rewardPools, deepMerge, moddedMaxHp,
+  enterNode, advanceFromNode, awardScrap, applyHeal, applyPostBattleRepair, buildShop, applyShopPurchase, rollUpgradeOffer,
+} from '../core/run.js';
+import { generateMap, validateMap, reachableNext, nodeById, isBossNode, bandForRow } from '../core/map.js';
+import { CATALOGS_FOR_TEST } from '../i18n/index.js';
+
+const allNodes = (map) => Object.values(map.byId);
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const CONFIG = JSON.parse(readFileSync(resolve(__dir, '../config/game.json'), 'utf8'));
@@ -103,13 +114,19 @@ test('cascade cliffs: tower→blind, engine→no initiative, launchpad→congest
   assert(sys.trsMods.blockerBonus > 0, 'launchpad dead → more blockers');
 });
 
-test('a healthy Launch Pad EASES the TRS grid (fewer blockers/traps); damaged fades to baseline', () => {
+test('Launch Pad TRS steps: healthy baseline, damaged +1, destroyed +2, unowned neutral', () => {
   const s = fresh();
-  const full = systemState(s.player, CONFIG).trsMods;
-  assert(full.blockerBonus < 0 && full.trapBonus < 0, 'full HP → eased grid (negative density bonus)');
-  s.player.components.launchpad.hp = s.player.components.launchpad.maxHp * 0.5;
-  const half = systemState(s.player, CONFIG).trsMods;
-  assert(half.blockerBonus > full.blockerBonus && half.blockerBonus < 0, 'damaged → bonus fades toward baseline');
+  const lp = s.player.components.launchpad;
+  assert(systemState(s.player, CONFIG).trsMods.sizeDelta === CONFIG.cascade.launchpadHealthy.sizeDelta, 'healthy → baseline grid');
+  lp.hp = lp.maxHp * 0.4;                              // below launchpadDamagedBelow (0.5)
+  assert(systemState(s.player, CONFIG).trsMods.sizeDelta === CONFIG.cascade.launchpadDamaged.sizeDelta, 'damaged → congested one step');
+  lp.hp = lp.maxHp * 0.6;                              // back above the threshold
+  assert(systemState(s.player, CONFIG).trsMods.sizeDelta === CONFIG.cascade.launchpadHealthy.sizeDelta, 'above threshold → healthy again');
+  lp.hp = 0;
+  assert(systemState(s.player, CONFIG).trsMods.sizeDelta === CONFIG.cascade.launchpadDestroyed.sizeDelta, 'destroyed → the cliff');
+  lp.hp = lp.maxHp; lp.owned = false;                  // run mode: never acquired
+  const un = systemState(s.player, CONFIG).trsMods;
+  assert(un.sizeDelta === 0 && un.blockerBonus === 0 && un.trapBonus === 0, 'unowned → neutral base grid (no phantom cliff)');
 });
 
 test('Launch Pad now carries attack strength: destroying it drops Combat Condition', () => {
@@ -700,4 +717,715 @@ test('defensive palettes also generate solvable boards that evaluate', () => {
 test('comboPotency sums item values', () => {
   assert(comboPotency({ items: [{ value: 2 }, { value: 3 }] }) === 5, 'sum');
   assert(comboPotency(null) === 0, 'null → 0');
+});
+
+// =============================================================================
+//  run meta-layer (core/run.js) — ownership, mods, progression, rewards
+// =============================================================================
+
+// Build a fresh battle state from a run exactly as main.js would. Optionally enter a node first.
+const battleFrom = (run, nodeId) => {
+  if (nodeId) run.currentNodeId = nodeId;
+  const s = createState(effectiveConfig(run), buildBattleUi(run, CONFIG.ui));
+  applyOwnership(s, run);
+  applyPersistentHp(s, run);
+  startAttackBuild(s);
+  return s;
+};
+// first reachable battle node id from the run's start (handy for tests)
+const firstBattleNodeId = (run) => reachableNext(run.map, run.mapPos).find((n) => n.encounter)?.id;
+const bridgeFor = (s) => createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+
+// --- deepMerge helper --------------------------------------------------------
+test('deepMerge: nested objects merge, scalars/arrays overwrite, no shared refs', () => {
+  const base = { a: { x: 1, y: 2 }, b: 5 };
+  deepMerge(base, { a: { y: 9, z: 3 }, b: 6 });
+  assert(base.a.x === 1 && base.a.y === 9 && base.a.z === 3, 'nested merge keeps siblings');
+  assert(base.b === 6, 'scalar overwrite');
+});
+
+// --- ownership gating --------------------------------------------------------
+test('run: a burst loadout owns exactly Core + its preset components', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  assert(run.owned.core, 'burst owns the core');
+  for (const id of CONFIG.run.loadouts.burst.components) assert(run.owned[id], `burst owns ${id}`);
+  const preset = new Set(CONFIG.run.loadouts.burst.components);
+  for (const id of COMPONENT_IDS) if (id !== 'core' && !preset.has(id)) assert(!run.owned[id], `${id} not owned`);
+});
+
+test('ownership: only owned components can open their TRS (the keystone gate)', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const s = battleFrom(run);
+  assert(s.player.components.weapon.owned === true, 'weapon owned');
+  assert(s.player.components.tower.owned === false, 'tower not owned');
+  assert(s.player.components.core.owned === true, 'core forced owned');
+  const b = bridgeFor(s);
+  assert(b.canOpen('weapon', true) === true, 'owned weapon opens');
+  assert(b.canOpen('tower', true) === false, 'unowned tower cannot open → its confuse never applies');
+});
+
+test('ownership: a combo cannot form when a source component is unowned', () => {
+  // Glass = Freeze(weapon)+Shatter(engine); owning only the weapon means Shatter can
+  // never be applied (engine TRS is gated), so Glass can never form.
+  const run = createRun(CONFIG, { components: ['weapon'] });
+  const s = battleFrom(run);
+  const b = bridgeFor(s);
+  assert(b.canOpen('weapon', true) === true, 'weapon (freeze) available');
+  assert(b.canOpen('engine', true) === false, 'engine (shatter) gated → no Glass');
+});
+
+test('condition: renormalized over owned parts — a small aircraft fights at full strength', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // owns weapon(.35)+engine(.10) only
+  const s = battleFrom(run);
+  assert(near(combatCondition(s.player, s.config), 1.0, 0.001), 'full HP + all owned alive → 1.0');
+  // The denominator is OWNED weight (fixed for the battle): a destroyed part you OWN still drags
+  // condition — losing a part of your kit hurts; not-owning a part is neutral.
+  s.player.components.weapon.hp = 0; // weapon destroyed → engine = .10/.45 of the blend
+  assert(near(combatCondition(s.player, s.config), 0.10 / 0.45, 0.01), 'destroyed owned part drags condition');
+  const s2 = battleFrom(createRun(CONFIG, { components: ['weapon', 'engine'] }));
+  s2.player.components.weapon.hp = s2.player.components.weapon.maxHp * 0.5; // half HP weapon
+  assert(near(combatCondition(s2.player, s2.config), 1 - 0.5 * (0.35 / 0.45), 0.01), 'damaged part scales by renorm weight');
+});
+
+test('ownership: an unowned Generator gives no brownout protection (systemState)', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // no generator
+  const s = battleFrom(run);
+  assert(systemState(s.player, s.config).brownout === CONFIG.cascade.brownoutMult, 'unowned generator → brownout');
+  assert(systemState(s.player, s.config).coreArmor === 0, 'unowned generator → no core armor');
+});
+
+// --- enemy targeting adapts to the player's owned components -------------------
+test('targeting: an enemy never plans a strike on an unowned component', () => {
+  // saboteur prefers generator/weapon/core — player owns NEITHER generator nor weapon.
+  const run = createRun(CONFIG, { components: ['tower', 'launchpad'] });
+  const s = battleFrom(run); // battle 0 roster = ['saboteur']
+  const plan = planAttack(s, s.enemies[0]);
+  assert(plan.entries.length > 0, 'enemy still strikes something');
+  assert(plan.entries.every((e) => isOwned(s.player.components[e.component])), 'every target is owned');
+  assert(plan.entries.every((e) => e.component !== 'generator' && e.component !== 'weapon'), 'no ghost targets');
+});
+
+test('targeting: a strike never lands on an unowned part at resolve', () => {
+  const run = createRun(CONFIG, { components: ['tower', 'launchpad'] });
+  const s = battleFrom(run);
+  startDefenseBuild(s);
+  resolveDefense(s);
+  for (const id of COMPONENT_IDS) {
+    if (!isOwned(s.player.components[id])) {
+      assert(s.player.components[id].hp === s.player.components[id].maxHp, `${id} (unowned) untouched`);
+    }
+  }
+});
+
+// --- core shield scales to owned contributor mass -----------------------------
+test('coreShield: full-6 keeps the absolute threshold (100)', () => {
+  const s = createState(CONFIG); // legacy full ownership
+  assert(coreShieldStatus(s.player, CONFIG).threshold === 100, 'full mass → threshold 100');
+  assert(coreShieldUp(s.player, CONFIG) === true, 'shield up at full');
+});
+
+test('coreShield: a partial aircraft has a reachable, scaled threshold and is exposable', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // core + weapon(40) + engine(40)
+  const s = battleFrom(run);
+  const st = coreShieldStatus(s.player, s.config);
+  assert(st.threshold > 0 && st.threshold < 100, `scaled below 100, got ${st.threshold}`);
+  assert(st.up === true, 'shield up before any contributor dies');
+  s.player.components.weapon.hp = 0; // destroy 40 of 80 owned mass
+  assert(coreShieldUp(s.player, s.config) === false, 'destroying owned mass exposes the core');
+});
+
+// --- mods + effective config (no base mutation) ------------------------------
+test('mods: a combo-mod overrides the combo number; base config is untouched', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  applyRewardChoice(run, { type: 'comboMod', modId: 'meltdownCore', combo: 'meltdown', table: 'offense', patch: { coreFrac: 0.7 } });
+  const cfg = effectiveConfig(run);
+  assert(cfg.effects.synergy.combos.meltdown.coreFrac === 0.7, 'effective config has 0.7');
+  assert(run.config.effects.synergy.combos.meltdown.coreFrac === 0.5, 'run.config unchanged (0.5)');
+  assert(CONFIG.effects.synergy.combos.meltdown.coreFrac === 0.5, 'base CONFIG unchanged');
+});
+
+test('mods: a defense combo-mod merges into defense.combos', () => {
+  const run = createRun(CONFIG, { loadout: 'sustain' });
+  applyRewardChoice(run, { type: 'comboMod', modId: 'bastionCap', combo: 'bastion', table: 'defense', patch: { capFrac: 0.35 } });
+  assert(effectiveConfig(run).defense.combos.bastion.capFrac === 0.35, 'bastion cap modded');
+});
+
+test('mods: a component-mod raises maxHp and flows effect numbers into the config', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  applyRewardChoice(run, { type: 'componentMod', modId: 'coreHp', id: 'core', patch: { hpBonus: 40 } });
+  applyRewardChoice(run, { type: 'componentMod', modId: 'weaponFreeze', id: 'weapon', patch: { effect: { freeze: { dmgPerPotency: 2.0 } } } });
+  const cfg = effectiveConfig(run);
+  assert(cfg.components.core.hp === CONFIG.components.core.hp + 40, 'core hp +40 in effective config');
+  assert(moddedMaxHp(run, 'core') === CONFIG.components.core.hp + 40, 'moddedMaxHp reflects bonus');
+  assert(cfg.effects.freeze.dmgPerPotency === 2.0, 'weapon freeze dmg modded');
+  assert(CONFIG.components.core.hp === 200 && CONFIG.effects.freeze.dmgPerPotency === 1.5, 'base untouched');
+});
+
+test('mods: escalation is driven by the current node row (no node → tier mult only)', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const eco = CONFIG.run.economy;
+  const base = CONFIG.archetypes.saboteur.damageBudget;
+  assert(effectiveConfig(run).archetypes.saboteur.damageBudget === Math.round(base * eco.tierBudgetMult.normal), 'no node → base × normal tier mult');
+  run.currentNodeId = firstBattleNodeId(run); // a row-1 battle (roster of 1 → no split)
+  const node = nodeById(run.map, run.currentNodeId);
+  const split = eco.rosterBudgetSplit ? node.encounter.enemies.length : 1;
+  const expected = Math.round(base * eco.perRowBudgetMult * eco.tierBudgetMult.normal / split);
+  assert(effectiveConfig(run).archetypes.saboteur.damageBudget === expected, 'row-1 battle escalates one row step');
+});
+
+// --- run progression ---------------------------------------------------------
+test('progression: HP persists between battles; Core is clamped to >=1', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  enterNode(run, firstBattleNodeId(run));
+  const b1 = battleFrom(run);
+  b1.player.components.weapon.hp = 30;
+  b1.player.components.core.hp = 50;
+  captureBattleResult(run, b1);
+  advanceFromNode(run);
+  assert(run.status === 'map' && run.offer === null, 'back on the map, offer cleared');
+  const b2 = battleFrom(run);
+  assert(b2.player.components.weapon.hp === 30, 'weapon HP carried');
+  assert(b2.player.components.core.hp === 50, 'core HP carried');
+  // a near-dead core still starts the next battle alive
+  run.persistentHp.core = 0;
+  assert(battleFrom(run).player.components.core.hp === 1, 'core clamped to >=1');
+});
+
+test('progression: isFinalBattle is true only on the boss node', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.currentNodeId = firstBattleNodeId(run);
+  assert(isFinalBattle(run) === false, 'a row-1 battle is not final');
+  run.currentNodeId = run.map.bossId;
+  assert(isFinalBattle(run) === true, 'the boss node is final');
+});
+
+test('progression: a destroyed owned part is dead next battle until repaired', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.persistentHp.weapon = 0;
+  let s = battleFrom(run);
+  assert(s.player.components.weapon.hp === 0, 'weapon starts dead');
+  assert(bridgeFor(s).canOpen('weapon', true) === false, 'dead part cannot open');
+  applyRewardChoice(run, { type: 'repair', id: 'weapon', amount: 'full' });
+  s = battleFrom(run);
+  assert(s.player.components.weapon.hp === s.player.components.weapon.maxHp, 'repaired to full');
+  assert(bridgeFor(s).canOpen('weapon', true) === true, 'revived part opens again');
+});
+
+// --- reward generation -------------------------------------------------------
+test('rewards: offer honors size, never offers an owned component, and is deterministic', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const a = rollRewardOffer(run);
+  assert(a.length === CONFIG.run.reward.offerSize, 'offer is offerSize');
+  assert(a.every((r) => r.type !== 'component' || !run.owned[r.id]), 'never offers an owned component');
+  assert(a.some((r) => r.type === 'component'), 'pity rule guarantees a component while unowned remain');
+  const b = rollRewardOffer(run);
+  assert(JSON.stringify(a) === JSON.stringify(b), 'same seed+battleIndex → identical offer');
+});
+
+test('rewards: combo-mods are only offered for currently-formable combos', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // not launchpad
+  const ids = rewardPools(run).comboMod.map((m) => m.modId);
+  assert(ids.includes('glassShatter'), 'Glass (weapon+engine) is formable → offerable');
+  assert(!ids.includes('meltdownCore'), 'Meltdown (launchpad+engine) not formable → not offered');
+});
+
+test('rewards: repair only appears when something is damaged', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  assert(rewardPools(run).repair.length === 0, 'all full → no repair');
+  run.persistentHp.weapon = 10;
+  assert(rewardPools(run).repair.some((r) => r.id === 'weapon'), 'damaged weapon → repair offered');
+});
+
+test('rewards: applyRewardChoice mutates the run per type', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  applyRewardChoice(run, { type: 'component', id: 'launchpad' });
+  assert(run.owned.launchpad && run.persistentHp.launchpad === moddedMaxHp(run, 'launchpad'), 'component acquired at full HP');
+  applyRewardChoice(run, { type: 'comboMod', modId: 'glassShatter', combo: 'glass', table: 'offense', patch: { mult: 2.5 } });
+  assert(run.comboMods.glass.mult === 2.5, 'combo-mod recorded');
+  applyRewardChoice(run, { type: 'componentMod', modId: 'engineShatter', id: 'engine', patch: { effect: { shatter: { dmgPerPotency: 3.0 } } } });
+  assert(run.componentMods.engine.effect.shatter.dmgPerPotency === 3.0, 'component-mod recorded');
+});
+
+test('rewards: an all-owned, all-repaired, all-modded run still yields a non-empty offer', () => {
+  const run = createRun(CONFIG, { components: COMPONENT_IDS.filter((id) => id !== 'core') });
+  for (const id of COMPONENT_IDS) run.persistentHp[id] = moddedMaxHp(run, id);
+  for (const modId of Object.keys(CONFIG.run.comboModCatalog)) if (modId !== '_comment') run.rewardsTaken.push({ type: 'comboMod', modId });
+  for (const modId of Object.keys(CONFIG.run.componentModCatalog)) if (modId !== '_comment') run.rewardsTaken.push({ type: 'componentMod', modId });
+  const offer = rollRewardOffer(run);
+  assert(offer.length >= 1, 'never empty (repair fallback)');
+});
+
+// --- backward compatibility --------------------------------------------------
+test('back-compat: a plain createState leaves every component owned (gating is a no-op)', () => {
+  const s = createState(CONFIG);
+  assert(COMPONENT_IDS.every((id) => isOwned(s.player.components[id])), 'all owned by default');
+});
+
+// =============================================================================
+//  node map (core/map.js)
+// =============================================================================
+test('map: a generated map is a connected DAG whose boss is reachable', () => {
+  const v = validateMap(generateMap(CONFIG, 3), CONFIG);
+  assert(v.connected, 'every node reachable from start');
+  assert(v.bossReachable, 'boss reachable');
+});
+
+test('map: every non-start node has at least one inbound edge (coverage pass)', () => {
+  const map = generateMap(CONFIG, 11);
+  const inbound = new Set(allNodes(map).flatMap((n) => n.next));
+  for (const n of allNodes(map)) {
+    if (n.id === map.startId) continue;
+    assert(inbound.has(n.id), `${n.id} has an inbound edge`);
+  }
+});
+
+test('map: guarantees met — first content row all enemy, single boss last, battle before boss, >=1 shop & heal, >=minElites', () => {
+  const v = validateMap(generateMap(CONFIG, 7), CONFIG);
+  assert(v.guaranteesMet, `guarantees: ${JSON.stringify(v)}`);
+  assert(v.elites >= CONFIG.run.map.act1.minElites, 'min elites');
+});
+
+test('map: deterministic by seed; differs across seeds', () => {
+  assert(JSON.stringify(generateMap(CONFIG, 5)) === JSON.stringify(generateMap(CONFIG, 5)), 'same seed → identical');
+  assert(JSON.stringify(generateMap(CONFIG, 5)) !== JSON.stringify(generateMap(CONFIG, 6)), 'different seed → different');
+});
+
+test('map: row count and per-row width respect config bounds', () => {
+  const map = generateMap(CONFIG, 9);
+  assert(map.rows.length === CONFIG.run.map.act1.rows, 'row count = config rows');
+  const [mn, mx] = CONFIG.run.map.act1.nodesPerRow;
+  for (let r = 1; r <= map.rows.length - 2; r++) {
+    assert(map.rows[r].length >= mn && map.rows[r].length <= mx, `row ${r} width in [${mn},${mx}]`);
+  }
+  assert(map.rows[0].length === 1 && map.rows[map.rows.length - 1].length === 1, 'single start + single boss');
+});
+
+test('map: battle nodes carry an encounter drawn from the right pool', () => {
+  const map = generateMap(CONFIG, 4);
+  const mc = CONFIG.run.map;
+  for (const n of allNodes(map)) {
+    if (n.type === 'enemy' || n.type === 'elite' || n.type === 'boss') {
+      assert(n.encounter && n.encounter.enemies.length > 0, `${n.id} has a roster`);
+      const pool = n.type === 'boss' ? mc.bossPool : (n.type === 'elite' ? mc.enemyPools.elite : mc.enemyPools[bandForRow(n.row, CONFIG)]);
+      assert(n.encounter.enemies.every((e) => pool.includes(e)), `${n.id} roster from its pool`);
+    } else {
+      assert(n.encounter === null, `${n.id} (non-battle) has no encounter`);
+    }
+  }
+});
+
+test('map: reachableNext returns the current node forward links; boss has none', () => {
+  const map = generateMap(CONFIG, 2);
+  const fromStart = reachableNext(map, map.startId).map((n) => n.id);
+  assert(fromStart.length >= 1 && fromStart.every((id) => nodeById(map, id).row === 1), 'start → row 1 nodes');
+  assert(reachableNext(map, map.bossId).length === 0, 'boss is terminal');
+  assert(isBossNode(nodeById(map, map.bossId)), 'boss node flagged');
+});
+
+// =============================================================================
+//  run: map navigation + economy + node resolution
+// =============================================================================
+test('run: a run with a map opens on the map at the start node', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  assert(run.status === 'map', 'status map');
+  assert(run.mapPos === run.map.startId && run.currentNodeId === null, 'standing on start');
+  assert(run.scrap === (CONFIG.run.economy.startScrap || 0), 'start scrap');
+});
+
+test('node: enterNode rejects an unreachable node, accepts a reachable one', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  enterNode(run, run.map.bossId);                 // not reachable from start
+  assert(run.currentNodeId === null && run.status === 'map', 'unreachable ignored');
+  const id = reachableNext(run.map, run.mapPos)[0].id;
+  enterNode(run, id);
+  assert(run.currentNodeId === id, 'reachable accepted');
+});
+
+test('node: entering a battle node sets inBattle and buildBattleUi pulls that node roster', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const id = firstBattleNodeId(run);
+  enterNode(run, id);
+  assert(run.status === 'inBattle', 'inBattle');
+  const ui = buildBattleUi(run, CONFIG.ui);
+  assert(JSON.stringify(ui.enemies) === JSON.stringify(nodeById(run.map, id).encounter.enemies), 'roster from node');
+});
+
+test('node: advanceFromNode returns to the map; boss node wins the run', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const id = firstBattleNodeId(run);
+  enterNode(run, id); advanceFromNode(run);
+  assert(run.status === 'map' && run.mapPos === id, 'back on the map, standing on the cleared node');
+  run.currentNodeId = run.map.bossId; advanceFromNode(run);
+  assert(run.status === 'won', 'boss → won');
+});
+
+test('node: heal restores percent HP to all owned parts incl. core, clamped to max', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.persistentHp.core = 10; run.persistentHp.weapon = 5;
+  applyHeal(run);
+  const pct = CONFIG.run.map.heal.percent;
+  assert(run.persistentHp.core === Math.min(moddedMaxHp(run, 'core'), 10 + Math.round(moddedMaxHp(run, 'core') * pct)), 'core healed');
+  assert(run.persistentHp.weapon === 5 + Math.round(moddedMaxHp(run, 'weapon') * pct), 'weapon healed');
+  run.persistentHp.engine = moddedMaxHp(run, 'engine'); applyHeal(run);
+  assert(run.persistentHp.engine === moddedMaxHp(run, 'engine'), 'clamped at max');
+});
+
+test('node: upgrade offer is free and mod-only', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'engine', 'launchpad'] });
+  rollUpgradeOffer(run);
+  assert(run.offerFree === true, 'flagged free');
+  assert(run.offer.every((o) => o.type === 'comboMod' || o.type === 'componentMod' || o.type === 'repair'), 'mods only');
+});
+
+test('economy: awardScrap adds tier reward + per-row bonus', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const eco = CONFIG.run.economy;
+  const node = { tier: 'elite', row: 3 };
+  const before = run.scrap;
+  awardScrap(run, node);
+  assert(run.scrap === before + eco.scrapReward.elite + eco.scrapPerRow * 3, 'elite + row bonus');
+});
+
+test('economy: shop purchase deducts price and applies; rejects when unaffordable or sold', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'engine'] }); // launchpad/tower/generator unowned
+  buildShop(run);
+  const comp = run.shop.items.find((i) => i.type === 'component');
+  assert(comp, 'a component is for sale');
+  run.scrap = comp.price - 1;
+  assert(applyShopPurchase(run, comp).ok === false, 'rejected: unaffordable');
+  assert(!run.owned[comp.id], 'not acquired');
+  run.scrap = comp.price + 5;
+  assert(applyShopPurchase(run, comp).ok === true, 'bought');
+  assert(run.owned[comp.id] && run.scrap === 5, 'acquired + scrap deducted');
+  assert(applyShopPurchase(run, comp).ok === false, 'cannot buy the same item twice');
+});
+
+test('economy: shop prices scale with map depth', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.currentNodeId = run.map.bossId; // deepest row
+  buildShop(run);
+  const deepRepair = run.shop.items.find((i) => i.type === 'repairAll').price;
+  run.currentNodeId = firstBattleNodeId(run); // row 1
+  buildShop(run);
+  const shallowRepair = run.shop.items.find((i) => i.type === 'repairAll').price;
+  assert(deepRepair > shallowRepair, `deeper shop dearer (${deepRepair} > ${shallowRepair})`);
+});
+
+test('escalation: damage budget scales by row and tier, split across the roster', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const eco = CONFIG.run.economy;
+  // find an elite node to read its row + tier mult; its budget splits over the roster
+  const elite = Object.values(run.map.byId).find((n) => n.type === 'elite');
+  run.currentNodeId = elite.id;
+  const split = eco.rosterBudgetSplit ? elite.encounter.enemies.length : 1;
+  const expected = Math.round(CONFIG.archetypes.brute.damageBudget * (eco.perRowBudgetMult ** elite.row) * eco.tierBudgetMult.elite / split);
+  assert(effectiveConfig(run).archetypes.brute.damageBudget === expected, `elite budget = row^mult × tier / roster, got ${effectiveConfig(run).archetypes.brute.damageBudget} want ${expected}`);
+});
+
+// =============================================================================
+//  run pacing: Breach + tier HP scaling + Overheat + fast-win economy
+// =============================================================================
+
+// plant a synthetic node in a run's map so buildBattleUi/effectiveConfig read it
+const plantNode = (run, node) => {
+  run.map.byId.__test = { id: '__test', ...node };
+  run.currentNodeId = '__test';
+  return run;
+};
+const NORMAL_NODE = { row: 1, col: 0, tier: 'normal', type: 'enemy', encounter: { enemies: ['saboteur'], creditSeconds: 16 } };
+const ELITE_NODE = { row: 3, col: 0, tier: 'elite', type: 'elite', encounter: { enemies: ['disruptor', 'brute'], creditSeconds: 16 } };
+const BOSS_NODE = { row: 5, col: 0, tier: 'boss', type: 'boss', encounter: { enemies: ['dreadnought'], creditSeconds: 18 } };
+
+test('overheat: multiplier is 1 at/under par, compounds past it, off when unset', () => {
+  const s = createState(CONFIG, { overheat: { par: 4, rampPerRound: 1.25 } });
+  s.round = 3; assert(overheatMult(s) === 1, 'under par → 1');
+  s.round = 4; assert(overheatMult(s) === 1, 'at par → 1');
+  s.round = 5; assert(near(overheatMult(s), 1.25, 0.001), '1 past par → ×1.25');
+  s.round = 7; assert(near(overheatMult(s), 1.25 ** 3, 0.001), '3 past par compounds');
+  const single = createState(CONFIG);
+  single.round = 20;
+  assert(single.overheat === null && overheatMult(single) === 1, 'single battle → no overheat ever');
+});
+
+test('overheat: currentBudget scales with the ramp', () => {
+  const s = createState(CONFIG, { overheat: { par: 2, rampPerRound: 1.5 } });
+  const base = currentBudget(s, s.enemies[0]);
+  s.round = 3;
+  assert(near(currentBudget(s, s.enemies[0]), base * 1.5, 0.01), 'budget ×1.5 one round past par');
+});
+
+test('enemyHpMult: scales enemy components only; player untouched; default 1', () => {
+  const s = createState(CONFIG, { enemyHpMult: 0.5 });
+  assert(s.enemies[0].components.core.maxHp === Math.round(CONFIG.components.core.hp * 0.5), 'enemy core halved');
+  assert(s.enemies[0].components.generator.hp === Math.round(CONFIG.components.generator.hp * 0.5), 'enemy generator halved');
+  assert(s.player.components.core.maxHp === CONFIG.components.core.hp, 'player core untouched');
+  const plain = createState(CONFIG);
+  assert(plain.enemies[0].components.core.maxHp === CONFIG.components.core.hp, 'default 1 → unscaled');
+});
+
+test('breach: enemy Core is exposed by the generator alone in run battles; player threshold unchanged', () => {
+  const run = plantNode(createRun(CONFIG, { loadout: 'burst' }), NORMAL_NODE);
+  const s = battleFrom(run);
+  const cfg = s.config;
+  assert(cfg.coreShield.enemyThreshold === CONFIG.run.enemyShieldThreshold, 'threshold injected');
+  const foe = s.enemies[0];
+  assert(coreShieldUp(foe, cfg) === true, 'enemy shield up at start');
+  foe.components.generator.hp = 0;
+  assert(coreShieldUp(foe, cfg) === false, 'generator kill breaches the enemy Core');
+  // the player still uses the full threshold (scaled to owned mass)
+  const st = coreShieldStatus(s.player, cfg);
+  const ownedMass = CONFIG.run.loadouts.burst.components.reduce((sum, id) => sum + (CONFIG.coreShield.contributors[id] || 0), 0);
+  const totalMass = Object.values(CONFIG.coreShield.contributors).reduce((a, b) => a + b, 0);
+  assert(st.threshold === Math.round(CONFIG.coreShield.threshold * (ownedMass / totalMass)), 'player threshold from base 100, not 60');
+});
+
+test('breach: single-battle (TRS Command) core shield is unchanged', () => {
+  const s = createState(CONFIG);
+  s.enemies[0].components.generator.hp = 0;
+  assert(coreShieldUp(s.enemies[0], CONFIG) === true, 'generator alone does not breach at threshold 100');
+});
+
+test('map: every path to the boss crosses >= minBattlesBeforeBoss battles; no crossing edges (seeds 0..60)', () => {
+  for (let seed = 0; seed <= 60; seed++) {
+    const v = validateMap(generateMap(CONFIG, seed), CONFIG);
+    assert(v.minBattlesMet, `seed ${seed}: min battles ${v.minBattles}`);
+    assert(v.noCrossings, `seed ${seed}: edges cross`);
+    assert(v.guaranteesMet, `seed ${seed}: guarantees`);
+  }
+});
+
+test('map: late-band normal battles field at most the elite roster size', () => {
+  assert(CONFIG.run.map.rosterSize.late <= CONFIG.run.map.rosterSize.elite, 'late normals never out-crowd elites');
+});
+
+test('rewards: elite win offers a wider spread with 2 picks; offer closes after the last pick', () => {
+  const run = plantNode(createRun(CONFIG, { loadout: 'burst' }), ELITE_NODE);
+  const offer = rollRewardOffer(run);
+  assert(offer.length === CONFIG.run.reward.eliteOffer.size, 'elite offer size 4');
+  assert(run.offerPicks === CONFIG.run.reward.eliteOffer.picks, '2 picks granted');
+  const first = run.offer[0];
+  applyRewardChoice(run, first);
+  assert(Array.isArray(run.offer) && run.offer.length === offer.length - 1, 'offer stays open minus the taken card');
+  assert(run.offerPicks === 1, 'one pick left');
+  applyRewardChoice(run, run.offer[0]);
+  assert(run.offer === null && run.offerPicks === 0, 'offer closes after the second pick');
+});
+
+test('rewards: a normal win still offers offerSize cards with a single pick', () => {
+  const run = plantNode(createRun(CONFIG, { loadout: 'burst' }), NORMAL_NODE);
+  const offer = rollRewardOffer(run);
+  assert(offer.length === CONFIG.run.reward.offerSize, 'normal offer size 3');
+  assert(run.offerPicks === 1, 'single pick');
+  applyRewardChoice(run, offer[0]);
+  assert(run.offer === null, 'offer closes after one pick');
+});
+
+test('economy: fast-win bonus pays at/under par and not above; boss pays nothing', () => {
+  const eco = CONFIG.run.economy;
+  const par = CONFIG.run.overheat.parRounds.normal;
+  let run = createRun(CONFIG, { loadout: 'burst' });
+  awardScrap(run, { tier: 'normal', row: 2 }, par);            // at par → bonus
+  assert(run.scrap === eco.scrapReward.normal + eco.scrapPerRow * 2 + eco.fastWinScrap.normal, 'fast win adds bonus');
+  assert(run.lastBattleReport.fastWin === true && run.lastBattleReport.par === par, 'report records the fast win');
+  run = createRun(CONFIG, { loadout: 'burst' });
+  awardScrap(run, { tier: 'normal', row: 2 }, par + 1);        // over par → no bonus
+  assert(run.scrap === eco.scrapReward.normal + eco.scrapPerRow * 2, 'no bonus over par');
+  assert(run.lastBattleReport.fastWin === false, 'report records the slow win');
+  run = createRun(CONFIG, { loadout: 'burst' });
+  awardScrap(run, { tier: 'boss', row: 5 }, 3);
+  assert(run.scrap === 0, 'boss win pays nothing (the run ends)');
+});
+
+test('shop: sells single-part repairs priced from prices.repair × depth', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.persistentHp.weapon = 10;                                 // damage something
+  const shopNode = Object.values(run.map.byId).find((n) => n.type === 'shop');
+  run.currentNodeId = shopNode.id;
+  buildShop(run);
+  const repair = run.shop.items.find((i) => i.type === 'repair');
+  assert(repair, 'a single-part repair is on sale');
+  const rowMult = 1 + CONFIG.run.economy.priceRowMult * shopNode.row;
+  assert(repair.price === Math.round(CONFIG.run.economy.prices.repair * rowMult), 'priced from prices.repair × row');
+});
+
+test('rewards: hpBonus mod on a damaged part heals by the bonus and clamps to modded max', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  run.persistentHp.core = 100;                                  // damaged core
+  applyRewardChoice(run, { type: 'componentMod', modId: 'coreHp', id: 'core', patch: { hpBonus: 40 } });
+  assert(run.persistentHp.core === 140, 'heals by exactly the bonus');
+  assert(moddedMaxHp(run, 'core') === CONFIG.components.core.hp + 40, 'max reflects the mod');
+});
+
+test('mods: the new catalog entries merge into the effective config', () => {
+  const run = createRun(CONFIG, { components: ['weapon', 'generator', 'tower', 'launchpad'] });
+  const cat = CONFIG.run.comboModCatalog;
+  applyRewardChoice(run, { type: 'comboMod', modId: 'feedbackArc', combo: 'feedback', table: 'offense', patch: cat.feedbackArc.patch });
+  applyRewardChoice(run, { type: 'comboMod', modId: 'reactiveMirror', combo: 'reactivePlating', table: 'defense', patch: cat.reactiveMirror.patch });
+  applyRewardChoice(run, { type: 'componentMod', modId: 'weaponShield', id: 'weapon', patch: CONFIG.run.componentModCatalog.weaponShield.patch });
+  const cfg = effectiveConfig(run);
+  assert(cfg.effects.synergy.combos.feedback.chainFrac === 0.75, 'feedback arc merged');
+  assert(cfg.defense.combos.reactivePlating.reflectFrac === 0.8, 'reactive mirror merged');
+  assert(cfg.defense.shield.absorbPerPotency === 11, 'weapon shield verb merged');
+  assert(CONFIG.defense.shield.absorbPerPotency === 8, 'base config untouched');
+});
+
+test('rewards: every catalog mod has i18n name+desc in the catalogs (offer-render safety)', () => {
+  for (const [group, cat] of [['comboMod', CONFIG.run.comboModCatalog], ['componentMod', CONFIG.run.componentModCatalog]]) {
+    for (const modId of Object.keys(cat)) {
+      if (modId === '_comment') continue;
+      for (const loc of ['en', 'zh-Hant']) {
+        const c = CATALOGS_FOR_TEST[loc];
+        const entry = c.reward?.[group]?.[modId];
+        assert(entry && entry.name && entry.desc, `${loc}: reward.${group}.${modId} has name+desc`);
+      }
+    }
+  }
+});
+
+// --- pacing simulation: a scripted competent player must land in the round bands
+const simCombo = (v) => ({ items: [{ value: v }] });
+function simBattle(owned, node, seed) {
+  const run = plantNode(createRun(CONFIG, { components: owned, seed }), node);
+  const s = createState(effectiveConfig(run), buildBattleUi(run, CONFIG.ui));
+  applyOwnership(s, run);
+  applyPersistentHp(s, run);
+  startAttackBuild(s);
+  // solve orders a competent player uses: Glass pair first; Shield then Repair.
+  // Defense is capped at 2 solves — the defenseCreditMult budget in real play.
+  const ATK_ORDER = ['weapon', 'engine', 'generator', 'launchpad', 'tower'];
+  const DEF_ORDER = ['weapon', 'generator', 'engine', 'tower', 'launchpad'];
+  const attackParts = ATK_ORDER.filter((id) => owned.includes(id) && ATTACK_EFFECT[id]);
+  while (s.phase !== PHASES.WON && s.phase !== PHASES.LOST && s.round <= 20) {
+    const foe = s.enemies.find((e) => isAlive2(e.components.core));
+    const tgt = () => (isAlive2(foe.components.generator) ? 'generator' : 'core');
+    let solves = 0;
+    for (const part of attackParts) {
+      if (solves >= 3 || !isAlive2(s.player.components[part]) || s.cooldowns[part] > 0) continue;
+      makePendingAttack(s, part, simCombo(6));
+      if (s.pendingAction) { finalizeAttackTarget(s, foe.eid, tgt()); solves++; }
+    }
+    commitAttack(s, foe.eid, tgt());
+    if (s.phase === PHASES.WON || s.phase === PHASES.LOST) break;
+    let d = 0;
+    for (const part of DEF_ORDER.filter((id) => owned.includes(id) && DEFENSE_VERB[id] && isAlive2(s.player.components[id]) && !(s.cooldowns[id] > 0))) {
+      if (d >= 2) break;
+      makePendingDefense(s, part, simCombo(6));
+      if (s.pendingDefense) {
+        const weakest = Object.entries(s.player.components)
+          .filter(([, c]) => c.owned !== false && c.hp < c.maxHp && c.hp > 0)
+          .sort((a, b) => a[1].hp / a[1].maxHp - b[1].hp / b[1].maxHp)[0];
+        finalizeDefenseTarget(s, DEFENSE_VERB[part] === 'repair' && weakest ? weakest[0] : 'core');
+        d++;
+      }
+    }
+    commitDefense(s);
+  }
+  return { rounds: s.round, won: s.phase === PHASES.WON };
+}
+const isAlive2 = (c) => c.hp > 0;
+
+test('pacing: scripted player lands in the tier round bands (regression net for tuning)', () => {
+  const KIT3 = ['weapon', 'engine', 'generator'];
+  const KIT5 = ['weapon', 'engine', 'generator', 'tower', 'launchpad'];
+  for (let seed = 1; seed <= 3; seed++) {
+    const normal = simBattle(KIT3, NORMAL_NODE, seed);
+    assert(normal.won && normal.rounds <= 5, `row-1 normal won in <=5 rounds (got ${normal.won ? normal.rounds : 'loss'})`);
+    const elite = simBattle(KIT5, ELITE_NODE, seed);
+    assert(elite.won && elite.rounds <= 8, `elite won in <=8 rounds (got ${elite.won ? elite.rounds : 'loss'})`);
+    const boss = simBattle(KIT5, BOSS_NODE, seed);
+    assert(boss.won && boss.rounds >= 5 && boss.rounds <= 10, `boss won in 5..10 rounds (got ${boss.won ? boss.rounds : 'loss'})`);
+  }
+});
+
+test('run: post-battle field repair heals surviving parts and never revives dead ones', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  const pct = CONFIG.run.postBattleRepair.percent;
+  run.persistentHp.weapon = 10;
+  run.persistentHp.engine = 0;                                  // destroyed stays destroyed
+  applyPostBattleRepair(run);
+  assert(run.persistentHp.weapon === 10 + Math.round(moddedMaxHp(run, 'weapon') * pct), 'damaged part patched up');
+  assert(run.persistentHp.engine === 0, 'destroyed part not revived');
+  run.persistentHp.core = moddedMaxHp(run, 'core');
+  applyPostBattleRepair(run);
+  assert(run.persistentHp.core === moddedMaxHp(run, 'core'), 'clamped at max');
+});
+
+test('run: entering the boss node fully restores the owned kit (staging)', () => {
+  const run = createRun(CONFIG, { loadout: 'burst' });
+  // walk the map graph to a last-content-row node, then step onto the boss
+  const lastContent = run.map.rows.length - 2;
+  run.mapPos = run.map.rows[lastContent][0].id;
+  run.persistentHp.weapon = 5;
+  run.persistentHp.engine = 0;
+  enterNode(run, run.map.bossId);
+  assert(run.status === 'inBattle', 'boss battle starts');
+  assert(run.persistentHp.weapon === moddedMaxHp(run, 'weapon'), 'damaged part restored');
+  assert(run.persistentHp.engine === moddedMaxHp(run, 'engine'), 'destroyed part revived for the final battle');
+});
+
+test('map: no elite ever spawns before eliteMinRow', () => {
+  for (let seed = 0; seed <= 60; seed++) {
+    const map = generateMap(CONFIG, seed);
+    for (const n of allNodes(map)) {
+      assert(!(n.type === 'elite' && n.row < CONFIG.run.map.act1.eliteMinRow), `seed ${seed}: elite at row ${n.row}`);
+    }
+  }
+});
+
+// =============================================================================
+//  playtest round 2: defense repeat penalty, defense credit, launchpad grid mod
+// =============================================================================
+
+test('defense replay: plays are counted per part and reset each defense phase', () => {
+  const s = fresh();
+  startDefenseBuild(s);
+  makePendingDefense(s, 'weapon', combo(5)); finalizeDefenseTarget(s, 'core');
+  makePendingDefense(s, 'weapon', combo(5)); finalizeDefenseTarget(s, 'core');
+  makePendingDefense(s, 'generator', combo(5)); finalizeDefenseTarget(s, 'generator');
+  assert(s.defensePlays.weapon === 2 && s.defensePlays.generator === 1, 'plays counted per part');
+  startDefenseBuild(s);
+  assert(Object.keys(s.defensePlays).length === 0, 'fresh defense phase resets the counter');
+});
+
+test('bridge: replaying the same part congests its TRS (+size per repeat, clamped to maxSize; attack untouched)', () => {
+  const s = fresh({ creditSeconds: 500 });
+  startDefenseBuild(s);
+  const bridge = createBridge({ getState: () => s, overlayEl: null, PuzzleClass: FakePuzzle, evaluateFn: evaluate });
+  const rp = CONFIG.puzzle.repeatPenalty;
+  const solveShield = () => { s.activePuzzle.instance.fireComplete([{ typeKey: 'shield' }]); finalizeDefenseTarget(s, 'core'); };
+  const sizes = [];
+  const blockers = [];
+  for (let i = 0; i < 7; i++) {
+    assert(bridge.open('weapon') === true, `defense replay ${i + 1} can open`);
+    sizes.push(s.activePuzzle.instance.opts.generate.size);
+    blockers.push(s.activePuzzle.instance.opts.generate.routePlan.blockerDensity);
+    solveShield();
+  }
+  for (let i = 1; i < 7; i++) {
+    const expected = Math.min(sizes[0] + i * rp.sizePerRepeat, rp.maxSize);
+    assert(sizes[i] === expected, `replay ${i + 1} grid ${expected} (got ${sizes[i]}, base ${sizes[0]})`);
+    const effRepeats = (expected - sizes[0]) / rp.sizePerRepeat;
+    assert(near(blockers[i], blockers[0] + effRepeats * rp.blockerPerRepeat, 0.001), `replay ${i + 1} denser blockers`);
+  }
+  assert(sizes[6] === rp.maxSize, `grid never exceeds ${rp.maxSize}×${rp.maxSize}`);
+  // a DIFFERENT part is unaffected by weapon's replays
+  assert(bridge.open('generator') === true, 'other part opens');
+  assert(s.activePuzzle.instance.opts.generate.size === sizes[0], 'other part gets the base grid');
+  s.activePuzzle.instance.fireFail();
+});
+
+test('defense build gets defenseCreditMult of the budget; attack build keeps the full budget', () => {
+  const s = fresh({ creditSeconds: 20 });
+  assert(s.creditLeftMs === 20000, 'attack build: full credit');
+  startDefenseBuild(s);
+  assert(s.creditLeftMs === Math.round(20000 * CONFIG.phase.defenseCreditMult), 'defense build: reduced credit');
+});
+
+test('mods: the launchpadGridPlus cascade patch merges into the effective config only', () => {
+  const run = createRun(CONFIG, { components: ['launchpad', 'weapon'] });
+  const entry = CONFIG.run.componentModCatalog.launchpadGridPlus;
+  applyRewardChoice(run, { type: 'componentMod', modId: 'launchpadGridPlus', id: entry.component, patch: entry.patch });
+  const cfg = effectiveConfig(run);
+  assert(cfg.cascade.launchpadHealthy.sizeDelta === -1, 'modded healthy pad eases the grid by 1 (5×5)');
+  assert(CONFIG.cascade.launchpadHealthy.sizeDelta === 0, 'base config untouched');
 });

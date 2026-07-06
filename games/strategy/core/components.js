@@ -51,12 +51,16 @@ export function makeComponent(id, cfg) {
     hp: cfg.hp,
     maxHp: cfg.hp,
     baseArmor: cfg.armor ?? 0,
+    owned: true,    // run meta-layer flips this off for parts the player hasn't acquired; the
+                    // legacy single-battle path leaves everything owned (full back-compat).
     statuses: {},   // { freeze:{turns,potency}, burning:{turns,potency,dot}, shatter:{turns}, confuse:{turns}, ... }
     defenses: {},   // pre-loaded defensive buffs for the upcoming resolve { shield, repair, cleanse, harden, overclock }
   };
 }
 
 export const isAlive = (c) => c.hp > 0;
+/** Owned = playable. Unowned parts can't open their TRS and contribute nothing to systems. */
+export const isOwned = (c) => c.owned !== false;
 export const hpFrac = (c) => (c.maxHp > 0 ? Math.max(0, c.hp) / c.maxHp : 0);
 
 export const hasStatus = (c, key) => !!c.statuses[key] && c.statuses[key].turns > 0;

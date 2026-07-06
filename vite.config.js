@@ -24,6 +24,7 @@ export default defineConfig({
         menu: resolve(__dirname, 'index.html'),
         puzzle: resolve(__dirname, 'games/grid-path-puzzle/index.html'),
         strategy: resolve(__dirname, 'games/strategy/index.html'),
+        strategyRun: resolve(__dirname, 'games/strategy-run/index.html'),
       },
     },
   },

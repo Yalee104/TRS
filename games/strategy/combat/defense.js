@@ -11,7 +11,7 @@
 //  next defense resolve.
 // =============================================================================
 
-import { DEFENSE_VERB, isAlive } from '../core/components.js';
+import { DEFENSE_VERB, isAlive, isOwned } from '../core/components.js';
 import { systemState, coreShieldUp, effectiveEvasion } from '../core/cascade.js';
 import { conditionReport } from '../core/firepower.js';
 import { logEvent } from '../core/state.js';
@@ -26,6 +26,9 @@ const NAME = (state, id) => state.player.components[id].name;
 export function makePendingDefense(state, componentId, combo) {
   const verb = DEFENSE_VERB[componentId];
   if (!verb) return null;
+  // count this phase's plays of the part — replays get a congested TRS (bridge reads this)
+  state.defensePlays = state.defensePlays || {};
+  state.defensePlays[componentId] = (state.defensePlays[componentId] || 0) + 1;
   state.pendingDefense = { side: 'defense', component: componentId, verb, potency: comboPotency(combo), label: combo?.label || verb, target: null };
   logEvent(state, `Solved ${state.player.components[componentId].name} TRS → ${verb} (potency ${state.pendingDefense.potency.toFixed(1)}). Pick a part to protect.`);
   return state.pendingDefense;
@@ -130,7 +133,7 @@ export function resolveDefense(state) {
 
     for (const entry of entries) {
       let target = player.components[entry.component];
-      if (!target || !isAlive(target)) target = (isAlive(player.components.core) && !coreShieldUp(player, config)) ? player.components.core : null;
+      if (!target || !isOwned(target) || !isAlive(target)) target = (isAlive(player.components.core) && !coreShieldUp(player, config)) ? player.components.core : null;
       if (!target) continue;
       const p = profiles[target.id];
       const incoming = entry.share * budget;

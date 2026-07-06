@@ -11,17 +11,22 @@
 //    • Launch Pad — destroyed → TRS congests (bigger grid, more blockers, less budget)
 // =============================================================================
 
-import { isAlive, hpFrac, hasStatus } from './components.js';
+import { isAlive, isOwned, hpFrac, hasStatus } from './components.js';
+
+/** A part provides its system only if the owner actually has it AND it's alive. */
+const works = (c) => isOwned(c) && isAlive(c);
 
 export function systemState(aircraft, config) {
   const c = aircraft.components;
   const casc = config.cascade;
 
-  const generatorAlive = isAlive(c.generator);
-  const weaponAlive = isAlive(c.weapon);
-  const towerAlive = isAlive(c.tower);
-  const engineAlive = isAlive(c.engine);
-  const launchpadAlive = isAlive(c.launchpad);
+  // Unowned parts (run meta-layer) behave like missing ones: no system benefit. The
+  // Core *shield* is intentionally NOT gated this way (see coreShieldStatus) so an
+  // early run with few parts isn't born with an exposed Core.
+  const generatorAlive = works(c.generator);
+  const weaponAlive = works(c.weapon);
+  const towerAlive = works(c.tower);
+  const engineAlive = works(c.engine);
 
   return {
     // Generator → Core armor (gradient) + brownout (cliff)
@@ -39,21 +44,25 @@ export function systemState(aircraft, config) {
     evasion: engineAlive ? casc.evasionAtFullEngine * hpFrac(c.engine) : 0,
     hasInitiative: engineAlive,
 
-    // Launch Pad → TRS quality (GRADIENT while alive, cliff when destroyed):
-    //   healthy → eased grid (bonus × HP); damaged → fades to baseline; dead → congested.
-    trsMods: launchpadAlive ? launchpadBonus(c.launchpad, casc) : { ...casc.launchpadDestroyed },
+    // Launch Pad → TRS quality, STEPPED (see launchpadTrsMods):
+    //   never owned → neutral; healthy → launchpadHealthy; below the damage
+    //   threshold → launchpadDamaged; destroyed → launchpadDestroyed cliff.
+    trsMods: launchpadTrsMods(c.launchpad, casc),
   };
 }
 
-/** Eased-grid bonus from a living Launch Pad, scaled by its HP (full HP = full bonus). */
-function launchpadBonus(launchpad, casc) {
-  const full = casc.launchpadFullBonus || {};
-  const f = hpFrac(launchpad);
-  return {
-    sizeDelta: Math.round((full.sizeDelta || 0) * f),
-    blockerBonus: (full.blockerBonus || 0) * f,
-    trapBonus: (full.trapBonus || 0) * f,
-  };
+/**
+ * The Launch Pad's TRS grid contribution, as HP steps rather than a gradient:
+ *   • not OWNED   → neutral (you can't lose a system you never had)
+ *   • > damagedBelow HP → casc.launchpadHealthy   (baseline 6×6 by default)
+ *   • ≤ damagedBelow HP → casc.launchpadDamaged   (congests to 7×7)
+ *   • destroyed         → casc.launchpadDestroyed (the 8×8 cliff)
+ */
+function launchpadTrsMods(launchpad, casc) {
+  if (!isOwned(launchpad)) return { sizeDelta: 0, blockerBonus: 0, trapBonus: 0 };
+  if (!isAlive(launchpad)) return { ...casc.launchpadDestroyed };
+  const threshold = casc.launchpadDamagedBelow ?? 0.5;
+  return hpFrac(launchpad) > threshold ? { ...(casc.launchpadHealthy || {}) } : { ...(casc.launchpadDamaged || {}) };
 }
 
 /**
@@ -65,16 +74,33 @@ function launchpadBonus(launchpad, casc) {
 export function coreShieldStatus(aircraft, config) {
   const cfg = (config && config.coreShield) || null;
   const contributors = (cfg && cfg.contributors) || {};
-  const threshold = (cfg && cfg.threshold) != null ? cfg.threshold : 100;
+  // Run-mode "Breach": enemy Cores may use a weaker threshold (cfg.enemyThreshold,
+  // injected by effectiveConfig) so fights close out faster. Absent from the base
+  // config, so single-battle behaviour is unchanged.
+  const baseThreshold = (aircraft.side === 'enemy' && cfg && cfg.enemyThreshold != null)
+    ? cfg.enemyThreshold
+    : ((cfg && cfg.threshold) != null ? cfg.threshold : 100);
+  // Scale the threshold to the contributor mass the aircraft actually OWNS, so a small
+  // (few-component) aircraft's Core is still exposable (its owned parts may never sum to the
+  // absolute threshold). Full-6 → activeMass = totalMass → threshold unchanged. Tunable off.
+  const scaleToOwned = !cfg || cfg.scaleToOwned !== false;
   let downSum = 0;
+  let activeMass = 0;
+  let totalMass = 0;
   const remaining = [];
   for (const [id, pct] of Object.entries(contributors)) {
+    totalMass += pct;
     const c = aircraft.components[id];
-    if (c && !isAlive(c)) downSum += pct;
+    if (!c || !isOwned(c)) continue;            // a part you don't own isn't part of the shield
+    activeMass += pct;
+    if (!isAlive(c)) downSum += pct;
     else remaining.push({ id, pct });
   }
-  const up = !!cfg && downSum < threshold;
-  return { up, downSum, threshold, remaining, contributors };
+  const threshold = (scaleToOwned && totalMass > 0)
+    ? Math.round(baseThreshold * (activeMass / totalMass))
+    : baseThreshold;
+  const up = !!cfg && activeMass > 0 && downSum < threshold;
+  return { up, downSum, threshold, scaledThreshold: threshold, activeMass, remaining, contributors };
 }
 
 /** Convenience boolean: is this aircraft's Core shield currently UP? */
@@ -89,9 +115,9 @@ export function coreShieldUp(aircraft, config) {
 /** A part is "disabled" if Frozen OR Stasis-Locked (the Frozen+Confused combo). */
 const isDisabled = (c) => hasStatus(c, 'freeze') || hasStatus(c, 'stasisLock');
 
-/** Is the Tower providing its system right now? (alive AND not frozen/locked) */
+/** Is the Tower providing its system right now? (owned, alive AND not frozen/locked) */
 export function towerActive(aircraft) {
-  return isAlive(aircraft.components.tower) && !isDisabled(aircraft.components.tower);
+  return works(aircraft.components.tower) && !isDisabled(aircraft.components.tower);
 }
 
 /** Aim multiplier: full if the Tower is active, else the destroyed/jammed penalty. */

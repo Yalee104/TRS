@@ -1,21 +1,27 @@
 // =============================================================================
-//  view/configPanel.js — the LEFT RAIL (DESIGN B.6)
+//  view/configPanel.js — the LEFT RAIL (DESIGN B.6 + run meta-layer)
 // =============================================================================
 //
-//  Before Start: a ROSTER of up to maxEnemies enemies, phase length, seed.
-//  After Start: a live status readout + Restart. A language
-//  selector sits at the top (both modes). getUi() returns createState() overrides.
-//  rebuild() re-renders the whole rail in the current locale, preserving inputs.
+//  A top mode toggle switches between RUN (the roguelike meta-layer, default) and
+//  SINGLE battle (the legacy path). Views:
+//    • config     — single-battle roster + phase length + seed (legacy)
+//    • runSetup   — run mode pre-run (the loadout picker drives setup in the centre)
+//    • status     — single battle in progress (readout + Restart)
+//    • runStatus  — run in progress (run HUD: act/row + scrap, owned, mods + New Run)
+//  A language selector sits at the top in every view. rebuild() re-renders the rail
+//  in the current locale, preserving inputs/view.
 // =============================================================================
 
 import { PHASES } from '../core/state.js';
-import { t, archetypeLabel, enemyLabel, getLocale, setLocale, LOCALES } from '../i18n/index.js';
+import { COMPONENT_IDS, isOwned } from '../core/components.js';
+import { t, archetypeLabel, enemyLabel, componentLabel, getLocale, setLocale, LOCALES } from '../i18n/index.js';
 
-export function createConfigPanel(root, { onStart, onRestart, defaults, archetypes }) {
+export function createConfigPanel(root, { onStart, onRestart, onMode, onNewRun, defaults, archetypes, config }) {
   const archList = Object.keys(archetypes || {}).filter((k) => k !== '_comment');
   const maxEnemies = defaults.maxEnemies || 4;
-  let mode = 'config';
-  // live values (seeded from config.ui defaults; preserved across locale rebuilds)
+  let view = 'config';     // 'config'/'status' (single battle) · 'runSetup'/'runStatus' (run game)
+  let run = null;
+  // live single-battle values (seeded from config.ui defaults; preserved across rebuilds)
   let vals = {
     enemies: (Array.isArray(defaults.enemies) && defaults.enemies.length) ? defaults.enemies.slice(0, maxEnemies) : [defaults.archetype || archList[0]],
     creditSeconds: defaults.creditSeconds || 15,
@@ -23,7 +29,7 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
   };
 
   const $ = (id) => root.querySelector(id);
-  let setupEl, statusEl, rosterEl;
+  let setupEl, runSetupEl, statusEl, runHudEl, rosterEl;
 
   const optionsHtml = (sel) => [
     ...archList.map((k) => `<option value="${k}"${k === sel ? ' selected' : ''}>${archetypeLabel(k)}</option>`),
@@ -43,16 +49,21 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
     syncButtons();
   }
   function captureVals() {
-    if (!rosterEl) return vals;
+    if (!rosterEl || view !== 'config') return vals;
     return {
       enemies: rowSelects().map((r) => r.value),
       creditSeconds: Number($('#cfg-credit').value),
       seed: Number($('#cfg-seed').value) || 0,
     };
   }
-  function applyMode() {
-    setupEl.style.display = mode === 'config' ? '' : 'none';
-    statusEl.style.display = mode === 'status' ? '' : 'none';
+  const isBattle = () => view === 'status' || view === 'runStatus';
+  function applyView() {
+    setupEl.style.display = view === 'config' ? '' : 'none';
+    runSetupEl.style.display = view === 'runSetup' ? '' : 'none';
+    runHudEl.style.display = view === 'runStatus' ? '' : 'none';
+    statusEl.style.display = isBattle() ? '' : 'none';
+    $('#cfg-restart').style.display = view === 'status' ? '' : 'none';
+    $('#cfg-newrun').style.display = view === 'runStatus' ? '' : 'none';
   }
 
   function build() {
@@ -71,15 +82,22 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
         <label>${t('config.seed')} <input id="cfg-seed" type="number" min="0" step="1" /></label>
         <button id="cfg-start">${t('ui.startBattle')}</button>
       </div>
-      <div class="status" style="display:none">
+      <div class="run-setup">
+        <p class="dim">${t('loadout.subtitle', { n: config?.run?.startComponents?.pickCount ?? 2 })}</p>
+      </div>
+      <div class="run-hud"></div>
+      <div class="status">
         <button id="cfg-restart">${t('ui.restart')}</button>
+        <button id="cfg-newrun">${t('run.newRun')}</button>
         <div id="cfg-readout"></div>
         <div class="log-title">${t('config.eventLog')}</div>
         <div id="cfg-log" class="log"></div>
       </div>`;
 
     setupEl = root.querySelector('.setup');
+    runSetupEl = root.querySelector('.run-setup');
     statusEl = root.querySelector('.status');
+    runHudEl = root.querySelector('.run-hud');
     rosterEl = $('#cfg-roster');
 
     $('#cfg-lang').addEventListener('change', (e) => setLocale(e.target.value));
@@ -94,26 +112,51 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
     $('#cfg-seed').value = vals.seed;
     $('#cfg-credit').addEventListener('input', () => { $('#cfg-credit-val').textContent = `${$('#cfg-credit').value}s`; });
 
-    $('#cfg-start').addEventListener('click', () => onStart(getUi()));
-    $('#cfg-restart').addEventListener('click', () => onRestart());
-    applyMode();
+    $('#cfg-start').addEventListener('click', () => { if (typeof onStart === 'function') onStart(getUi()); });
+    $('#cfg-restart').addEventListener('click', () => { if (typeof onRestart === 'function') onRestart(); });
+    $('#cfg-newrun').addEventListener('click', () => { if (typeof onNewRun === 'function') onNewRun(); });
+    applyView();
+    if (view === 'runStatus' && run) renderHud();
   }
 
   function getUi() { return captureVals(); }
-  function showConfig() { mode = 'config'; applyMode(); }
-  function showStatus() { mode = 'status'; applyMode(); }
-  /** Re-render the whole rail in the current locale, preserving inputs + mode. */
+  function showConfig() { view = 'config'; applyView(); }
+  function showRunSetup() { view = 'runSetup'; applyView(); }
+  function showStatus() { view = 'status'; applyView(); }
+  function showRunStatus() { view = 'runStatus'; applyView(); }
+  function setRun(r) { run = r; if (view === 'runStatus') renderHud(); }
+  /** Re-render the whole rail in the current locale, preserving inputs + view. */
   function rebuild() { vals = captureVals(); build(); }
 
+  function renderHud() {
+    if (!runHudEl || !run) return;
+    const owned = COMPONENT_IDS.filter((id) => run.owned[id]).map((id) => `<span class="rh-chip">${componentLabel(id)}</span>`).join('');
+    const mods = run.rewardsTaken
+      .filter((r) => r.type === 'comboMod' || r.type === 'componentMod')
+      .map((r) => `<span class="rh-chip mod">${t(`reward.${r.type}.${r.modId}.name`)}</span>`).join('');
+    // Map-run header: act/row + Scrap.
+    const header = `<div class="rh-battle">${t('hud.actRow', { act: run.act || 1, row: (run.map?.byId[run.mapPos]?.row ?? 0) })}</div>
+         <div class="rh-row"><span class="rh-chip mod">${t('hud.scrap')}: ${run.scrap || 0}</span></div>`;
+    runHudEl.innerHTML = `
+      ${header}
+      <div class="rh-row"><div class="rh-k">${t('hud.owned')}</div>${owned}</div>
+      <div class="rh-row"><div class="rh-k">${t('hud.mods')}</div>${mods || `<span class="rh-chip">${t('hud.noMods')}</span>`}</div>`;
+  }
+
   function update(state) {
+    if (!isBattle()) return;
+    if (view === 'runStatus') renderHud();
     const credit = (state.creditLeftMs / 1000).toFixed(0);
     const phaseName = {
       [PHASES.ATTACK_BUILD]: t('config.phase.attackBuild'), [PHASES.DEFENSE_BUILD]: t('config.phase.defenseBuild'),
       [PHASES.WON]: t('config.phase.won'), [PHASES.LOST]: t('config.phase.lost'),
     }[state.phase] || state.phase;
     const enemyList = state.enemies.map((e) => `${enemyLabel(e)}${e.components.core.hp <= 0 ? ' ☠️' : ''}`).join(', ');
+    const roundLine = state.overheat
+      ? t('config.readout.roundPar', { n: state.round, par: state.overheat.par })
+      : `${state.round}`;
     $('#cfg-readout').innerHTML = `
-      <div><b>${t('config.readout.round')}</b> ${state.round} · ${phaseName}</div>
+      <div><b>${t('config.readout.round')}</b> ${roundLine} · ${phaseName}</div>
       <div><b>${t('config.readout.credit')}</b> ${t('config.readout.creditLeft', { n: credit })}</div>
       <div><b>${t('config.readout.enemies')}</b> ${enemyList}</div>
       <div><b>${t('config.readout.queued')}</b> ${t('config.readout.queuedActions', { n: state.queue.length })}</div>`;
@@ -121,7 +164,7 @@ export function createConfigPanel(root, { onStart, onRestart, defaults, archetyp
   }
 
   build();
-  return { getUi, showConfig, showStatus, update, rebuild };
+  return { getUi, showConfig, showRunSetup, showStatus, showRunStatus, setRun, update, rebuild };
 }
 
 // --- Event log (PARKED: stays English in v1) ----------------------------------

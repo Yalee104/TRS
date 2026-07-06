@@ -18,8 +18,8 @@ export const PHASES = {
   ATTACK_RESOLVE: 'attackResolve',
   DEFENSE_BUILD: 'defenseBuild',
   DEFENSE_RESOLVE: 'defenseResolve',
-  WON: 'won',
-  LOST: 'lost',
+  WON: 'won',                // BATTLE won (run layer decides reward vs run-won)
+  LOST: 'lost',              // BATTLE lost (run layer ends the run)
 };
 
 function makeAircraft(side, config) {
@@ -33,10 +33,16 @@ function makeAircraft(side, config) {
  * archetype, label, and per-enemy telegraph. Duplicate archetypes get numbered
  * labels (e.g. "Saboteur 1", "Saboteur 2").
  */
-function buildEnemies(config, roster, rng) {
+function buildEnemies(config, roster, rng, hpMult = 1) {
   const keys = archetypeKeys(config);
   const enemies = roster.map((key, i) => {
     const ac = makeAircraft('enemy', config);
+    if (hpMult !== 1) {
+      for (const c of Object.values(ac.components)) {
+        c.maxHp = Math.max(1, Math.round(c.maxHp * hpMult));
+        c.hp = c.maxHp;
+      }
+    }
     ac.eid = i;
     ac.archetype = resolveArchetype(key, rng, keys);
     ac.telegraph = null;
@@ -55,8 +61,11 @@ function buildEnemies(config, roster, rng) {
 
 /**
  * @param config  the parsed game.json
- * @param ui      optional overrides from the config panel:
- *                { enemies:[archetype...], creditSeconds, seed }  (attackTimeModel defaults to config.phase = realtime)
+ * @param ui      optional overrides from the config panel / run layer:
+ *                { enemies:[archetype...], creditSeconds, seed,
+ *                  enemyHpMult,                  — run tier scaling of ENEMY component HP (default 1)
+ *                  overheat: { par, rampPerRound } — run anti-stall clock (default off) }
+ *                (attackTimeModel defaults to config.phase = realtime)
  */
 export function createState(config, ui = {}) {
   const u = { ...config.ui, ...ui };
@@ -77,9 +86,10 @@ export function createState(config, ui = {}) {
     creditLeftMs: creditMs,
     creditBonusMs: 0,            // banked by Overclock; spent on the next attack build
     attackTimeModel: u.attackTimeModel || config.phase.attackTimeModel,
+    overheat: (u.overheat && u.overheat.par) ? { par: u.overheat.par, rampPerRound: u.overheat.rampPerRound || 1 } : null,
 
     player: makeAircraft('player', config),
-    enemies: buildEnemies(config, roster, rng),   // 1..4 enemy aircraft
+    enemies: buildEnemies(config, roster, rng, u.enemyHpMult || 1),   // 1..4 enemy aircraft
 
     // current build session
     queue: [],                   // attack: {component, effect, potency, target:{eid,component}}; defense: {component, verb, potency, target}
@@ -88,6 +98,7 @@ export function createState(config, ui = {}) {
     focus: null,                 // attack: the firepower Focus {eid, component}, chosen at Resolve
     pickFocus: false,            // attack: true while waiting for the player to click the Focus
     usedComponents: {},          // attack: one-use-per-phase guard { weapon:true, ... }
+    defensePlays: {},            // defense: plays per part THIS phase (replays congest the TRS)
     cooldowns: {},               // per-component fail cooldown (turns remaining)
 
     activePuzzle: null,          // { component, side, mode, instance, overlay }

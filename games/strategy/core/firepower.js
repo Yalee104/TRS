@@ -9,7 +9,7 @@
 //  config, so the feel is tunable without code.
 // =============================================================================
 
-import { hpFrac, isAlive } from './components.js';
+import { hpFrac, isAlive, isOwned } from './components.js';
 import { systemState } from './cascade.js';
 
 const DEBUFF_KEYS = ['freeze', 'drain', 'confuse', 'burning', 'shatter'];
@@ -28,14 +28,22 @@ function debuffFactorOf(component, config) {
   return factor;
 }
 
-/** Combat Condition in [0,1]: Σ weight × hpFrac × debuffFactor over weighted parts. */
+/** Combat Condition in [0,1]: weighted blend of OWNED parts' hp×debuff, renormalized so a
+ *  small (few-component) aircraft fights at full per-hit strength — owning fewer parts costs
+ *  you BREADTH (fewer attacks/combos/buffer), not raw per-hit power. Full-6 → ownedW=1 (no-op). */
 export function combatCondition(aircraft, config) {
   const weights = config.firepower.weights || {};
+  let ownedW = 0;
+  for (const [id, w] of Object.entries(weights)) {
+    const comp = aircraft.components[id];
+    if (comp && isOwned(comp)) ownedW += w;
+  }
+  if (ownedW <= 0) return 0;
   let cond = 0;
   for (const [id, w] of Object.entries(weights)) {
     const comp = aircraft.components[id];
-    if (!comp) continue;
-    cond += w * hpFrac(comp) * debuffFactorOf(comp, config);
+    if (!comp || !isOwned(comp)) continue;
+    cond += (w / ownedW) * hpFrac(comp) * debuffFactorOf(comp, config);
   }
   return Math.max(0, Math.min(1, cond));
 }
@@ -65,6 +73,7 @@ export function conditionReport(aircraft, config) {
   for (const id of Object.keys(weights)) {
     const comp = aircraft.components[id];
     if (!comp) continue;
+    if (!isOwned(comp)) { chokes.push(`${comp.name} not owned ×0`); continue; }
     if (!isAlive(comp)) { chokes.push(`${comp.name} destroyed ×0`); continue; }
     const wd = worstDebuff(comp, config);
     const hf = hpFrac(comp);

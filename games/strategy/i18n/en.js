@@ -21,6 +21,7 @@ export const en = {
     hintApply: '↳ pick an enemy part to apply the status',
     hintFocus: '↳ click the enemy part to FOCUS firepower',
     hintProtect: '↳ pick one of your parts to protect',
+    locked: '🔒 Locked — acquire this component to use its attack & defense.',
     banner: {
       config: 'Configure on the left, then ▶ Start Battle',
       attack: 'Round {n} — ATTACK ⚔️',
@@ -28,6 +29,8 @@ export const en = {
       won: '🏆 VICTORY',
       lost: '💀 DEFEAT',
       round: 'Round {n}',
+      overheatSoon: '⚠ OVERHEAT IMMINENT — finish this fight!',
+      overheat: '🔥 OVERHEAT ×{mult} — enemy strikes amplified',
     },
     combos: {
       attackTitle: '⚔️ Attack combos',
@@ -69,6 +72,8 @@ export const en = {
     hunter: 'Hunter',
     swarm: 'Swarm',
     disruptor: 'Disruptor',
+    dreadnought: 'Dreadnought',
+    siegebreaker: 'Siegebreaker',
     random: 'Random',
   },
 
@@ -166,6 +171,7 @@ export const en = {
     remove: 'remove',
     readout: {
       round: 'Round',
+      roundPar: '{n} / par {par}',
       credit: 'Credit',
       creditLeft: '{n}s left',
       enemies: 'Enemies',
@@ -176,4 +182,107 @@ export const en = {
   },
 
   puzzle: { go: 'GO', fail: 'FAIL', start: 'START', goal: 'Goal', trap: 'Trap', firehazard: 'Burning hazard' },
+
+  run: {
+    title: 'TRS Run',
+    begin: '▶ Begin Run',
+    newRun: '⟲ New Run',
+    won: '🏆 RUN COMPLETE',
+    wonDesc: 'You cleared every battle. Press New Run to start a fresh build.',
+    lost: '💀 RUN OVER',
+    lostDesc: 'Your run ended here. Press New Run to try again.',
+    continue: '▶ Continue',
+    mode: 'Mode',
+    modeRun: 'Run',
+    modeSingle: 'Single battle',
+  },
+
+  loadout: {
+    title: 'Build your loadout',
+    subtitle: 'Your Reactor Core is always equipped. Pick {n} more — or start from a preset.',
+    pickN: 'Pick {n} components',
+    coreLocked: 'Core · always equipped',
+    presetsLabel: 'Presets',
+    customLabel: 'Custom',
+    beginRun: '▶ Begin Run',
+    chosen: 'Chosen: {n}/{max}',
+    preset: {
+      burst: 'Burst',
+      burstDesc: 'Weapon + Engine + Generator — Glass focus-fire at full reactor power.',
+      sustain: 'Sustain',
+      sustainDesc: 'Generator + Tower + Engine — a Repair/Cleanse backbone with Shatter damage.',
+      custom: 'Custom',
+      customDesc: 'Choose your own components.',
+    },
+  },
+
+  reward: {
+    title: 'Choose a reward',
+    pickOne: 'Pick one to carry into the next battle.',
+    pickTwo: 'Elite spoils — pick {n} to carry into the next battle.',
+    fastWin: 'Fast win! Finished in {rounds} rounds (par {par}) — bonus Scrap earned.',
+    type: {
+      component: 'New component',
+      comboMod: 'Combo mod',
+      componentMod: 'Component mod',
+      repair: 'Repair',
+    },
+    upgradeTitle: 'Free upgrade',
+    component: { desc: ({ name }) => `Acquire ${name} — unlocks its attack effect and defense verb (and new combos).` },
+    repair: { desc: ({ name }) => `Repair ${name} to full HP.` },
+    comboMod: {
+      meltdownCore: { name: 'Meltdown: Overload', desc: 'Meltdown funnels 70% of each burn tick into the Core (was 50%).' },
+      glassShatter: { name: 'Glass: Lens', desc: 'Glass focus-fire multiplier ×2.5 (was ×2).' },
+      wildfireSpread: { name: 'Wildfire: Updraft', desc: 'Wildfire spreads 75% of the burn to a neighbour (was 50%).' },
+      bastionCap: { name: 'Bastion: Reinforce', desc: 'Bastion caps damage at 35% of max HP (was 25%).' },
+      collapseRupture: { name: 'Collapse: Rupture', desc: 'Collapse executes parts below 35% HP (was 20%).' },
+      feedbackArc: { name: 'Feedback: Arc', desc: 'Feedback Cascade chains 75% of the hit to another enemy (was 50%).' },
+      reactiveMirror: { name: 'Reactive Plating: Mirror', desc: 'Reactive Plating reflects 80% of absorbed damage (was 50%).' },
+    },
+    componentMod: {
+      weaponFreeze: { name: 'Weapon: Cryo Coils', desc: 'Freeze deals 2.0 dmg / potency (was 1.5).' },
+      generatorDrain: { name: 'Generator: Siphon', desc: 'Drain heals 3.0 / potency (was 2.0).' },
+      engineShatter: { name: 'Engine: Fracture', desc: 'Shatter deals 3.0 dmg / potency (was 2.0).' },
+      launchpadBurn: { name: 'Launch Pad: Accelerant', desc: 'Burning deals 1.6 DoT / potency (was 1.2).' },
+      coreHp: { name: 'Core: Reinforced Hull', desc: 'Reactor Core max HP +40.' },
+      towerConfuse: { name: 'Tower: Scrambler', desc: 'Confuse deals 2.0 dmg / potency (was 1.0).' },
+      weaponShield: { name: 'Weapon: Barrier Cells', desc: 'Shield absorbs 11 / potency (was 8).' },
+      generatorRepair: { name: 'Generator: Nanoweld', desc: 'Repair restores 8 HP / potency (was 6).' },
+      launchpadOverclock: { name: 'Launch Pad: Turbo Feed', desc: 'Overclock banks 4.0s of build credit (was 2.5s).' },
+      launchpadGridPlus: { name: 'Launch Pad: Compact Router', desc: 'While the Launch Pad is healthy your TRS grid shrinks to 5×5 (base 6×6).' },
+    },
+  },
+
+  hud: {
+    owned: 'Owned',
+    mods: 'Mods',
+    noMods: 'none',
+    scrap: 'Scrap',
+    actRow: 'Act {act} · row {row}',
+  },
+
+  map: {
+    title: 'Choose your path',
+    pickNode: 'Pick a connected node to advance.',
+    node: {
+      start: 'Start',
+      enemy: 'Enemy',
+      elite: 'Elite',
+      boss: 'Boss',
+      shop: 'Shop',
+      heal: 'Repair Bay',
+      upgrade: 'Upgrade',
+    },
+  },
+
+  shop: {
+    title: 'Salvage Shop',
+    leave: '▶ Leave',
+    buy: 'Buy',
+    cantAfford: 'Not enough Scrap',
+    sold: 'Sold',
+    balance: 'Scrap: {n}',
+    price: '{n} Scrap',
+    repairAll: 'Full repair (all parts)',
+  },
 };

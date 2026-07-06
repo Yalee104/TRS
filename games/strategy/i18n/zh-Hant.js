@@ -21,6 +21,7 @@ export const zhHant = {
     hintApply: '↳ 選擇敵方部件以施加狀態',
     hintFocus: '↳ 點擊敵方部件以集中火力',
     hintProtect: '↳ 選擇我方部件加以防護',
+    locked: '🔒 未持有 — 取得此部件後才能使用其攻擊與防禦。',
     banner: {
       config: '在左側設定，然後 ▶ 開始戰鬥',
       attack: '第 {n} 回合 — 攻擊 ⚔️',
@@ -28,6 +29,8 @@ export const zhHant = {
       won: '🏆 勝利',
       lost: '💀 失敗',
       round: '第 {n} 回合',
+      overheatSoon: '⚠ 即將過熱 — 盡快結束這場戰鬥！',
+      overheat: '🔥 過熱 ×{mult} — 敵方攻擊增幅中',
     },
     combos: {
       attackTitle: '⚔️ 攻擊連段',
@@ -69,6 +72,8 @@ export const zhHant = {
     hunter: '獵人',
     swarm: '蜂群',
     disruptor: '干擾者',
+    dreadnought: '無畏艦',
+    siegebreaker: '破城者',
     random: '隨機',
   },
 
@@ -166,6 +171,7 @@ export const zhHant = {
     remove: '移除',
     readout: {
       round: '回合',
+      roundPar: '{n} / 標準 {par}',
       credit: '額度',
       creditLeft: '剩餘 {n}秒',
       enemies: '敵人',
@@ -176,4 +182,107 @@ export const zhHant = {
   },
 
   puzzle: { go: '開始', fail: '失敗', start: '起點', goal: '終點', trap: '陷阱', firehazard: '燃燒危害' },
+
+  run: {
+    title: 'TRS 征程',
+    begin: '▶ 開始征程',
+    newRun: '⟲ 新征程',
+    won: '🏆 征程完成',
+    wonDesc: '你通過了每一場戰鬥。按新征程以全新配置再次挑戰。',
+    lost: '💀 征程結束',
+    lostDesc: '你的征程止步於此。按新征程以再次嘗試。',
+    continue: '▶ 繼續',
+    mode: '模式',
+    modeRun: '征程',
+    modeSingle: '單場戰鬥',
+  },
+
+  loadout: {
+    title: '組建你的配置',
+    subtitle: '反應爐核心永遠裝備。再挑選 {n} 個部件 — 或從預設開始。',
+    pickN: '挑選 {n} 個部件',
+    coreLocked: '核心 · 永遠裝備',
+    presetsLabel: '預設',
+    customLabel: '自訂',
+    beginRun: '▶ 開始征程',
+    chosen: '已選：{n}/{max}',
+    preset: {
+      burst: '爆發',
+      burstDesc: '武器庫 + 引擎 + 發電機 — 反應爐全功率下的玻璃化集中火力。',
+      sustain: '續航',
+      sustainDesc: '發電機 + 感測塔 + 引擎 — 修復／淨化中樞，兼具碎裂傷害。',
+      custom: '自訂',
+      customDesc: '自行挑選部件。',
+    },
+  },
+
+  reward: {
+    title: '選擇獎勵',
+    pickOne: '選擇一項帶入下一場戰鬥。',
+    pickTwo: '精英戰利品 — 選擇 {n} 項帶入下一場戰鬥。',
+    fastWin: '快速獲勝！以 {rounds} 回合完成（標準 {par}）— 獲得額外廢料。',
+    type: {
+      component: '新部件',
+      comboMod: '連段改裝',
+      componentMod: '部件改裝',
+      repair: '修復',
+    },
+    upgradeTitle: '免費升級',
+    component: { desc: ({ name }) => `取得${name} — 解鎖其攻擊效果與防禦動作（以及新的連段）。` },
+    repair: { desc: ({ name }) => `將${name}修復至滿生命。` },
+    comboMod: {
+      meltdownCore: { name: '熔毀：過載', desc: '熔毀將每次燃燒跳動的 70% 灌入核心（原為 50%）。' },
+      glassShatter: { name: '玻璃化：透鏡', desc: '玻璃化集中火力倍率 ×2.5（原為 ×2）。' },
+      wildfireSpread: { name: '野火：上升氣流', desc: '野火將 75% 的燃燒蔓延至鄰近部件（原為 50%）。' },
+      bastionCap: { name: '堡壘：強化', desc: '堡壘將傷害上限壓至最大生命的 35%（原為 25%）。' },
+      collapseRupture: { name: '崩塌：裂解', desc: '崩塌處決生命低於 35% 的部件（原為 20%）。' },
+      feedbackArc: { name: '回饋：電弧', desc: '回饋串流將 75% 的傷害鏈結至另一架敵機（原為 50%）。' },
+      reactiveMirror: { name: '反應裝甲：鏡面', desc: '反應裝甲反彈 80% 已吸收的傷害（原為 50%）。' },
+    },
+    componentMod: {
+      weaponFreeze: { name: '武器庫：低溫線圈', desc: '凍結每點威力造成 2.0 傷害（原為 1.5）。' },
+      generatorDrain: { name: '發電機：虹吸', desc: '汲取每點威力治療 3.0（原為 2.0）。' },
+      engineShatter: { name: '引擎：斷裂', desc: '碎裂每點威力造成 3.0 傷害（原為 2.0）。' },
+      launchpadBurn: { name: '發射台：助燃劑', desc: '燃燒每點威力造成 1.6 持續傷害（原為 1.2）。' },
+      coreHp: { name: '核心：強化裝甲', desc: '反應爐核心最大生命 +40。' },
+      towerConfuse: { name: '感測塔：干擾器', desc: '混亂每點威力造成 2.0 傷害（原為 1.0）。' },
+      weaponShield: { name: '武器庫：屏障電池', desc: '護盾每點威力吸收 11（原為 8）。' },
+      generatorRepair: { name: '發電機：奈米焊接', desc: '修復每點威力恢復 8 生命（原為 6）。' },
+      launchpadOverclock: { name: '發射台：渦輪供給', desc: '超頻儲存 4.0 秒建構額度（原為 2.5 秒）。' },
+      launchpadGridPlus: { name: '發射台：緊湊路由器', desc: '發射台健康時你的 TRS 網格縮小至 5×5（基準 6×6）。' },
+    },
+  },
+
+  hud: {
+    owned: '持有',
+    mods: '改裝',
+    noMods: '無',
+    scrap: '廢料',
+    actRow: '第 {act} 幕 · 第 {row} 列',
+  },
+
+  map: {
+    title: '選擇你的路徑',
+    pickNode: '選擇一個相連的節點以前進。',
+    node: {
+      start: '起點',
+      enemy: '敵人',
+      elite: '精英',
+      boss: '首領',
+      shop: '商店',
+      heal: '維修站',
+      upgrade: '升級',
+    },
+  },
+
+  shop: {
+    title: '廢料商店',
+    leave: '▶ 離開',
+    buy: '購買',
+    cantAfford: '廢料不足',
+    sold: '已售',
+    balance: '廢料：{n}',
+    price: '{n} 廢料',
+    repairAll: '完全修復（所有部件）',
+  },
 };

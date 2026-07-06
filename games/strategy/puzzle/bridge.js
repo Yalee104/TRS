@@ -13,7 +13,7 @@
 import { GridPathPuzzle } from '../../grid-path-puzzle/module/GridPathPuzzle.js';
 import { evaluate } from '../../grid-path-puzzle/combo/ComboEngine.js';
 import { PHASES } from '../core/state.js';
-import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, hasStatus } from '../core/components.js';
+import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, isOwned, hasStatus } from '../core/components.js';
 import { systemState } from '../core/cascade.js';
 import { spendCredit } from '../core/phases.js';
 import { logEvent } from '../core/state.js';
@@ -76,7 +76,8 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     if (state.pendingAction || state.pendingDefense) return false; // finish placing the last status first
     if (state.pickFocus) return false;
     if (state.cooldowns[componentId] > 0) return false;
-    if (!isAlive(state.player.components[componentId])) return false;
+    const comp = state.player.components[componentId];
+    if (!isAlive(comp) || !isOwned(comp)) return false;   // unowned part → no TRS → no effect → no combo
     if (isAttack) {
       if (state.phase !== PHASES.ATTACK_BUILD) return false;
       if (!ATTACK_EFFECT[componentId]) return false;
@@ -110,10 +111,23 @@ export function createBridge({ getState, overlayEl = null, PuzzleClass = GridPat
     const knobs = { ...(state.config.puzzle.gen || {}) };
     delete knobs._comment;
     knobs.burningDensity = burningOn ? (pmods.burningDensity ?? 0) : 0;
+    // Defense replay penalty: each repeated play of the SAME part this phase congests
+    // its TRS — +sizePerRepeat grid per repeat, clamped to an absolute maxSize grid,
+    // plus denser blockers per effective repeat (config.puzzle.repeatPenalty). Attack
+    // parts are one-use per phase, so this only ever applies to defense.
+    const baseSize = state.config.puzzle.size + (trsMods.sizeDelta || 0);
+    const rp = state.config.puzzle.repeatPenalty || null;
+    const plays = (!isAttack && rp) ? (state.defensePlays?.[componentId] || 0) : 0;
+    const cap = Math.max(baseSize, rp?.maxSize ?? Infinity);
+    const size = Math.min(baseSize + plays * (rp?.sizePerRepeat || 0), cap);
+    const repeats = (rp?.sizePerRepeat || 0) > 0 ? Math.round((size - baseSize) / rp.sizePerRepeat) : 0;
+    if (repeats > 0) {
+      knobs.blockerDensity = (knobs.blockerDensity ?? 0.4) + repeats * (rp.blockerPerRepeat || 0);
+      logEvent(state, `Repeated ${component.name} play — TRS congested (${size}×${size} grid).`);
+    }
     const cfg = isAttack
       ? offensivePalette(componentId, trsMods, state.config.potency, knobs)
       : defensivePalette(componentId, trsMods, state.config.potency, knobs);
-    const size = state.config.puzzle.size + (trsMods.sizeDelta || 0);
 
     const nt = catalogFromConfig(cfg);
     // Localize the in-grid node labels host-side (the shared module is not modified).

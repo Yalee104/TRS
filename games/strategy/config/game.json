@@ -3,6 +3,7 @@
 
   "phase": {
     "creditMs": 15000,
+    "defenseCreditMult": 0.6,
     "attackTimeModel": "realtime",
     "actionCostMs": 20000,
     "failCostMs": 10000
@@ -12,6 +13,12 @@
     "_comment": "TRS routing puzzle. `size` is the base grid (Launch Pad cascade adds its sizeDelta). `gen` knobs feed the shared preset's genPlan (grid-path-puzzle/presets/trs.js); `modifiers` tune how an ENEMY STATUS on YOUR component is FELT while you solve that component's route (the reflect-back of the puzzle-module status effects). `countdown` is the pre-start GO pause (excluded from the solve clock). `trapEntryMode:failFast` = crossing a hazard fails the run immediately.",
     "size": 6,
     "timeLimitMs": 10000,
+    "repeatPenalty": {
+      "_comment": "Defense-phase replay tax: the 2nd+ play of the SAME part in one defense phase gets +sizePerRepeat grid per repeat (grid clamped to maxSize) and +blockerPerRepeat blocker density per effective repeat — spamming one verb (e.g. Shield) gets progressively harder. Attack parts are one-use per phase, so this never applies to attacks.",
+      "sizePerRepeat": 1,
+      "maxSize": 10,
+      "blockerPerRepeat": 0.04
+    },
     "trapEntryMode": "failFast",
     "failText": "FAIL",
     "countdown": { "ms": 800, "flashStart": true, "text": "GO" },
@@ -118,8 +125,10 @@
     "evasionAtFullEngine": 0.15,
     "weaponDestroyedBaseMult": 0.4,
     "towerDestroyedAimMult": 0.6,
-    "_lpComment": "Launch Pad governs its owner's TRS quality on a GRADIENT: at full HP it EASES the grid (fewer blockers/traps, smaller grid = bonus scaled by HP); as it's damaged the bonus fades to baseline; DESTROYED it congests past baseline (the cliff). blockerBonus/trapBonus are added to densities; sizeDelta adjusts grid size.",
-    "launchpadFullBonus": { "sizeDelta": -1, "blockerBonus": -0.08, "trapBonus": -0.08 },
+    "_lpComment": "Launch Pad governs its owner's TRS quality in HP STEPS (core/cascade.js launchpadTrsMods): never owned → neutral base grid; above launchpadDamagedBelow HP → launchpadHealthy (baseline 6×6); at/below it → launchpadDamaged (7×7); destroyed → launchpadDestroyed (the 8×8 congested cliff). blockerBonus/trapBonus add to densities; sizeDelta adjusts grid size. The launchpadGridPlus mod patches launchpadHealthy.sizeDelta to -1 (5×5 while healthy).",
+    "launchpadDamagedBelow": 0.5,
+    "launchpadHealthy": { "sizeDelta": 0, "blockerBonus": 0, "trapBonus": 0 },
+    "launchpadDamaged": { "sizeDelta": 1, "blockerBonus": 0, "trapBonus": 0 },
     "launchpadDestroyed": { "sizeDelta": 2, "blockerBonus": 0.12, "trapBonus": 0.1 }
   },
 
@@ -129,8 +138,8 @@
       "label": "Saboteur",
       "damageBudget": 70,
       "priority": ["generator", "weapon", "core"],
-      "spread": 0.25,
-      "statusChance": 0.4,
+      "spread": 0.45,
+      "statusChance": 0.5,
       "status": "drain"
     },
     "brute": {
@@ -138,14 +147,14 @@
       "damageBudget": 80,
       "priority": "highestHp",
       "spread": 0.0,
-      "statusChance": 0.15,
+      "statusChance": 0.25,
       "status": "freeze"
     },
     "hunter": {
       "label": "Hunter",
       "damageBudget": 65,
       "priority": ["tower", "engine", "generator", "weapon"],
-      "spread": 0.15,
+      "spread": 0.35,
       "statusChance": 0.35,
       "status": "confuse"
     },
@@ -161,13 +170,128 @@
       "label": "Disruptor",
       "damageBudget": 55,
       "priority": ["generator", "weapon", "engine"],
-      "spread": 0.3,
+      "spread": 0.45,
       "statusChance": 0.9,
       "statusPool": ["freeze", "drain", "confuse"]
+    },
+    "dreadnought": {
+      "_comment": "Act boss — heavy, status-rich, spreads across your kit. priority 'highestHp' makes it adaptive (the weight fallback handles any loadout).",
+      "label": "Dreadnought",
+      "damageBudget": 150,
+      "priority": "highestHp",
+      "spread": 0.5,
+      "statusChance": 0.6,
+      "statusPool": ["freeze", "burning", "drain"]
+    },
+    "siegebreaker": {
+      "_comment": "Alternate boss (reserved for variety / later acts) — focused single-target shatter.",
+      "label": "Siegebreaker",
+      "damageBudget": 140,
+      "priority": ["generator", "weapon", "engine"],
+      "spread": 0.1,
+      "statusChance": 0.3,
+      "status": "shatter"
     }
   },
 
   "telegraph": { "gated": true, "confuseFalseChance": 0.5 },
+
+  "run": {
+    "_comment": "Roguelike run meta-layer (core/run.js + core/map.js). A run walks the act map from start to boss; win the boss battle to win the run, lose any battle to end it. The player owns Core + `startComponents.pickCount` parts at the start and acquires the rest as rewards. All tuning is data-driven: combo-mods/component-mods are catalog `patch` objects deep-merged over the base config at battle time (no base mutation). Component (incl. Core) HP persists between battles.",
+    "startComponents": { "core": true, "pickCount": 3 },
+    "enemyShieldThreshold": 60,
+    "overheat": {
+      "_comment": "Anti-stall clock (run battles only). Each tier has a PAR round; past par every enemy's damageBudget compounds by rampPerRound each extra round (telegraphed one round early in the banner/log). Winning at or under par pays economy.fastWinScrap.",
+      "parRounds": { "normal": 5, "elite": 6, "boss": 9 },
+      "rampPerRound": 1.25
+    },
+    "postBattleRepair": {
+      "_comment": "Field repairs between sorties: every SURVIVING owned part recovers this fraction of max HP after a battle win. Destroyed parts stay destroyed until a real repair (reward/shop/heal bay), so losing a part still stings without becoming a death spiral.",
+      "percent": 0.3
+    },
+    "reward": {
+      "_comment": "Between battles, offer `offerSize` choices. Each type's pool is filtered by current ownership/damage; types are weighted, empty pools skipped. guaranteeComponentUntilOwned forces at least one component offer while unowned parts remain so a run can always progress toward the full kit. A repair fallback guarantees the offer is never empty. Elite wins (economy.eliteRewardBonus) use eliteOffer: a wider spread with 2 picks.",
+      "offerSize": 3,
+      "weights": { "component": 3, "comboMod": 2, "componentMod": 2, "repair": 1 },
+      "guaranteeComponentUntilOwned": true,
+      "eliteOffer": { "size": 4, "picks": 2 }
+    },
+    "comboModCatalog": {
+      "_comment": "patch keys mirror effects.synergy.combos[combo] (offense) or defense.combos[combo] (defense). `needs` = the two components that must be owned for the combo to be formable (offer-gating).",
+      "meltdownCore":    { "combo": "meltdown",        "table": "offense", "needs": ["launchpad", "engine"], "patch": { "coreFrac": 0.7 } },
+      "glassShatter":    { "combo": "glass",           "table": "offense", "needs": ["weapon", "engine"],    "patch": { "mult": 2.5 } },
+      "wildfireSpread":  { "combo": "wildfire",        "table": "offense", "needs": ["launchpad", "tower"],  "patch": { "spreadFrac": 0.75 } },
+      "bastionCap":      { "combo": "bastion",         "table": "defense", "needs": ["engine", "weapon"],    "patch": { "capFrac": 0.35 } },
+      "collapseRupture": { "combo": "collapse",        "table": "offense", "needs": ["generator", "engine"], "patch": { "hpThreshold": 0.35 } },
+      "feedbackArc":     { "combo": "feedback",        "table": "offense", "needs": ["tower", "generator"],  "patch": { "chainFrac": 0.75 } },
+      "reactiveMirror":  { "combo": "reactivePlating", "table": "defense", "needs": ["launchpad", "weapon"], "patch": { "reflectFrac": 0.8 } }
+    },
+    "componentModCatalog": {
+      "_comment": "patch shape mirrors the component-mod merge in effectiveConfig: hpBonus/armor on components[id], `effect` over effects[ATTACK_EFFECT[id]], `verb` over defense[DEFENSE_VERB[id]], `cascade` over the cascade table. `component` must be owned to be offered.",
+      "weaponFreeze":    { "component": "weapon",    "patch": { "effect": { "freeze": { "dmgPerPotency": 2.0 } } } },
+      "generatorDrain":  { "component": "generator", "patch": { "effect": { "drain": { "healPerPotency": 3.0 } } } },
+      "engineShatter":   { "component": "engine",    "patch": { "effect": { "shatter": { "dmgPerPotency": 3.0 } } } },
+      "launchpadBurn":   { "component": "launchpad", "patch": { "effect": { "burning": { "dotPerPotency": 1.6 } } } },
+      "coreHp":          { "component": "core",      "patch": { "hpBonus": 40 } },
+      "towerConfuse":    { "component": "tower",     "patch": { "effect": { "confuse": { "dmgPerPotency": 2.0 } } } },
+      "weaponShield":    { "component": "weapon",    "patch": { "verb": { "shield": { "absorbPerPotency": 11 } } } },
+      "generatorRepair": { "component": "generator", "patch": { "verb": { "repair": { "hpPerPotency": 8 } } } },
+      "launchpadOverclock": { "component": "launchpad", "patch": { "verb": { "overclock": { "creditBonusMs": 4000 } } } },
+      "launchpadGridPlus": { "component": "launchpad", "patch": { "cascade": { "launchpadHealthy": { "sizeDelta": -1 } } } }
+    },
+    "loadouts": {
+      "_comment": "Presets pre-select the 3 non-core starting components (the player can still go custom). Both include the Generator — without it every attack suffers the brownout penalty (cascade.brownoutMult), which is a trap for a starting kit. burst = Glass-enabling offense; sustain = defensive backbone (Repair+Cleanse) with Shatter damage.",
+      "burst":   { "components": ["weapon", "engine", "generator"] },
+      "sustain": { "components": ["generator", "tower", "engine"] },
+      "custom":  { "components": [] }
+    },
+
+    "map": {
+      "_comment": "StS-style node map (core/map.js). A run is a seeded branching DAG of rows ending in a boss; the player picks a path. Node types: start/enemy/elite/boss/shop/heal/upgrade. Battle rosters come from enemyPools by row band; difficulty escalates by row + tier (economy.tierBudgetMult). minBattlesBeforeBoss is enforced by generation: every path to the boss crosses at least that many battles.",
+      "act1": {
+        "rows": 6,
+        "nodesPerRow": [2, 3],
+        "minElites": 2,
+        "eliteMinRow": 3,
+        "minBattlesBeforeBoss": 3,
+        "typeWeights": {
+          "early": { "enemy": 6, "shop": 1, "heal": 1 },
+          "mid":   { "enemy": 4, "elite": 2, "shop": 2, "heal": 1, "upgrade": 2 },
+          "late":  { "enemy": 3, "elite": 3, "shop": 1, "heal": 1, "upgrade": 1 }
+        },
+        "guarantees": { "firstRowAllEnemy": true, "requireShop": true, "requireHeal": true }
+      },
+      "bands": { "early": [0, 1], "mid": [2, 3], "late": [4, 5] },
+      "rosterSize": { "early": 1, "mid": 2, "late": 2, "elite": 2, "boss": 1 },
+      "enemyPools": {
+        "early": ["saboteur", "hunter"],
+        "mid":   ["brute", "hunter", "swarm", "saboteur"],
+        "late":  ["disruptor", "brute", "swarm", "hunter"],
+        "elite": ["disruptor", "brute"]
+      },
+      "bossPool": ["dreadnought"],
+      "creditSeconds": { "normal": 16, "elite": 16, "boss": 18 },
+      "heal": { "percent": 0.4, "fullCore": false },
+      "bossStaging": { "_comment": "Entering the boss node fully restores (and revives) every owned part — the final battle tests your build and your play, not the attrition you arrived with.", "fullRepair": true },
+      "upgrade": { "allowComponent": false, "size": 3 }
+    },
+
+    "economy": {
+      "_comment": "Scrap currency. Earned on each battle win (more from elite/boss + per-row bonus); spent at shop nodes. tierBudgetMult multiplies archetype damageBudget for elite/boss nodes ON TOP of per-row escalation. Prices scale with map depth via priceRowMult.",
+      "startScrap": 0,
+      "scrapReward": { "normal": 25, "elite": 60, "boss": 0 },
+      "scrapPerRow": 4,
+      "perRowBudgetMult": 1.08,
+      "rosterBudgetSplit": true,
+      "tierBudgetMult": { "normal": 1.05, "elite": 1.25, "boss": 0.9 },
+      "tierHpMult": { "normal": 0.35, "elite": 0.6, "boss": 1.4 },
+      "eliteRewardBonus": true,
+      "fastWinScrap": { "normal": 15, "elite": 30, "boss": 0 },
+      "prices": { "component": 110, "comboMod": 70, "componentMod": 70, "repair": 30, "repairAll": 80 },
+      "priceRowMult": 0.12,
+      "shop": { "size": 5 }
+    }
+  },
 
   "ui": {
     "enemies": ["saboteur"],
