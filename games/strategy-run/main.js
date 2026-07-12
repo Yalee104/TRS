@@ -34,6 +34,9 @@ import { createTooltip } from '../strategy/view/tooltip.js';
 import { createComboPanel } from '../strategy/view/comboInfo.js';
 import { ATTACK_EFFECT, DEFENSE_VERB, isAlive, isOwned, isEffectValidOn } from '../strategy/core/components.js';
 import { t, onLocaleChange } from '../strategy/i18n/index.js';
+import { createTutorialDirector } from '../strategy/view/tutorial/director.js';
+import { TUTORIAL_STEPS, TUTORIAL_MOMENTS, TUTORIAL_HINTS } from '../strategy/view/tutorial/script.js';
+import { createTutorialPresenter } from '../strategy/view/tutorial/presenter.js';
 
 const app = { state: createState(config), run: null, started: false };
 app.state.phase = PHASES.CONFIG;
@@ -54,11 +57,34 @@ const tooltip = createTooltip(centerEl, getState);
 const comboPanel = createComboPanel(document.getElementById('combo-panel'), getState);
 const infobar = createInfoBar(infoEl);
 const panel = createConfigPanel(leftEl, { onNewRun, defaults: config.ui, archetypes: config.archetypes, config });
-const loadout = createLoadoutPicker(runScreenEl, { config, onBegin: onBeginRun });
+const loadout = createLoadoutPicker(runScreenEl, { config, onBegin: onBeginRun, onTutorial: () => tutorial.startTutorial() });
 const reward = createRewardScreen(runScreenEl, { onPick: onPickReward });
 const mapScreen = createMapScreen(runScreenEl, { onPickNode, getRun: () => app.run });
 const shopScreen = createShopScreen(runScreenEl, { onBuy: onBuyShop, onLeave: onLeaveShop, getRun: () => app.run });
 panel.showRunSetup();
+
+// --- Training Sortie tutorial (view/tutorial) ---------------------------------
+// The tutorial run IS a real run, just begun with a fixed kit + seed so the first
+// fight is deterministic. The director/presenter only OBSERVE state via draw().
+const localStore = {
+  get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+};
+const tutCfg = config.run.tutorial || { seed: 0, loadout: 'burst' };
+const beginTutorialRun = () => onBeginRun({
+  components: (config.run.loadouts[tutCfg.loadout] || {}).components || [],
+  loadout: tutCfg.loadout,
+  seed: tutCfg.seed || 0,
+});
+const tutorialDirector = createTutorialDirector({
+  steps: TUTORIAL_STEPS, moments: TUTORIAL_MOMENTS, hints: TUTORIAL_HINTS, storage: localStore,
+});
+const tutorial = createTutorialPresenter({
+  director: tutorialDirector,
+  getCtx: () => ({ state: app.state, run: app.run, screen: app.run ? currentScreen() : 'loadout' }),
+  beginTutorialRun,
+  onChange: () => draw(),
+});
 
 // Language change → re-render the whole UI (every view reads text at render time).
 document.title = t('run.title');
@@ -144,6 +170,29 @@ function onNewRun() {
   app.state = createState(config);
   app.state.phase = PHASES.CONFIG;
   panel.showRunSetup();
+
+// --- Training Sortie tutorial (view/tutorial) ---------------------------------
+// The tutorial run IS a real run, just begun with a fixed kit + seed so the first
+// fight is deterministic. The director/presenter only OBSERVE state via draw().
+const localStore = {
+  get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+};
+const tutCfg = config.run.tutorial || { seed: 0, loadout: 'burst' };
+const beginTutorialRun = () => onBeginRun({
+  components: (config.run.loadouts[tutCfg.loadout] || {}).components || [],
+  loadout: tutCfg.loadout,
+  seed: tutCfg.seed || 0,
+});
+const tutorialDirector = createTutorialDirector({
+  steps: TUTORIAL_STEPS, moments: TUTORIAL_MOMENTS, hints: TUTORIAL_HINTS, storage: localStore,
+});
+const tutorial = createTutorialPresenter({
+  director: tutorialDirector,
+  getCtx: () => ({ state: app.state, run: app.run, screen: app.run ? currentScreen() : 'loadout' }),
+  beginTutorialRun,
+  onChange: () => draw(),
+});
   draw();
 }
 
@@ -248,6 +297,8 @@ function draw() {
   const puzzleOpen = !!app.state.activePuzzle;
   centerEl.classList.toggle('puzzle-open', puzzleOpen);
   if (puzzleOpen) tooltip.hide();
+
+  tutorial.sync();                      // Training Sortie coach observes every frame
 }
 
 draw(); // initial paint (loadout picker)
@@ -262,6 +313,13 @@ window.__strategyRun = {
   buyShop: (item) => onBuyShop(item),
   newRun: onNewRun,
   redraw: draw,
+  tutorial: {
+    start: () => tutorial.startTutorial(),
+    next: () => { tutorialDirector.next(); draw(); },
+    skip: () => { tutorialDirector.skip(); draw(); },
+    current: () => tutorialDirector.sync({ state: app.state, run: app.run, screen: app.run ? currentScreen() : 'loadout' }),
+    get status() { return tutorialDirector.status; },
+  },
   commitAttack: (eid, focusId) => { commitAttack(app.state, eid, focusId); draw(); },
   commitDefense: () => { commitDefense(app.state); draw(); },
   solveActivePuzzle() {

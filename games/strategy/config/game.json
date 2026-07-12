@@ -199,6 +199,11 @@
   "run": {
     "_comment": "Roguelike run meta-layer (core/run.js + core/map.js). A run walks the act map from start to boss; win the boss battle to win the run, lose any battle to end it. The player owns Core + `startComponents.pickCount` parts at the start and acquires the rest as rewards. All tuning is data-driven: combo-mods/component-mods are catalog `patch` objects deep-merged over the base config at battle time (no base mutation). Component (incl. Core) HP persists between battles.",
     "startComponents": { "core": true, "pickCount": 3 },
+    "tutorial": {
+      "_comment": "Training Sortie (view/tutorial). The tutorial run is a REAL run begun with this loadout + seed; the seed is chosen so EVERY row-1 node reachable from start is a lone Saboteur (locked by a regression test in tutorial.test.mjs), making the walkthrough deterministic.",
+      "seed": 3,
+      "loadout": "burst"
+    },
     "enemyShieldThreshold": 60,
     "overheat": {
       "_comment": "Anti-stall clock (run battles only). Each tier has a PAR round; past par every enemy's damageBudget compounds by rampPerRound each extra round (telegraphed one round early in the banner/log). Winning at or under par pays economy.fastWinScrap.",

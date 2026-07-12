@@ -269,3 +269,57 @@ html, body { margin: 0; height: 100%; background: #0e0f13; color: #e6e6e6;
 .trs-tooltip .tt-tel { color: #ffb04a; }
 .trs-tooltip .tt-cd { color: #ff8a3d; }
 .cdbadge { font-size: 11px; color: #ff8a3d; }
+
+/* --- Training Sortie tutorial (view/tutorial) -------------------------------- */
+.tut-coach {
+  position: fixed; z-index: 40; width: 340px; max-width: calc(100vw - 24px);
+  background: #10161f; border: 1px solid #3a4a63; border-radius: 10px;
+  padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.55);
+  font-size: 13px; line-height: 1.45; color: #dbe4f0;
+}
+.tut-ops { font-size: 11px; letter-spacing: .12em; color: #7fd4ff; margin-bottom: 6px; font-weight: 700; }
+.tut-text b { color: #ffd479; }
+.tut-btns { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.tut-next { padding: 5px 14px; font-size: 13px; }
+.tut-skip {
+  margin-left: auto; background: none; border: none; color: #8091a8;
+  font-size: 11px; cursor: pointer; padding: 4px;
+}
+.tut-skip:hover { color: #e6e6e6; }
+.tut-ring {
+  position: fixed; z-index: 39; pointer-events: none; border-radius: 10px;
+  border: 2px solid #7fd4ff; box-shadow: 0 0 14px rgba(127,212,255,.55);
+  animation: tutPulse 1.4s ease-in-out infinite;
+}
+@keyframes tutPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(127,212,255,.35); }
+  50% { box-shadow: 0 0 20px rgba(127,212,255,.8); }
+}
+.tut-modal-backdrop {
+  position: fixed; inset: 0; z-index: 60; background: rgba(4,8,14,.72);
+  display: flex; align-items: center; justify-content: center;
+}
+.tut-modal {
+  width: 420px; max-width: calc(100vw - 32px); background: #10161f;
+  border: 1px solid #3a4a63; border-radius: 12px; padding: 20px 22px;
+  color: #dbe4f0; font-size: 14px; line-height: 1.5;
+}
+.tut-modal h3 { margin: 4px 0 8px; color: #fff; }
+.tut-modal p b { color: #ffd479; }
+.tut-modal-btns { display: flex; gap: 10px; margin-top: 16px; }
+.tut-toast {
+  position: fixed; z-index: 55; left: 50%; top: 26%; transform: translateX(-50%);
+  background: #1a1206; border: 1px solid #ffb347; border-radius: 12px;
+  padding: 14px 26px; color: #ffd479; font-size: 18px; font-weight: 700;
+  box-shadow: 0 0 32px rgba(255,179,71,.45); pointer-events: none;
+}
+.tut-toast.celebrate { animation: tutCelebrate .5s ease-out; }
+@keyframes tutCelebrate {
+  0% { transform: translateX(-50%) scale(.6); opacity: 0; }
+  60% { transform: translateX(-50%) scale(1.12); opacity: 1; }
+  100% { transform: translateX(-50%) scale(1); }
+}
+.rs-btn.ghost {
+  background: none; border: 1px solid #3a4a63; color: #8091a8;
+}
+.rs-btn.ghost:hover { color: #e6e6e6; border-color: #5a6d8c; }

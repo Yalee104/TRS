@@ -12,7 +12,7 @@
 import { COMPONENT_IDS, ATTACK_EFFECT, DEFENSE_VERB } from '../core/components.js';
 import { t, componentLabel, effectLabel, verbLabel } from '../i18n/index.js';
 
-export function createLoadoutPicker(root, { config, onBegin }) {
+export function createLoadoutPicker(root, { config, onBegin, onTutorial = null }) {
   const rc = config.run || {};
   const pickCount = rc.startComponents?.pickCount ?? 2;
   const presets = rc.loadouts || {};
@@ -67,6 +67,7 @@ export function createLoadoutPicker(root, { config, onBegin }) {
         </label>
         <div class="rs-foot">
           <button class="rs-btn" id="rs-begin"${ready ? '' : ' disabled'}>${t('loadout.beginRun')}</button>
+          ${onTutorial ? `<button class="rs-btn ghost" id="rs-tutorial">${t('tutorial.replay')}</button>` : ''}
         </div>
       </div>`;
 
@@ -89,6 +90,8 @@ export function createLoadoutPicker(root, { config, onBegin }) {
       if (selected.size !== pickCount) return;
       onBegin({ components: [...selected], loadout: preset, seed });
     });
+    const tut = root.querySelector('#rs-tutorial');
+    if (tut) tut.addEventListener('click', () => onTutorial());
   }
 
   return { render };
